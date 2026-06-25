@@ -1,7 +1,7 @@
 APP_NAME := devops-control-plane
 PKG := ./...
 
-.PHONY: run build test fmt vet clean
+.PHONY: run build test fmt vet clean migrate-up migrate-down
 
 run:
 	go run ./cmd/devops-control-plane
@@ -18,6 +18,12 @@ fmt:
 
 vet:
 	go vet $(PKG)
+
+migrate-up:
+	go run ./cmd/devops-control-plane-migrate -direction up
+
+migrate-down:
+	go run ./cmd/devops-control-plane-migrate -direction down
 
 clean:
 	rm -rf bin coverage.out coverage.html

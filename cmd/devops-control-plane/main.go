@@ -22,7 +22,15 @@ func main() {
 	logger := logging.New(cfg.LogLevel)
 	slog.SetDefault(logger)
 
-	db := database.NewPlaceholder(cfg.DatabaseURL)
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer startupCancel()
+
+	db, err := database.Open(startupCtx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("database initialization failed", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
 	services := app.Services{
 		Applications: app.NewApplicationService(),
