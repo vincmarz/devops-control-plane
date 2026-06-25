@@ -1,0 +1,13 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: devops-control-plane
+  namespace: devops-control-plane
+spec:
+  to:
+    kind: Service
+    name: devops-control-plane
+  port:
+    targetPort: http
+  tls:
+    termination: edge

@@ -1,0 +1,34 @@
+# Binaries
+bin/
+dist/
+*.exe
+*.out
+*.test
+
+# Go workspace/cache
+vendor/
+coverage.out
+coverage.html
+
+# Local env / secrets - never commit real secrets
+.env
+*.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.crt
+kubeconfig*
+config.json
+.dockerconfigjson
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Runtime output
+tmp/
+logs/

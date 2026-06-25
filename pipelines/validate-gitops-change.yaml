@@ -1,0 +1,54 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: validate-gitops-change
+  namespace: devops-control-plane
+spec:
+  params:
+    - name: change-id
+      type: string
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+    - name: gitops-path
+      type: string
+    - name: target-namespace
+      type: string
+  workspaces:
+    - name: shared-workspace
+  tasks:
+    - name: report-placeholder
+      taskSpec:
+        params:
+          - name: change-id
+            type: string
+          - name: repo-url
+            type: string
+          - name: revision
+            type: string
+          - name: gitops-path
+            type: string
+          - name: target-namespace
+            type: string
+        steps:
+          - name: report
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              echo "DevOps Control Plane validation placeholder"
+              echo "CHANGE_ID=$(params.change-id)"
+              echo "REPO_URL=$(params.repo-url)"
+              echo "REVISION=$(params.revision)"
+              echo "GITOPS_PATH=$(params.gitops-path)"
+              echo "TARGET_NAMESPACE=$(params.target-namespace)"
+      params:
+        - name: change-id
+          value: $(params.change-id)
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+        - name: gitops-path
+          value: $(params.gitops-path)
+        - name: target-namespace
+          value: $(params.target-namespace)

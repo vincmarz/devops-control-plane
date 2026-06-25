@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-control-plane
+  namespace: devops-control-plane
+spec:
+  selector:
+    app: devops-control-plane
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
