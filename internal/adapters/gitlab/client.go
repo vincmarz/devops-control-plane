@@ -119,6 +119,55 @@ func (c *Client) CreateBranch(ctx context.Context, projectID int, branch string,
 	return created, nil
 }
 
+// CreateOrUpdateFile crea un file GitLab oppure lo aggiorna se esiste gia'.
+func (c *Client) CreateOrUpdateFile(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) (RepositoryFile, error) {
+	branch = strings.TrimSpace(branch)
+	filePath = strings.TrimSpace(filePath)
+	commitMessage = strings.TrimSpace(commitMessage)
+
+	if projectID <= 0 {
+		return RepositoryFile{}, errors.New("gitlab project ID must be greater than zero")
+	}
+	if branch == "" {
+		return RepositoryFile{}, errors.New("gitlab branch is required")
+	}
+	if filePath == "" {
+		return RepositoryFile{}, errors.New("gitlab file path is required")
+	}
+	if commitMessage == "" {
+		return RepositoryFile{}, errors.New("gitlab commit message is required")
+	}
+
+	form := url.Values{}
+	form.Set("branch", branch)
+	form.Set("commit_message", commitMessage)
+	form.Set("content", content)
+
+	path := fmt.Sprintf("/api/v4/projects/%d/repository/files/%s", projectID, url.PathEscape(filePath))
+
+	var created RepositoryFile
+	if err := c.doForm(ctx, http.MethodPost, path, form, &created); err != nil {
+		if !isFileAlreadyExistsError(err) {
+			return RepositoryFile{}, err
+		}
+		var updated RepositoryFile
+		if updateErr := c.doForm(ctx, http.MethodPut, path, form, &updated); updateErr != nil {
+			return RepositoryFile{}, updateErr
+		}
+		return updated, nil
+	}
+
+	return created, nil
+}
+
+func isFileAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "already exists") || strings.Contains(message, "file with this name")
+}
+
 func (c *Client) doForm(ctx context.Context, method string, path string, form url.Values, out any) error {
 	body := strings.NewReader(form.Encode())
 	req, err := c.newRequest(ctx, method, path, body)

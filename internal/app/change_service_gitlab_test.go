@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vincmarz/devops-control-plane/internal/domain"
@@ -110,5 +111,78 @@ func TestChangeServiceCreateBranchPropagatesGitError(t *testing.T) {
 	}
 	if store.markStepCalled {
 		t.Fatal("store.MarkStep was called even if GitLab create branch failed")
+	}
+}
+
+func TestChangeServiceUpdateFiles(t *testing.T) {
+	store := &createBranchFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0003", ApplicationName: "demo-go-color-app", TargetEnvironment: "dev"}}
+
+	var gotProjectID int
+	var gotBranch string
+	var gotFilePath string
+	var gotCommitMessage string
+	var gotContent string
+	service := NewChangeService(
+		store,
+		WithGitCreateBranch(func(ctx context.Context, projectID int, branch string, ref string) error { return nil }, 1, "main"),
+		WithGitCreateOrUpdateFile(func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error {
+			gotProjectID = projectID
+			gotBranch = branch
+			gotFilePath = filePath
+			gotCommitMessage = commitMessage
+			gotContent = content
+			return nil
+		}),
+	)
+
+	result, err := service.UpdateFiles(context.Background(), "CHG-2026-0003")
+	if err != nil {
+		t.Fatalf("UpdateFiles returned error: %v", err)
+	}
+	if gotProjectID != 1 {
+		t.Fatalf("projectID = %d, want 1", gotProjectID)
+	}
+	if gotBranch != "change/CHG-2026-0003" {
+		t.Fatalf("branch = %q", gotBranch)
+	}
+	if gotFilePath != "manifests/chg-2026-0003-control-plane.yaml" {
+		t.Fatalf("filePath = %q", gotFilePath)
+	}
+	if gotCommitMessage != "Add generated manifest for CHG-2026-0003" {
+		t.Fatalf("commitMessage = %q", gotCommitMessage)
+	}
+	for _, expected := range []string{"changeNumber: CHG-2026-0003", "applicationName: demo-go-color-app", "targetEnvironment: dev", "managedBy: devops-control-plane"} {
+		if !strings.Contains(gotContent, expected) {
+			t.Fatalf("content does not contain %q: %s", expected, gotContent)
+		}
+	}
+	if store.markedStatus != "CommitCreated" {
+		t.Fatalf("marked status = %q, want CommitCreated", store.markedStatus)
+	}
+	gitInfo, ok := result["git"].(map[string]any)
+	if !ok {
+		t.Fatalf("result git info missing or invalid: %#v", result["git"])
+	}
+	if gitInfo["filePath"] != "manifests/chg-2026-0003-control-plane.yaml" {
+		t.Fatalf("git filePath = %v", gitInfo["filePath"])
+	}
+}
+
+func TestChangeServiceUpdateFilesPropagatesGitError(t *testing.T) {
+	store := &createBranchFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0003"}}
+	service := NewChangeService(
+		store,
+		WithGitCreateBranch(func(ctx context.Context, projectID int, branch string, ref string) error { return nil }, 1, "main"),
+		WithGitCreateOrUpdateFile(func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error {
+			return errors.New("gitlab file failed")
+		}),
+	)
+
+	_, err := service.UpdateFiles(context.Background(), "CHG-2026-0003")
+	if err == nil {
+		t.Fatal("UpdateFiles returned nil error, want git error")
+	}
+	if store.markStepCalled {
+		t.Fatal("store.MarkStep was called even if GitLab update file failed")
 	}
 }

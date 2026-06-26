@@ -3,11 +3,12 @@ package gitlab
 import "time"
 
 type RepositoryFile struct {
-	FilePath       string
-	Ref            string
-	ContentDecoded string
-	CommitID       string
-	LastCommitID   string
+	FilePath       string `json:"file_path"`
+	Branch         string `json:"branch"`
+	Ref            string `json:"ref,omitempty"`
+	ContentDecoded string `json:"content_decoded,omitempty"`
+	CommitID       string `json:"commit_id,omitempty"`
+	LastCommitID   string `json:"last_commit_id,omitempty"`
 }
 
 type CommitAction struct {

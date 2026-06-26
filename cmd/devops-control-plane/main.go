@@ -51,14 +51,22 @@ func main() {
 			logger.Error("gitlab project ID must be configured when GitLab integration is enabled")
 			os.Exit(1)
 		}
-		changeServiceOptions = append(changeServiceOptions, app.WithGitCreateBranch(
-			func(ctx context.Context, projectID int, branch string, ref string) error {
-				_, err := gitLabClient.CreateBranch(ctx, projectID, branch, ref)
-				return err
-			},
-			cfg.GitLabProjectID,
-			cfg.GitLabDefaultBranch,
-		))
+		changeServiceOptions = append(changeServiceOptions,
+			app.WithGitCreateBranch(
+				func(ctx context.Context, projectID int, branch string, ref string) error {
+					_, err := gitLabClient.CreateBranch(ctx, projectID, branch, ref)
+					return err
+				},
+				cfg.GitLabProjectID,
+				cfg.GitLabDefaultBranch,
+			),
+			app.WithGitCreateOrUpdateFile(
+				func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error {
+					_, err := gitLabClient.CreateOrUpdateFile(ctx, projectID, branch, filePath, commitMessage, content)
+					return err
+				},
+			),
+		)
 		logger.Info("gitlab integration enabled", "baseURL", cfg.GitLabBaseURL, "projectID", cfg.GitLabProjectID, "defaultBranch", cfg.GitLabDefaultBranch, "insecureTLS", cfg.GitLabInsecureTLS)
 	} else {
 		logger.Info("gitlab integration disabled; create-branch endpoint will require GitLab configuration")

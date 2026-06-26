@@ -25,6 +25,9 @@ type ChangeStore interface {
 // e passa una funzione che incapsula l'adapter reale.
 type GitCreateBranchFunc func(ctx context.Context, projectID int, branch string, ref string) error
 
+// GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
+type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
+
 type ChangeServiceOption func(*ChangeService)
 
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
@@ -35,12 +38,19 @@ func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch st
 	}
 }
 
+func WithGitCreateOrUpdateFile(fn GitCreateOrUpdateFileFunc) ChangeServiceOption {
+	return func(s *ChangeService) {
+		s.gitCreateOrUpdateFile = fn
+	}
+}
+
 type ChangeService struct {
 	store ChangeStore
 
-	gitCreateBranch  GitCreateBranchFunc
-	gitProjectID     int
-	gitDefaultBranch string
+	gitCreateBranch       GitCreateBranchFunc
+	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
+	gitProjectID          int
+	gitDefaultBranch      string
 }
 
 func NewChangeService(store ChangeStore, opts ...ChangeServiceOption) *ChangeService {
@@ -170,6 +180,59 @@ func (s *ChangeService) CreateBranch(ctx context.Context, idOrNumber string) (ma
 		"ref":       ref,
 	}
 	return result, nil
+}
+
+// UpdateFiles esegue lo step tecnico GitLab update-files e poi marca
+// la ChangeRequest con runtime_status CommitCreated.
+func (s *ChangeService) UpdateFiles(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.gitCreateOrUpdateFile == nil {
+		return nil, errors.New("git create or update file client is not configured")
+	}
+	if s.gitProjectID <= 0 {
+		return nil, errors.New("git project ID must be configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
+	filePath := fmt.Sprintf("manifests/%s-control-plane.yaml", strings.ToLower(change.ChangeNumber))
+	commitMessage := fmt.Sprintf("Add generated manifest for %s", change.ChangeNumber)
+	content := generatedChangeConfigMap(change)
+
+	if err := s.gitCreateOrUpdateFile(ctx, s.gitProjectID, branchName, filePath, commitMessage, content); err != nil {
+		return nil, fmt.Errorf("create or update git file %q on branch %q: %w", filePath, branchName, err)
+	}
+
+	result, err := s.store.MarkStep(ctx, idOrNumber, "CommitCreated")
+	if err != nil {
+		return nil, err
+	}
+	result["git"] = map[string]any{
+		"projectID": s.gitProjectID,
+		"branch":    branchName,
+		"filePath":  filePath,
+	}
+	return result, nil
+}
+
+func generatedChangeConfigMap(change domain.ChangeRequest) string {
+	return fmt.Sprintf(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: %s-control-plane
+data:
+  changeNumber: %s
+  applicationName: %s
+  targetEnvironment: %s
+  managedBy: devops-control-plane
+`, strings.ToLower(change.ChangeNumber), change.ChangeNumber, change.ApplicationName, change.TargetEnvironment)
 }
 
 // MarkStep registra uno step tecnico del workflow.
