@@ -6,11 +6,14 @@ type PipelineRunRef struct {
 	UID       string
 }
 type PipelineRunStatus struct {
-	Name      string
-	Namespace string
-	Status    string
-	Reason    string
-	Message   string
+	Name              string
+	Namespace         string
+	UID               string
+	Status            string
+	Reason            string
+	Message           string
+	CreationTimestamp string
+	CompletionTime    string
 }
 type TaskRunStatus struct {
 	Name     string

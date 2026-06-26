@@ -28,6 +28,18 @@ type GitCreateBranchFunc func(ctx context.Context, projectID int, branch string,
 // TektonRunPipelineFunc rappresenta la porta applicativa minima per avviare una PipelineRun Tekton.
 type TektonRunPipelineFunc func(ctx context.Context, change domain.ChangeRequest) (string, string, string, error)
 
+type TektonValidationResult struct {
+	PipelineRunName string
+	Namespace       string
+	UID             string
+	Status          string
+	Reason          string
+	Message         string
+}
+
+// TektonCheckValidationFunc rappresenta la porta applicativa minima per leggere lo stato di una PipelineRun Tekton.
+type TektonCheckValidationFunc func(ctx context.Context, change domain.ChangeRequest) (TektonValidationResult, error)
+
 // GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
 type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
 
@@ -41,6 +53,10 @@ type ChangeServiceOption func(*ChangeService)
 
 func WithTektonRunPipeline(fn TektonRunPipelineFunc) ChangeServiceOption {
 	return func(s *ChangeService) { s.tektonRunPipeline = fn }
+}
+
+func WithTektonCheckValidation(fn TektonCheckValidationFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.tektonCheckValidation = fn }
 }
 
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
@@ -72,7 +88,8 @@ func WithGitMergeRequest(fn GitMergeRequestFunc) ChangeServiceOption {
 type ChangeService struct {
 	store ChangeStore
 
-	tektonRunPipeline TektonRunPipelineFunc
+	tektonRunPipeline     TektonRunPipelineFunc
+	tektonCheckValidation TektonCheckValidationFunc
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -193,6 +210,37 @@ func (s *ChangeService) Validate(ctx context.Context, idOrNumber string) (map[st
 		return nil, err
 	}
 	result["tekton"] = map[string]any{"pipelineRunName": pipelineRunName, "namespace": namespace, "uid": uid}
+	return result, nil
+}
+
+// CheckValidation legge lo stato reale della PipelineRun Tekton piu recente e aggiorna il runtime_status.
+func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.tektonCheckValidation == nil {
+		return nil, errors.New("tekton check validation client is not configured")
+	}
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+	validation, err := s.tektonCheckValidation(ctx, change)
+	if err != nil {
+		return nil, fmt.Errorf("check tekton validation pipeline for %q: %w", change.ChangeNumber, err)
+	}
+	runtimeStatus := "ValidationRunning"
+	if validation.Status == "True" {
+		runtimeStatus = "ValidationSucceeded"
+	} else if validation.Status == "False" {
+		runtimeStatus = "ValidationFailed"
+	}
+	result, err := s.store.MarkStep(ctx, idOrNumber, runtimeStatus)
+	if err != nil {
+		return nil, err
+	}
+	result["tekton"] = map[string]any{"pipelineRunName": validation.PipelineRunName, "namespace": validation.Namespace, "uid": validation.UID, "status": validation.Status, "reason": validation.Reason, "message": validation.Message}
 	return result, nil
 }
 

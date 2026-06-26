@@ -101,6 +101,10 @@ func main() {
 			ref, err := tektonClient.CreatePipelineRun(ctx, tektonadapter.CreatePipelineRunRequest{Namespace: cfg.TektonNamespace, PipelineName: cfg.TektonPipelineName, ServiceAccountName: cfg.TektonServiceAccount, GenerateName: "devops-cp-validate-" + strings.ToLower(change.ChangeNumber) + "-", ChangeNumber: change.ChangeNumber, GitURL: cfg.TektonGitURL, GitRevision: cfg.TektonGitRevision, Image: cfg.TektonImage, WorkspacePVC: cfg.TektonWorkspacePVC, DockerConfigSecret: cfg.TektonDockerConfigSecret})
 			return ref.Name, ref.Namespace, ref.UID, err
 		}))
+		changeServiceOptions = append(changeServiceOptions, app.WithTektonCheckValidation(func(ctx context.Context, change domain.ChangeRequest) (app.TektonValidationResult, error) {
+			status, err := tektonClient.FindLatestPipelineRunByChange(ctx, cfg.TektonNamespace, change.ChangeNumber)
+			return app.TektonValidationResult{PipelineRunName: status.Name, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message}, err
+		}))
 		logger.Info("tekton integration enabled", "namespace", cfg.TektonNamespace, "pipeline", cfg.TektonPipelineName, "serviceAccount", cfg.TektonServiceAccount, "apiURL", cfg.KubernetesAPIURL, "insecureTLS", cfg.KubernetesInsecureTLS)
 	} else {
 		logger.Info("tekton integration disabled; validate endpoint will require Kubernetes API configuration")

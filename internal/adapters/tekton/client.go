@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -134,6 +135,80 @@ func (c *Client) CreatePipelineRun(ctx context.Context, r CreatePipelineRunReque
 	}
 	return PipelineRunRef{Name: name, Namespace: ns, UID: uid}, nil
 }
+
+// FindLatestPipelineRunByChange cerca la PipelineRun Tekton piu' recente associata a una ChangeRequest.
+func (c *Client) FindLatestPipelineRunByChange(ctx context.Context, namespace string, changeNumber string) (PipelineRunStatus, error) {
+	namespace = strings.TrimSpace(namespace)
+	changeNumber = strings.TrimSpace(changeNumber)
+	if namespace == "" {
+		return PipelineRunStatus{}, errors.New("tekton namespace is required")
+	}
+	if changeNumber == "" {
+		return PipelineRunStatus{}, errors.New("change number is required")
+	}
+	query := url.Values{}
+	query.Set("labelSelector", "devops-control-plane/change-number="+changeNumber)
+	path := fmt.Sprintf("/apis/tekton.dev/v1/namespaces/%s/pipelineruns?%s", namespace, query.Encode())
+	list, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return PipelineRunStatus{}, err
+	}
+	items, _ := list["items"].([]any)
+	if len(items) == 0 {
+		return PipelineRunStatus{}, fmt.Errorf("tekton PipelineRun not found for change %q in namespace %q", changeNumber, namespace)
+	}
+	var latest map[string]any
+	latestCreation := ""
+	for _, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		metadata, _ := item["metadata"].(map[string]any)
+		creation, _ := metadata["creationTimestamp"].(string)
+		if latest == nil || creation > latestCreation {
+			latest = item
+			latestCreation = creation
+		}
+	}
+	if latest == nil {
+		return PipelineRunStatus{}, errors.New("tekton API response did not include valid PipelineRun items")
+	}
+	metadata, _ := latest["metadata"].(map[string]any)
+	statusBlock, _ := latest["status"].(map[string]any)
+	conditions, _ := statusBlock["conditions"].([]any)
+	result := PipelineRunStatus{Name: stringValue(metadata, "name"), Namespace: stringValue(metadata, "namespace"), UID: stringValue(metadata, "uid"), CreationTimestamp: stringValue(metadata, "creationTimestamp"), CompletionTime: stringValue(statusBlock, "completionTime")}
+	if result.Namespace == "" {
+		result.Namespace = namespace
+	}
+	for _, rawCondition := range conditions {
+		condition, ok := rawCondition.(map[string]any)
+		if !ok {
+			continue
+		}
+		if stringValue(condition, "type") == "Succeeded" {
+			result.Status = stringValue(condition, "status")
+			result.Reason = stringValue(condition, "reason")
+			result.Message = stringValue(condition, "message")
+			break
+		}
+	}
+	if result.Status == "" {
+		result.Status = "Unknown"
+		result.Reason = "Pending"
+		result.Message = "PipelineRun has no Succeeded condition yet"
+	}
+	return result, nil
+}
+
+func stringValue(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, _ := values[key].(string)
+	return value
+}
+
 func (c *Client) do(ctx context.Context, method, path string, payload any) (map[string]any, error) {
 	if c == nil {
 		return nil, errors.New("tekton client is nil")

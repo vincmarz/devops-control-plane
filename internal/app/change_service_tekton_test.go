@@ -70,3 +70,46 @@ func TestChangeServiceValidatePropagatesTektonError(t *testing.T) {
 		t.Fatal("MarkStep called")
 	}
 }
+
+func TestChangeServiceCheckValidationSucceeded(t *testing.T) {
+	store := &validateFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0005"}}
+	svc := NewChangeService(store, WithTektonCheckValidation(func(ctx context.Context, ch domain.ChangeRequest) (TektonValidationResult, error) {
+		return TektonValidationResult{PipelineRunName: "newer", Namespace: "devops-ci-demo", UID: "uid-new", Status: "True", Reason: "Succeeded", Message: "Tasks Completed: 2"}, nil
+	}))
+	result, err := svc.CheckValidation(context.Background(), "CHG-2026-0005")
+	if err != nil {
+		t.Fatalf("CheckValidation returned error: %v", err)
+	}
+	if store.markedStatus != "ValidationSucceeded" {
+		t.Fatalf("marked status=%q, want ValidationSucceeded", store.markedStatus)
+	}
+	if result["tekton"] == nil {
+		t.Fatalf("missing tekton info")
+	}
+}
+func TestChangeServiceCheckValidationFailed(t *testing.T) {
+	store := &validateFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0005"}}
+	svc := NewChangeService(store, WithTektonCheckValidation(func(ctx context.Context, ch domain.ChangeRequest) (TektonValidationResult, error) {
+		return TektonValidationResult{PipelineRunName: "failed", Namespace: "devops-ci-demo", Status: "False", Reason: "Failed", Message: "failed"}, nil
+	}))
+	_, err := svc.CheckValidation(context.Background(), "CHG-2026-0005")
+	if err != nil {
+		t.Fatalf("CheckValidation returned error: %v", err)
+	}
+	if store.markedStatus != "ValidationFailed" {
+		t.Fatalf("marked status=%q, want ValidationFailed", store.markedStatus)
+	}
+}
+func TestChangeServiceCheckValidationRunning(t *testing.T) {
+	store := &validateFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0005"}}
+	svc := NewChangeService(store, WithTektonCheckValidation(func(ctx context.Context, ch domain.ChangeRequest) (TektonValidationResult, error) {
+		return TektonValidationResult{PipelineRunName: "running", Namespace: "devops-ci-demo", Status: "Unknown", Reason: "Running", Message: "running"}, nil
+	}))
+	_, err := svc.CheckValidation(context.Background(), "CHG-2026-0005")
+	if err != nil {
+		t.Fatalf("CheckValidation returned error: %v", err)
+	}
+	if store.markedStatus != "ValidationRunning" {
+		t.Fatalf("marked status=%q, want ValidationRunning", store.markedStatus)
+	}
+}
