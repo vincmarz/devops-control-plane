@@ -260,3 +260,69 @@ func TestChangeServiceOpenMergeRequestPropagatesGitError(t *testing.T) {
 		t.Fatal("store.MarkStep was called even if GitLab open merge request failed")
 	}
 }
+
+func TestChangeServiceMergeRequest(t *testing.T) {
+	store := &createBranchFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0004", ApplicationName: "demo-go-color-app", TargetEnvironment: "dev"}}
+
+	var gotProjectID int
+	var gotSourceBranch string
+	var gotTargetBranch string
+	var gotMergeCommitMessage string
+	service := NewChangeService(
+		store,
+		WithGitCreateBranch(func(ctx context.Context, projectID int, branch string, ref string) error { return nil }, 1, "main"),
+		WithGitMergeRequest(func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error) {
+			gotProjectID = projectID
+			gotSourceBranch = sourceBranch
+			gotTargetBranch = targetBranch
+			gotMergeCommitMessage = mergeCommitMessage
+			return 3, "https://gitlab.example.local/group/project/-/merge_requests/3", "def456", nil
+		}),
+	)
+
+	result, err := service.MergeRequest(context.Background(), "CHG-2026-0004")
+	if err != nil {
+		t.Fatalf("MergeRequest returned error: %v", err)
+	}
+	if gotProjectID != 1 {
+		t.Fatalf("projectID = %d, want 1", gotProjectID)
+	}
+	if gotSourceBranch != "change/CHG-2026-0004" {
+		t.Fatalf("sourceBranch = %q", gotSourceBranch)
+	}
+	if gotTargetBranch != "main" {
+		t.Fatalf("targetBranch = %q", gotTargetBranch)
+	}
+	if gotMergeCommitMessage != "Merge CHG-2026-0004 via DevOps Control Plane" {
+		t.Fatalf("mergeCommitMessage = %q", gotMergeCommitMessage)
+	}
+	if store.markedStatus != "MergeRequestMerged" {
+		t.Fatalf("marked status = %q, want MergeRequestMerged", store.markedStatus)
+	}
+	gitInfo, ok := result["git"].(map[string]any)
+	if !ok {
+		t.Fatalf("result git info missing or invalid: %#v", result["git"])
+	}
+	if gitInfo["mergeCommitSHA"] != "def456" {
+		t.Fatalf("mergeCommitSHA = %v", gitInfo["mergeCommitSHA"])
+	}
+}
+
+func TestChangeServiceMergeRequestPropagatesGitError(t *testing.T) {
+	store := &createBranchFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0004", ApplicationName: "demo-go-color-app"}}
+	service := NewChangeService(
+		store,
+		WithGitCreateBranch(func(ctx context.Context, projectID int, branch string, ref string) error { return nil }, 1, "main"),
+		WithGitMergeRequest(func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error) {
+			return 0, "", "", errors.New("gitlab merge failed")
+		}),
+	)
+
+	_, err := service.MergeRequest(context.Background(), "CHG-2026-0004")
+	if err == nil {
+		t.Fatal("MergeRequest returned nil error, want git error")
+	}
+	if store.markStepCalled {
+		t.Fatal("store.MarkStep was called even if GitLab merge failed")
+	}
+}

@@ -206,6 +206,75 @@ func isFileAlreadyExistsError(err error) bool {
 	return strings.Contains(message, "already exists") || strings.Contains(message, "file with this name")
 }
 
+// FindOpenMergeRequest cerca una Merge Request aperta per source e target branch.
+func (c *Client) FindOpenMergeRequest(ctx context.Context, projectID int, sourceBranch string, targetBranch string) (MergeRequest, error) {
+	sourceBranch = strings.TrimSpace(sourceBranch)
+	targetBranch = strings.TrimSpace(targetBranch)
+
+	if projectID <= 0 {
+		return MergeRequest{}, errors.New("gitlab project ID must be greater than zero")
+	}
+	if sourceBranch == "" {
+		return MergeRequest{}, errors.New("gitlab source branch is required")
+	}
+	if targetBranch == "" {
+		return MergeRequest{}, errors.New("gitlab target branch is required")
+	}
+
+	query := url.Values{}
+	query.Set("state", "opened")
+	query.Set("source_branch", sourceBranch)
+	query.Set("target_branch", targetBranch)
+
+	path := fmt.Sprintf("/api/v4/projects/%d/merge_requests?%s", projectID, query.Encode())
+
+	var mergeRequests []MergeRequest
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &mergeRequests); err != nil {
+		return MergeRequest{}, err
+	}
+	if len(mergeRequests) == 0 {
+		return MergeRequest{}, fmt.Errorf("gitlab open merge request not found for source %q target %q", sourceBranch, targetBranch)
+	}
+	if len(mergeRequests) > 1 {
+		return MergeRequest{}, fmt.Errorf("multiple gitlab open merge requests found for source %q target %q", sourceBranch, targetBranch)
+	}
+
+	return mergeRequests[0], nil
+}
+
+// MergeMergeRequest esegue il merge di una Merge Request GitLab.
+func (c *Client) MergeMergeRequest(ctx context.Context, projectID int, mergeRequestIID int, sha string, mergeCommitMessage string) (MergeRequest, error) {
+	sha = strings.TrimSpace(sha)
+	mergeCommitMessage = strings.TrimSpace(mergeCommitMessage)
+
+	if projectID <= 0 {
+		return MergeRequest{}, errors.New("gitlab project ID must be greater than zero")
+	}
+	if mergeRequestIID <= 0 {
+		return MergeRequest{}, errors.New("gitlab merge request IID must be greater than zero")
+	}
+	if mergeCommitMessage == "" {
+		return MergeRequest{}, errors.New("gitlab merge commit message is required")
+	}
+
+	form := url.Values{}
+	form.Set("merge_commit_message", mergeCommitMessage)
+	form.Set("should_remove_source_branch", "false")
+	form.Set("squash", "false")
+	if sha != "" {
+		form.Set("sha", sha)
+	}
+
+	path := fmt.Sprintf("/api/v4/projects/%d/merge_requests/%d/merge", projectID, mergeRequestIID)
+
+	var merged MergeRequest
+	if err := c.doForm(ctx, http.MethodPut, path, form, &merged); err != nil {
+		return MergeRequest{}, err
+	}
+
+	return merged, nil
+}
+
 func (c *Client) doForm(ctx context.Context, method string, path string, form url.Values, out any) error {
 	body := strings.NewReader(form.Encode())
 	req, err := c.newRequest(ctx, method, path, body)

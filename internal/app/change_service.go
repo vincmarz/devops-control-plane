@@ -31,6 +31,9 @@ type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch s
 // GitOpenMergeRequestFunc rappresenta la porta applicativa minima per aprire una Merge Request Git.
 type GitOpenMergeRequestFunc func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, title string, description string) (int, string, error)
 
+// GitMergeRequestFunc rappresenta la porta applicativa minima per mergiare una Merge Request Git aperta.
+type GitMergeRequestFunc func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error)
+
 type ChangeServiceOption func(*ChangeService)
 
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
@@ -53,12 +56,19 @@ func WithGitOpenMergeRequest(fn GitOpenMergeRequestFunc) ChangeServiceOption {
 	}
 }
 
+func WithGitMergeRequest(fn GitMergeRequestFunc) ChangeServiceOption {
+	return func(s *ChangeService) {
+		s.gitMergeRequest = fn
+	}
+}
+
 type ChangeService struct {
 	store ChangeStore
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
 	gitOpenMergeRequest   GitOpenMergeRequestFunc
+	gitMergeRequest       GitMergeRequestFunc
 	gitProjectID          int
 	gitDefaultBranch      string
 }
@@ -287,6 +297,52 @@ func (s *ChangeService) OpenMergeRequest(ctx context.Context, idOrNumber string)
 		"targetBranch":    targetBranch,
 		"mergeRequestIID": mrIID,
 		"mergeRequestURL": mrWebURL,
+	}
+	return result, nil
+}
+
+// MergeRequest esegue lo step tecnico GitLab merge-request e poi marca
+// la ChangeRequest con runtime_status MergeRequestMerged.
+func (s *ChangeService) MergeRequest(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.gitMergeRequest == nil {
+		return nil, errors.New("git merge request client is not configured")
+	}
+	if s.gitProjectID <= 0 {
+		return nil, errors.New("git project ID must be configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	sourceBranch := fmt.Sprintf("change/%s", change.ChangeNumber)
+	targetBranch := s.gitDefaultBranch
+	if strings.TrimSpace(targetBranch) == "" {
+		targetBranch = "main"
+	}
+	mergeCommitMessage := fmt.Sprintf("Merge %s via DevOps Control Plane", change.ChangeNumber)
+
+	mrIID, mrWebURL, mergeCommitSHA, err := s.gitMergeRequest(ctx, s.gitProjectID, sourceBranch, targetBranch, mergeCommitMessage)
+	if err != nil {
+		return nil, fmt.Errorf("merge git merge request from %q to %q: %w", sourceBranch, targetBranch, err)
+	}
+
+	result, err := s.store.MarkStep(ctx, idOrNumber, "MergeRequestMerged")
+	if err != nil {
+		return nil, err
+	}
+	result["git"] = map[string]any{
+		"projectID":       s.gitProjectID,
+		"sourceBranch":    sourceBranch,
+		"targetBranch":    targetBranch,
+		"mergeRequestIID": mrIID,
+		"mergeRequestURL": mrWebURL,
+		"mergeCommitSHA":  mergeCommitSHA,
 	}
 	return result, nil
 }

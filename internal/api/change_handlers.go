@@ -124,6 +124,15 @@ func (h *Handler) openMergeRequest(w http.ResponseWriter, r *http.Request, id st
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
+func (h *Handler) mergeRequest(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := h.deps.Services.Changes.MergeRequest(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GITLAB_MERGE_REQUEST_FAILED", Message: "Unable to merge GitLab merge request for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
+}
+
 func (h *Handler) syncChange(w http.ResponseWriter, r *http.Request, id string) {
 	h.markWorkflowStep(w, r, id, "SyncRunning")
 }

@@ -72,6 +72,16 @@ func main() {
 					return mr.IID, mr.WebURL, err
 				},
 			),
+			app.WithGitMergeRequest(
+				func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error) {
+					mr, err := gitLabClient.FindOpenMergeRequest(ctx, projectID, sourceBranch, targetBranch)
+					if err != nil {
+						return 0, "", "", err
+					}
+					merged, err := gitLabClient.MergeMergeRequest(ctx, projectID, mr.IID, mr.SHA, mergeCommitMessage)
+					return merged.IID, merged.WebURL, merged.MergeCommitSHA, err
+				},
+			),
 		)
 		logger.Info("gitlab integration enabled", "baseURL", cfg.GitLabBaseURL, "projectID", cfg.GitLabProjectID, "defaultBranch", cfg.GitLabDefaultBranch, "insecureTLS", cfg.GitLabInsecureTLS)
 	} else {

@@ -18,14 +18,18 @@ type CommitAction struct {
 }
 
 type MergeRequest struct {
-	ID           int    `json:"id"`
-	IID          int    `json:"iid"`
-	ProjectID    int    `json:"project_id"`
-	Title        string `json:"title"`
-	State        string `json:"state"`
-	SourceBranch string `json:"source_branch"`
-	TargetBranch string `json:"target_branch"`
-	WebURL       string `json:"web_url"`
+	ID                  int    `json:"id"`
+	IID                 int    `json:"iid"`
+	ProjectID           int    `json:"project_id"`
+	Title               string `json:"title"`
+	State               string `json:"state"`
+	SourceBranch        string `json:"source_branch"`
+	TargetBranch        string `json:"target_branch"`
+	WebURL              string `json:"web_url"`
+	SHA                 string `json:"sha"`
+	MergeStatus         string `json:"merge_status"`
+	DetailedMergeStatus string `json:"detailed_merge_status"`
+	MergeCommitSHA      string `json:"merge_commit_sha"`
 }
 
 // Branch rappresenta la risposta GitLab per un repository branch.

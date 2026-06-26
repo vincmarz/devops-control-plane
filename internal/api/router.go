@@ -107,6 +107,8 @@ func (h *Handler) changeSubrouter(w http.ResponseWriter, r *http.Request) {
 		h.updateFiles(w, r, id)
 	case len(parts) == 2 && parts[1] == "open-merge-request" && r.Method == http.MethodPost:
 		h.openMergeRequest(w, r, id)
+	case len(parts) == 2 && parts[1] == "merge-request" && r.Method == http.MethodPost:
+		h.mergeRequest(w, r, id)
 	default:
 		writeError(w, http.StatusNotFound, APIError{Code: "NOT_FOUND", Message: "Change route not found"}, nil)
 	}

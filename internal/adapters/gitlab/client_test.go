@@ -286,3 +286,123 @@ func TestOpenMergeRequestValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestFindOpenMergeRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/api/v4/projects/1/merge_requests" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("state"); got != "opened" {
+			t.Fatalf("state = %q", got)
+		}
+		if got := r.URL.Query().Get("source_branch"); got != "change/CHG-2026-0004" {
+			t.Fatalf("source_branch = %q", got)
+		}
+		if got := r.URL.Query().Get("target_branch"); got != "main" {
+			t.Fatalf("target_branch = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]map[string]any{{
+			"id":                    11,
+			"iid":                   3,
+			"project_id":            1,
+			"title":                 "CHG-2026-0004 - GitOps change for demo-go-color-app",
+			"state":                 "opened",
+			"source_branch":         "change/CHG-2026-0004",
+			"target_branch":         "main",
+			"sha":                   "abc123",
+			"web_url":               "https://gitlab.example.local/group/project/-/merge_requests/3",
+			"merge_status":          "can_be_merged",
+			"detailed_merge_status": "mergeable",
+		}})
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL, Token: "test-token"}, WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	mr, err := client.FindOpenMergeRequest(context.Background(), 1, "change/CHG-2026-0004", "main")
+	if err != nil {
+		t.Fatalf("FindOpenMergeRequest returned error: %v", err)
+	}
+	if mr.IID != 3 {
+		t.Fatalf("mr.IID = %d, want 3", mr.IID)
+	}
+	if mr.SHA != "abc123" {
+		t.Fatalf("mr.SHA = %q, want abc123", mr.SHA)
+	}
+}
+
+func TestFindOpenMergeRequestNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL, Token: "test-token"}, WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	_, err = client.FindOpenMergeRequest(context.Background(), 1, "change/CHG-2026-0004", "main")
+	if err == nil {
+		t.Fatal("FindOpenMergeRequest returned nil error, want not found error")
+	}
+}
+
+func TestMergeMergeRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		if r.URL.Path != "/api/v4/projects/1/merge_requests/3/merge" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("ParseForm returned error: %v", err)
+		}
+		if got := r.Form.Get("merge_commit_message"); got != "Merge CHG-2026-0004 via DevOps Control Plane" {
+			t.Fatalf("merge_commit_message = %q", got)
+		}
+		if got := r.Form.Get("sha"); got != "abc123" {
+			t.Fatalf("sha = %q", got)
+		}
+		if got := r.Form.Get("should_remove_source_branch"); got != "false" {
+			t.Fatalf("should_remove_source_branch = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":               11,
+			"iid":              3,
+			"project_id":       1,
+			"state":            "merged",
+			"source_branch":    "change/CHG-2026-0004",
+			"target_branch":    "main",
+			"web_url":          "https://gitlab.example.local/group/project/-/merge_requests/3",
+			"merge_commit_sha": "def456",
+		})
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL, Token: "test-token"}, WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	mr, err := client.MergeMergeRequest(context.Background(), 1, 3, "abc123", "Merge CHG-2026-0004 via DevOps Control Plane")
+	if err != nil {
+		t.Fatalf("MergeMergeRequest returned error: %v", err)
+	}
+	if mr.State != "merged" {
+		t.Fatalf("mr.State = %q, want merged", mr.State)
+	}
+	if mr.MergeCommitSHA != "def456" {
+		t.Fatalf("mr.MergeCommitSHA = %q, want def456", mr.MergeCommitSHA)
+	}
+}
