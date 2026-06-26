@@ -24,14 +24,22 @@ type Config struct {
 	GitLabTimeoutSeconds int
 	GitLabInsecureTLS    bool
 
-	TektonNamespace        string
-	TektonPipelineName     string
-	TektonServiceAccount   string
-	TektonTimeoutSeconds   int
-	TektonPollIntervalSecs int
+	TektonNamespace          string
+	TektonPipelineName       string
+	TektonServiceAccount     string
+	TektonTimeoutSeconds     int
+	TektonPollIntervalSecs   int
+	TektonGitURL             string
+	TektonGitRevision        string
+	TektonImage              string
+	TektonWorkspacePVC       string
+	TektonDockerConfigSecret string
 
-	KubernetesNamespace string
-	EvidenceBasePath    string
+	KubernetesAPIURL      string
+	KubernetesToken       string
+	KubernetesInsecureTLS bool
+	KubernetesNamespace   string
+	EvidenceBasePath      string
 }
 
 func Load() Config {
@@ -54,14 +62,22 @@ func Load() Config {
 		GitLabTimeoutSeconds: getIntEnv("GITLAB_TIMEOUT_SECONDS", 30),
 		GitLabInsecureTLS:    getBoolEnv("GITLAB_INSECURE_TLS", false),
 
-		TektonNamespace:        getEnv("TEKTON_NAMESPACE", "devops-control-plane"),
-		TektonPipelineName:     getEnv("TEKTON_PIPELINE_NAME", "validate-gitops-change"),
-		TektonServiceAccount:   getEnv("TEKTON_SERVICE_ACCOUNT", "pipeline"),
-		TektonTimeoutSeconds:   getIntEnv("TEKTON_TIMEOUT_SECONDS", 900),
-		TektonPollIntervalSecs: getIntEnv("TEKTON_POLL_INTERVAL_SECONDS", 5),
+		TektonNamespace:          getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
+		TektonPipelineName:       getEnv("TEKTON_PIPELINE_NAME", "go-build-and-push"),
+		TektonServiceAccount:     getEnv("TEKTON_SERVICE_ACCOUNT", "pipeline"),
+		TektonTimeoutSeconds:     getIntEnv("TEKTON_TIMEOUT_SECONDS", 900),
+		TektonPollIntervalSecs:   getIntEnv("TEKTON_POLL_INTERVAL_SECONDS", 5),
+		TektonGitURL:             getEnv("TEKTON_GIT_URL", "https://github.com/vincmarz/demo-go-color-app.git"),
+		TektonGitRevision:        getEnv("TEKTON_GIT_REVISION", "main"),
+		TektonImage:              getEnv("TEKTON_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest"),
+		TektonWorkspacePVC:       getEnv("TEKTON_WORKSPACE_PVC", "pipeline-workspace"),
+		TektonDockerConfigSecret: getEnv("TEKTON_DOCKERCONFIG_SECRET", "pipeline-registry-dockerconfig"),
 
-		KubernetesNamespace: getEnv("KUBERNETES_NAMESPACE", "devops-ci-demo"),
-		EvidenceBasePath:    getEnv("EVIDENCE_BASE_PATH", ""),
+		KubernetesAPIURL:      getEnv("KUBERNETES_API_URL", ""),
+		KubernetesToken:       getEnv("KUBERNETES_TOKEN", ""),
+		KubernetesInsecureTLS: getBoolEnv("KUBERNETES_INSECURE_TLS", false),
+		KubernetesNamespace:   getEnv("KUBERNETES_NAMESPACE", "devops-ci-demo"),
+		EvidenceBasePath:      getEnv("EVIDENCE_BASE_PATH", ""),
 	}
 }
 

@@ -25,6 +25,9 @@ type ChangeStore interface {
 // e passa una funzione che incapsula l'adapter reale.
 type GitCreateBranchFunc func(ctx context.Context, projectID int, branch string, ref string) error
 
+// TektonRunPipelineFunc rappresenta la porta applicativa minima per avviare una PipelineRun Tekton.
+type TektonRunPipelineFunc func(ctx context.Context, change domain.ChangeRequest) (string, string, string, error)
+
 // GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
 type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
 
@@ -35,6 +38,10 @@ type GitOpenMergeRequestFunc func(ctx context.Context, projectID int, sourceBran
 type GitMergeRequestFunc func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error)
 
 type ChangeServiceOption func(*ChangeService)
+
+func WithTektonRunPipeline(fn TektonRunPipelineFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.tektonRunPipeline = fn }
+}
 
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
 	return func(s *ChangeService) {
@@ -64,6 +71,8 @@ func WithGitMergeRequest(fn GitMergeRequestFunc) ChangeServiceOption {
 
 type ChangeService struct {
 	store ChangeStore
+
+	tektonRunPipeline TektonRunPipelineFunc
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -159,6 +168,32 @@ func (s *ChangeService) TransitionLifecycle(ctx context.Context, idOrNumber stri
 	}
 
 	return s.store.TransitionLifecycle(ctx, idOrNumber, action, actor, message)
+}
+
+// Validate esegue lo step tecnico Tekton validate e poi marca
+// la ChangeRequest con runtime_status ValidationRunning.
+func (s *ChangeService) Validate(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.tektonRunPipeline == nil {
+		return nil, errors.New("tekton run pipeline client is not configured")
+	}
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+	pipelineRunName, namespace, uid, err := s.tektonRunPipeline(ctx, change)
+	if err != nil {
+		return nil, fmt.Errorf("run tekton validation pipeline for %q: %w", change.ChangeNumber, err)
+	}
+	result, err := s.store.MarkStep(ctx, idOrNumber, "ValidationRunning")
+	if err != nil {
+		return nil, err
+	}
+	result["tekton"] = map[string]any{"pipelineRunName": pipelineRunName, "namespace": namespace, "uid": uid}
+	return result, nil
 }
 
 // CreateBranch esegue lo step tecnico GitLab create-branch e poi marca

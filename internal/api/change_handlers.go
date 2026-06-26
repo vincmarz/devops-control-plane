@@ -112,7 +112,12 @@ func (h *Handler) updateFiles(w http.ResponseWriter, r *http.Request, id string)
 }
 
 func (h *Handler) validateChange(w http.ResponseWriter, r *http.Request, id string) {
-	h.markWorkflowStep(w, r, id, "ValidationRunning")
+	result, err := h.deps.Services.Changes.Validate(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "TEKTON_VALIDATE_FAILED", Message: "Unable to start Tekton validation pipeline for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
 func (h *Handler) openMergeRequest(w http.ResponseWriter, r *http.Request, id string) {

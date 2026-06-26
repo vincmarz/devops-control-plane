@@ -7,14 +7,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	gitlabadapter "github.com/vincmarz/devops-control-plane/internal/adapters/gitlab"
+	tektonadapter "github.com/vincmarz/devops-control-plane/internal/adapters/tekton"
 	"github.com/vincmarz/devops-control-plane/internal/api"
 	"github.com/vincmarz/devops-control-plane/internal/app"
 	"github.com/vincmarz/devops-control-plane/internal/config"
 	"github.com/vincmarz/devops-control-plane/internal/database"
+	"github.com/vincmarz/devops-control-plane/internal/domain"
 	"github.com/vincmarz/devops-control-plane/internal/logging"
 )
 
@@ -86,6 +89,21 @@ func main() {
 		logger.Info("gitlab integration enabled", "baseURL", cfg.GitLabBaseURL, "projectID", cfg.GitLabProjectID, "defaultBranch", cfg.GitLabDefaultBranch, "insecureTLS", cfg.GitLabInsecureTLS)
 	} else {
 		logger.Info("gitlab integration disabled; create-branch endpoint will require GitLab configuration")
+	}
+
+	if cfg.KubernetesAPIURL != "" || cfg.KubernetesToken != "" {
+		tektonClient, err := tektonadapter.New(tektonadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS})
+		if err != nil {
+			logger.Error("tekton client initialization failed", "error", err)
+			os.Exit(1)
+		}
+		changeServiceOptions = append(changeServiceOptions, app.WithTektonRunPipeline(func(ctx context.Context, change domain.ChangeRequest) (string, string, string, error) {
+			ref, err := tektonClient.CreatePipelineRun(ctx, tektonadapter.CreatePipelineRunRequest{Namespace: cfg.TektonNamespace, PipelineName: cfg.TektonPipelineName, ServiceAccountName: cfg.TektonServiceAccount, GenerateName: "devops-cp-validate-" + strings.ToLower(change.ChangeNumber) + "-", ChangeNumber: change.ChangeNumber, GitURL: cfg.TektonGitURL, GitRevision: cfg.TektonGitRevision, Image: cfg.TektonImage, WorkspacePVC: cfg.TektonWorkspacePVC, DockerConfigSecret: cfg.TektonDockerConfigSecret})
+			return ref.Name, ref.Namespace, ref.UID, err
+		}))
+		logger.Info("tekton integration enabled", "namespace", cfg.TektonNamespace, "pipeline", cfg.TektonPipelineName, "serviceAccount", cfg.TektonServiceAccount, "apiURL", cfg.KubernetesAPIURL, "insecureTLS", cfg.KubernetesInsecureTLS)
+	} else {
+		logger.Info("tekton integration disabled; validate endpoint will require Kubernetes API configuration")
 	}
 
 	services := app.Services{
