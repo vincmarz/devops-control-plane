@@ -2,6 +2,7 @@ package gitlab
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ type Config struct {
 	BaseURL        string
 	Token          string
 	TimeoutSeconds int
+	InsecureTLS    bool
 }
 
 // Client implementa un client minimale per GitLab REST API v4.
@@ -58,11 +60,17 @@ func New(cfg Config, opts ...Option) (*Client, error) {
 		timeoutSeconds = defaultTimeoutSeconds
 	}
 
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if cfg.InsecureTLS {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // Lab-only option for self-signed GitLab routes.
+	}
+
 	client := &Client{
 		baseURL: baseURL,
 		token:   token,
 		httpClient: &http.Client{
-			Timeout: time.Duration(timeoutSeconds) * time.Second,
+			Timeout:   time.Duration(timeoutSeconds) * time.Second,
+			Transport: transport,
 		},
 	}
 

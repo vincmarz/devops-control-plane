@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	gitlabadapter "github.com/vincmarz/devops-control-plane/internal/adapters/gitlab"
 	"github.com/vincmarz/devops-control-plane/internal/api"
 	"github.com/vincmarz/devops-control-plane/internal/app"
 	"github.com/vincmarz/devops-control-plane/internal/config"
@@ -34,9 +35,38 @@ func main() {
 
 	repositories := database.NewRepositorySet(db)
 
+	changeServiceOptions := []app.ChangeServiceOption{}
+	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" || cfg.GitLabProjectID > 0 {
+		gitLabClient, err := gitlabadapter.New(gitlabadapter.Config{
+			BaseURL:        cfg.GitLabBaseURL,
+			Token:          cfg.GitLabToken,
+			TimeoutSeconds: cfg.GitLabTimeoutSeconds,
+			InsecureTLS:    cfg.GitLabInsecureTLS,
+		})
+		if err != nil {
+			logger.Error("gitlab client initialization failed", "error", err)
+			os.Exit(1)
+		}
+		if cfg.GitLabProjectID <= 0 {
+			logger.Error("gitlab project ID must be configured when GitLab integration is enabled")
+			os.Exit(1)
+		}
+		changeServiceOptions = append(changeServiceOptions, app.WithGitCreateBranch(
+			func(ctx context.Context, projectID int, branch string, ref string) error {
+				_, err := gitLabClient.CreateBranch(ctx, projectID, branch, ref)
+				return err
+			},
+			cfg.GitLabProjectID,
+			cfg.GitLabDefaultBranch,
+		))
+		logger.Info("gitlab integration enabled", "baseURL", cfg.GitLabBaseURL, "projectID", cfg.GitLabProjectID, "defaultBranch", cfg.GitLabDefaultBranch, "insecureTLS", cfg.GitLabInsecureTLS)
+	} else {
+		logger.Info("gitlab integration disabled; create-branch endpoint will require GitLab configuration")
+	}
+
 	services := app.Services{
 		Applications: app.NewApplicationService(),
-		Changes:      app.NewChangeService(repositories.Changes),
+		Changes:      app.NewChangeService(repositories.Changes, changeServiceOptions...),
 		Evidence:     app.NewEvidenceService(),
 		DB:           db,
 	}

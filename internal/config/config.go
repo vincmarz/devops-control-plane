@@ -19,8 +19,10 @@ type Config struct {
 
 	GitLabBaseURL        string
 	GitLabToken          string
+	GitLabProjectID      int
 	GitLabDefaultBranch  string
 	GitLabTimeoutSeconds int
+	GitLabInsecureTLS    bool
 
 	TektonNamespace        string
 	TektonPipelineName     string
@@ -47,8 +49,10 @@ func Load() Config {
 
 		GitLabBaseURL:        getEnv("GITLAB_BASE_URL", ""),
 		GitLabToken:          getEnv("GITLAB_TOKEN", ""),
+		GitLabProjectID:      getIntEnv("GITLAB_PROJECT_ID", 0),
 		GitLabDefaultBranch:  getEnv("GITLAB_DEFAULT_BRANCH", "main"),
 		GitLabTimeoutSeconds: getIntEnv("GITLAB_TIMEOUT_SECONDS", 30),
+		GitLabInsecureTLS:    getBoolEnv("GITLAB_INSECURE_TLS", false),
 
 		TektonNamespace:        getEnv("TEKTON_NAMESPACE", "devops-control-plane"),
 		TektonPipelineName:     getEnv("TEKTON_PIPELINE_NAME", "validate-gitops-change"),

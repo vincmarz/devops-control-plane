@@ -94,7 +94,12 @@ func (h *Handler) cancelChange(w http.ResponseWriter, r *http.Request, id string
 }
 
 func (h *Handler) createBranch(w http.ResponseWriter, r *http.Request, id string) {
-	h.markWorkflowStep(w, r, id, "BranchCreated")
+	result, err := h.deps.Services.Changes.CreateBranch(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GITLAB_CREATE_BRANCH_FAILED", Message: "Unable to create GitLab branch for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
 func (h *Handler) updateFiles(w http.ResponseWriter, r *http.Request, id string) {

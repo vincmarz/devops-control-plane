@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/vincmarz/devops-control-plane/internal/domain"
@@ -17,12 +18,43 @@ type ChangeStore interface {
 	MarkStep(ctx context.Context, idOrNumber string, status string) (map[string]any, error)
 }
 
-type ChangeService struct {
-	store ChangeStore
+// GitCreateBranchFunc rappresenta la porta applicativa minima per creare un branch Git.
+//
+// Nota architetturale:
+// Il package app non importa l'adapter GitLab concreto. Il main fa da composition root
+// e passa una funzione che incapsula l'adapter reale.
+type GitCreateBranchFunc func(ctx context.Context, projectID int, branch string, ref string) error
+
+type ChangeServiceOption func(*ChangeService)
+
+func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
+	return func(s *ChangeService) {
+		s.gitCreateBranch = fn
+		s.gitProjectID = projectID
+		s.gitDefaultBranch = strings.TrimSpace(defaultBranch)
+	}
 }
 
-func NewChangeService(store ChangeStore) *ChangeService {
-	return &ChangeService{store: store}
+type ChangeService struct {
+	store ChangeStore
+
+	gitCreateBranch  GitCreateBranchFunc
+	gitProjectID     int
+	gitDefaultBranch string
+}
+
+func NewChangeService(store ChangeStore, opts ...ChangeServiceOption) *ChangeService {
+	service := &ChangeService{
+		store:            store,
+		gitDefaultBranch: "main",
+	}
+	for _, opt := range opts {
+		opt(service)
+	}
+	if service.gitDefaultBranch == "" {
+		service.gitDefaultBranch = "main"
+	}
+	return service
 }
 
 func (s *ChangeService) List(ctx context.Context) ([]domain.ChangeRequest, error) {
@@ -97,6 +129,47 @@ func (s *ChangeService) TransitionLifecycle(ctx context.Context, idOrNumber stri
 	}
 
 	return s.store.TransitionLifecycle(ctx, idOrNumber, action, actor, message)
+}
+
+// CreateBranch esegue lo step tecnico GitLab create-branch e poi marca
+// la ChangeRequest con runtime_status BranchCreated.
+func (s *ChangeService) CreateBranch(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.gitCreateBranch == nil {
+		return nil, errors.New("git create branch client is not configured")
+	}
+	if s.gitProjectID <= 0 {
+		return nil, errors.New("git project ID must be configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
+	ref := s.gitDefaultBranch
+	if strings.TrimSpace(ref) == "" {
+		ref = "main"
+	}
+
+	if err := s.gitCreateBranch(ctx, s.gitProjectID, branchName, ref); err != nil {
+		return nil, fmt.Errorf("create git branch %q from ref %q: %w", branchName, ref, err)
+	}
+
+	result, err := s.store.MarkStep(ctx, idOrNumber, "BranchCreated")
+	if err != nil {
+		return nil, err
+	}
+	result["git"] = map[string]any{
+		"projectID": s.gitProjectID,
+		"branch":    branchName,
+		"ref":       ref,
+	}
+	return result, nil
 }
 
 // MarkStep registra uno step tecnico del workflow.
