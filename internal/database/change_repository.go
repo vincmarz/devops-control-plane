@@ -21,22 +21,31 @@ func NewChangeRepository(db *DB) *ChangeRepository {
 
 func (r *ChangeRepository) List(ctx context.Context) ([]domain.ChangeRequest, error) {
 	rows, err := r.db.Pool.Query(ctx, `
-		SELECT
-			id::text,
-			change_number,
-			application_name,
-			change_type,
-			status,
-			COALESCE(requested_by, ''),
-			COALESCE(description, ''),
-			COALESCE(request_payload, '{}'::jsonb),
-			created_at,
-			updated_at,
-			completed_at
-		FROM change_requests
-		ORDER BY created_at DESC
-		LIMIT 100
-	`)
+        SELECT
+            id::text,
+            change_number,
+            title,
+            application_name,
+            target_environment,
+            change_type,
+            status,
+            risk_level,
+            requested_by,
+            COALESCE(description, ''),
+            COALESCE(request_payload, '{}'::jsonb),
+            created_at,
+            updated_at,
+            submitted_at,
+            approved_at,
+            rejected_at,
+            executed_at,
+            closed_at,
+            cancelled_at,
+            completed_at
+        FROM change_requests
+        ORDER BY created_at DESC
+        LIMIT 100
+    `)
 	if err != nil {
 		return nil, fmt.Errorf("list change_requests: %w", err)
 	}
@@ -57,8 +66,23 @@ func (r *ChangeRepository) List(ctx context.Context) ([]domain.ChangeRequest, er
 }
 
 func (r *ChangeRepository) Create(ctx context.Context, req domain.CreateChangeRequest) (domain.ChangeRequest, error) {
-	if req.ApplicationName == "" || req.ChangeType == "" {
-		return domain.ChangeRequest{}, errors.New("applicationName and changeType are required")
+	if req.Title == "" {
+		return domain.ChangeRequest{}, errors.New("title is required")
+	}
+	if req.ApplicationName == "" {
+		return domain.ChangeRequest{}, errors.New("applicationName is required")
+	}
+	if req.TargetEnvironment == "" {
+		return domain.ChangeRequest{}, errors.New("targetEnvironment is required")
+	}
+	if req.ChangeType == "" {
+		return domain.ChangeRequest{}, errors.New("changeType is required")
+	}
+	if req.RiskLevel == "" {
+		return domain.ChangeRequest{}, errors.New("riskLevel is required")
+	}
+	if req.RequestedBy == "" {
+		return domain.ChangeRequest{}, errors.New("requestedBy is required")
 	}
 
 	payload, err := json.Marshal(req.Payload)
@@ -75,10 +99,10 @@ func (r *ChangeRepository) Create(ctx context.Context, req domain.CreateChangeRe
 	year := time.Now().UTC().Year()
 	var nextNumber int
 	if err := tx.QueryRow(ctx, `
-		SELECT COALESCE(MAX(split_part(change_number, '-', 3)::int), 0) + 1
-		FROM change_requests
-		WHERE change_number LIKE $1
-	`, fmt.Sprintf("CHG-%d-%%", year)).Scan(&nextNumber); err != nil {
+        SELECT COALESCE(MAX(split_part(change_number, '-', 3)::int), 0) + 1
+        FROM change_requests
+        WHERE change_number LIKE $1
+    `, fmt.Sprintf("CHG-%d-%%", year)).Scan(&nextNumber); err != nil {
 		return domain.ChangeRequest{}, fmt.Errorf("generate change number: %w", err)
 	}
 
@@ -87,39 +111,60 @@ func (r *ChangeRepository) Create(ctx context.Context, req domain.CreateChangeRe
 	var change domain.ChangeRequest
 	var rawPayload []byte
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO change_requests (
-			change_number,
-			application_name,
-			change_type,
-			status,
-			requested_by,
-			description,
-			request_payload
-		)
-		VALUES ($1, $2, $3, 'Created', $4, $5, $6::jsonb)
-		RETURNING
-			id::text,
-			change_number,
-			application_name,
-			change_type,
-			status,
-			COALESCE(requested_by, ''),
-			COALESCE(description, ''),
-			COALESCE(request_payload, '{}'::jsonb),
-			created_at,
-			updated_at,
-			completed_at
-	`, changeNumber, req.ApplicationName, req.ChangeType, req.RequestedBy, req.Description, string(payload)).Scan(
+        INSERT INTO change_requests (
+            change_number,
+            title,
+            application_name,
+            target_environment,
+            change_type,
+            status,
+            risk_level,
+            requested_by,
+            description,
+            request_payload
+        )
+        VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7, $8, $9::jsonb)
+        RETURNING
+            id::text,
+            change_number,
+            title,
+            application_name,
+            target_environment,
+            change_type,
+            status,
+            risk_level,
+            requested_by,
+            COALESCE(description, ''),
+            COALESCE(request_payload, '{}'::jsonb),
+            created_at,
+            updated_at,
+            submitted_at,
+            approved_at,
+            rejected_at,
+            executed_at,
+            closed_at,
+            cancelled_at,
+            completed_at
+    `, changeNumber, req.Title, req.ApplicationName, req.TargetEnvironment, req.ChangeType, req.RiskLevel, req.RequestedBy, req.Description, string(payload)).Scan(
 		&change.ID,
 		&change.ChangeNumber,
+		&change.Title,
 		&change.ApplicationName,
+		&change.TargetEnvironment,
 		&change.ChangeType,
 		&change.Status,
+		&change.RiskLevel,
 		&change.RequestedBy,
 		&change.Description,
 		&rawPayload,
 		&change.CreatedAt,
 		&change.UpdatedAt,
+		&change.SubmittedAt,
+		&change.ApprovedAt,
+		&change.RejectedAt,
+		&change.ExecutedAt,
+		&change.ClosedAt,
+		&change.CancelledAt,
 		&change.CompletedAt,
 	); err != nil {
 		return domain.ChangeRequest{}, fmt.Errorf("insert change_request: %w", err)
@@ -127,16 +172,25 @@ func (r *ChangeRepository) Create(ctx context.Context, req domain.CreateChangeRe
 	change.Payload = decodeMap(rawPayload)
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO change_events (
-			change_request_id,
-			event_type,
-			new_status,
-			message,
-			source,
-			payload
-		)
-		VALUES ($1::uuid, 'Created', 'Created', 'ChangeRequest created', 'workflow', '{}'::jsonb)
-	`, change.ID); err != nil {
+        INSERT INTO change_events (
+            change_request_id,
+            event_type,
+            previous_status,
+            new_status,
+            message,
+            source,
+            payload
+        )
+        VALUES (
+            $1::uuid,
+            $2,
+            NULL,
+            $3,
+            'ChangeRequest created',
+            'workflow',
+            '{}'::jsonb
+        )
+    `, change.ID, domain.ChangeEventCreated, domain.ChangeStatusDraft); err != nil {
 		return domain.ChangeRequest{}, fmt.Errorf("insert created event: %w", err)
 	}
 
@@ -149,21 +203,30 @@ func (r *ChangeRepository) Create(ctx context.Context, req domain.CreateChangeRe
 
 func (r *ChangeRepository) Get(ctx context.Context, idOrNumber string) (domain.ChangeRequest, error) {
 	row := r.db.Pool.QueryRow(ctx, `
-		SELECT
-			id::text,
-			change_number,
-			application_name,
-			change_type,
-			status,
-			COALESCE(requested_by, ''),
-			COALESCE(description, ''),
-			COALESCE(request_payload, '{}'::jsonb),
-			created_at,
-			updated_at,
-			completed_at
-		FROM change_requests
-		WHERE id::text = $1 OR change_number = $1
-	`, idOrNumber)
+        SELECT
+            id::text,
+            change_number,
+            title,
+            application_name,
+            target_environment,
+            change_type,
+            status,
+            risk_level,
+            requested_by,
+            COALESCE(description, ''),
+            COALESCE(request_payload, '{}'::jsonb),
+            created_at,
+            updated_at,
+            submitted_at,
+            approved_at,
+            rejected_at,
+            executed_at,
+            closed_at,
+            cancelled_at,
+            completed_at
+        FROM change_requests
+        WHERE id::text = $1 OR change_number = $1
+    `, idOrNumber)
 
 	change, err := scanChange(row)
 	if err != nil {
@@ -182,19 +245,19 @@ func (r *ChangeRepository) Events(ctx context.Context, idOrNumber string) ([]dom
 	}
 
 	rows, err := r.db.Pool.Query(ctx, `
-		SELECT
-			event_type,
-			COALESCE(previous_status, ''),
-			COALESCE(new_status, ''),
-			COALESCE(message, ''),
-			COALESCE(error_code, ''),
-			COALESCE(source, ''),
-			COALESCE(payload, '{}'::jsonb),
-			created_at
-		FROM change_events
-		WHERE change_request_id = $1::uuid
-		ORDER BY created_at ASC
-	`, change.ID)
+        SELECT
+            event_type,
+            COALESCE(previous_status, ''),
+            COALESCE(new_status, ''),
+            COALESCE(message, ''),
+            COALESCE(error_code, ''),
+            COALESCE(source, ''),
+            COALESCE(payload, '{}'::jsonb),
+            created_at
+        FROM change_events
+        WHERE change_request_id = $1::uuid
+        ORDER BY created_at ASC
+    `, change.ID)
 	if err != nil {
 		return nil, fmt.Errorf("list change events: %w", err)
 	}
@@ -225,7 +288,15 @@ func (r *ChangeRepository) Events(ctx context.Context, idOrNumber string) ([]dom
 	return events, nil
 }
 
-func (r *ChangeRepository) MarkStep(ctx context.Context, idOrNumber string, status string) (map[string]any, error) {
+// MarkStep registra uno step tecnico del workflow.
+//
+// Nota importante:
+// questo metodo NON modifica change_requests.status.
+// Lo stato governato resta draft/submitted/approved/executing/executed/...
+// Lo step tecnico viene salvato in:
+// - change_requests.runtime_status
+// - change_events con event_type = technical_step_completed
+func (r *ChangeRepository) MarkStep(ctx context.Context, idOrNumber string, step string) (map[string]any, error) {
 	tx, err := r.db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin mark step transaction: %w", err)
@@ -234,12 +305,18 @@ func (r *ChangeRepository) MarkStep(ctx context.Context, idOrNumber string, stat
 
 	var id string
 	var changeNumber string
-	var previousStatus string
+	var lifecycleStatus string
+	var previousRuntimeStatus string
+
 	if err := tx.QueryRow(ctx, `
-		SELECT id::text, change_number, status
-		FROM change_requests
-		WHERE id::text = $1 OR change_number = $1
-	`, idOrNumber).Scan(&id, &changeNumber, &previousStatus); err != nil {
+        SELECT
+            id::text,
+            change_number,
+            status,
+            COALESCE(runtime_status, '')
+        FROM change_requests
+        WHERE id::text = $1 OR change_number = $1
+    `, idOrNumber).Scan(&id, &changeNumber, &lifecycleStatus, &previousRuntimeStatus); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("change not found: %s", idOrNumber)
 		}
@@ -247,28 +324,46 @@ func (r *ChangeRepository) MarkStep(ctx context.Context, idOrNumber string, stat
 	}
 
 	_, err = tx.Exec(ctx, `
-		UPDATE change_requests
-		SET status = $2,
-		    updated_at = now(),
-		    completed_at = CASE WHEN $2 IN ('Completed', 'Failed', 'Cancelled') THEN now() ELSE completed_at END
-		WHERE id = $1::uuid
-	`, id, status)
+        UPDATE change_requests
+        SET runtime_status = $2,
+            updated_at = now()
+        WHERE id = $1::uuid
+    `, id, step)
 	if err != nil {
-		return nil, fmt.Errorf("update change status: %w", err)
+		return nil, fmt.Errorf("update change runtime status: %w", err)
+	}
+
+	eventPayload := map[string]any{
+		"step":                  step,
+		"previousRuntimeStatus": previousRuntimeStatus,
+		"lifecycleStatus":       lifecycleStatus,
+	}
+
+	rawEventPayload, err := json.Marshal(eventPayload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal technical step payload: %w", err)
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO change_events (
-			change_request_id,
-			event_type,
-			previous_status,
-			new_status,
-			message,
-			source,
-			payload
-		)
-		VALUES ($1::uuid, $2, $3, $2, 'Workflow step executed', 'workflow', '{}'::jsonb)
-	`, id, status, previousStatus)
+        INSERT INTO change_events (
+            change_request_id,
+            event_type,
+            previous_status,
+            new_status,
+            message,
+            source,
+            payload
+        )
+        VALUES (
+            $1::uuid,
+            $2,
+            $3,
+            $4,
+            'Technical workflow step completed',
+            'workflow',
+            $5::jsonb
+        )
+    `, id, domain.ChangeEventTechnicalStepCompleted, lifecycleStatus, lifecycleStatus, string(rawEventPayload))
 	if err != nil {
 		return nil, fmt.Errorf("insert mark step event: %w", err)
 	}
@@ -278,10 +373,11 @@ func (r *ChangeRepository) MarkStep(ctx context.Context, idOrNumber string, stat
 	}
 
 	return map[string]any{
-		"id":             id,
-		"changeNumber":   changeNumber,
-		"previousStatus": previousStatus,
-		"status":         status,
+		"id":                    id,
+		"changeNumber":          changeNumber,
+		"status":                lifecycleStatus,
+		"runtimeStatus":         step,
+		"previousRuntimeStatus": previousRuntimeStatus,
 	}, nil
 }
 
@@ -295,14 +391,23 @@ func scanChange(row changeScanner) (domain.ChangeRequest, error) {
 	if err := row.Scan(
 		&change.ID,
 		&change.ChangeNumber,
+		&change.Title,
 		&change.ApplicationName,
+		&change.TargetEnvironment,
 		&change.ChangeType,
 		&change.Status,
+		&change.RiskLevel,
 		&change.RequestedBy,
 		&change.Description,
 		&rawPayload,
 		&change.CreatedAt,
 		&change.UpdatedAt,
+		&change.SubmittedAt,
+		&change.ApprovedAt,
+		&change.RejectedAt,
+		&change.ExecutedAt,
+		&change.ClosedAt,
+		&change.CancelledAt,
 		&change.CompletedAt,
 	); err != nil {
 		return domain.ChangeRequest{}, fmt.Errorf("scan change_request: %w", err)
