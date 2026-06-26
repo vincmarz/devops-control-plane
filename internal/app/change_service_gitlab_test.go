@@ -186,3 +186,77 @@ func TestChangeServiceUpdateFilesPropagatesGitError(t *testing.T) {
 		t.Fatal("store.MarkStep was called even if GitLab update file failed")
 	}
 }
+
+func TestChangeServiceOpenMergeRequest(t *testing.T) {
+	store := &createBranchFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0003", ApplicationName: "demo-go-color-app", TargetEnvironment: "dev"}}
+
+	var gotProjectID int
+	var gotSourceBranch string
+	var gotTargetBranch string
+	var gotTitle string
+	var gotDescription string
+	service := NewChangeService(
+		store,
+		WithGitCreateBranch(func(ctx context.Context, projectID int, branch string, ref string) error { return nil }, 1, "main"),
+		WithGitCreateOrUpdateFile(func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error {
+			return nil
+		}),
+		WithGitOpenMergeRequest(func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, title string, description string) (int, string, error) {
+			gotProjectID = projectID
+			gotSourceBranch = sourceBranch
+			gotTargetBranch = targetBranch
+			gotTitle = title
+			gotDescription = description
+			return 1, "https://gitlab.example.local/group/project/-/merge_requests/1", nil
+		}),
+	)
+
+	result, err := service.OpenMergeRequest(context.Background(), "CHG-2026-0003")
+	if err != nil {
+		t.Fatalf("OpenMergeRequest returned error: %v", err)
+	}
+	if gotProjectID != 1 {
+		t.Fatalf("projectID = %d, want 1", gotProjectID)
+	}
+	if gotSourceBranch != "change/CHG-2026-0003" {
+		t.Fatalf("sourceBranch = %q", gotSourceBranch)
+	}
+	if gotTargetBranch != "main" {
+		t.Fatalf("targetBranch = %q", gotTargetBranch)
+	}
+	if gotTitle != "CHG-2026-0003 - GitOps change for demo-go-color-app" {
+		t.Fatalf("title = %q", gotTitle)
+	}
+	if !strings.Contains(gotDescription, "CHG-2026-0003") {
+		t.Fatalf("description does not contain change number: %q", gotDescription)
+	}
+	if store.markedStatus != "MergeRequestOpened" {
+		t.Fatalf("marked status = %q, want MergeRequestOpened", store.markedStatus)
+	}
+	gitInfo, ok := result["git"].(map[string]any)
+	if !ok {
+		t.Fatalf("result git info missing or invalid: %#v", result["git"])
+	}
+	if gitInfo["mergeRequestIID"] != 1 {
+		t.Fatalf("mergeRequestIID = %v", gitInfo["mergeRequestIID"])
+	}
+}
+
+func TestChangeServiceOpenMergeRequestPropagatesGitError(t *testing.T) {
+	store := &createBranchFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0003", ApplicationName: "demo-go-color-app"}}
+	service := NewChangeService(
+		store,
+		WithGitCreateBranch(func(ctx context.Context, projectID int, branch string, ref string) error { return nil }, 1, "main"),
+		WithGitOpenMergeRequest(func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, title string, description string) (int, string, error) {
+			return 0, "", errors.New("gitlab mr failed")
+		}),
+	)
+
+	_, err := service.OpenMergeRequest(context.Background(), "CHG-2026-0003")
+	if err == nil {
+		t.Fatal("OpenMergeRequest returned nil error, want git error")
+	}
+	if store.markStepCalled {
+		t.Fatal("store.MarkStep was called even if GitLab open merge request failed")
+	}
+}

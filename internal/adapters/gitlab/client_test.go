@@ -200,3 +200,89 @@ func TestCreateOrUpdateFileFallsBackToUpdate(t *testing.T) {
 		t.Fatalf("methods = %#v, want POST then PUT", methods)
 	}
 }
+
+func TestOpenMergeRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/v4/projects/1/merge_requests" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("ParseForm returned error: %v", err)
+		}
+		if got := r.Form.Get("source_branch"); got != "change/CHG-2026-0003" {
+			t.Fatalf("source_branch = %q", got)
+		}
+		if got := r.Form.Get("target_branch"); got != "main" {
+			t.Fatalf("target_branch = %q", got)
+		}
+		if got := r.Form.Get("title"); got != "CHG-2026-0003 - GitOps change for demo-go-color-app" {
+			t.Fatalf("title = %q", got)
+		}
+		if got := r.Form.Get("remove_source_branch"); got != "false" {
+			t.Fatalf("remove_source_branch = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":            10,
+			"iid":           1,
+			"project_id":    1,
+			"title":         "CHG-2026-0003 - GitOps change for demo-go-color-app",
+			"state":         "opened",
+			"source_branch": "change/CHG-2026-0003",
+			"target_branch": "main",
+			"web_url":       "https://gitlab.example.local/group/project/-/merge_requests/1",
+		})
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL, Token: "test-token"}, WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	mr, err := client.OpenMergeRequest(context.Background(), 1, "change/CHG-2026-0003", "main", "CHG-2026-0003 - GitOps change for demo-go-color-app", "description")
+	if err != nil {
+		t.Fatalf("OpenMergeRequest returned error: %v", err)
+	}
+	if mr.IID != 1 {
+		t.Fatalf("mr.IID = %d, want 1", mr.IID)
+	}
+	if mr.State != "opened" {
+		t.Fatalf("mr.State = %q, want opened", mr.State)
+	}
+	if mr.WebURL == "" {
+		t.Fatal("mr.WebURL is empty")
+	}
+}
+
+func TestOpenMergeRequestValidation(t *testing.T) {
+	client, err := New(Config{BaseURL: "https://gitlab.example.local", Token: "token"})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	tests := []struct {
+		name         string
+		projectID    int
+		sourceBranch string
+		targetBranch string
+		title        string
+	}{
+		{name: "missing project", projectID: 0, sourceBranch: "change/test", targetBranch: "main", title: "title"},
+		{name: "missing source", projectID: 1, sourceBranch: "", targetBranch: "main", title: "title"},
+		{name: "missing target", projectID: 1, sourceBranch: "change/test", targetBranch: "", title: "title"},
+		{name: "missing title", projectID: 1, sourceBranch: "change/test", targetBranch: "main", title: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.OpenMergeRequest(context.Background(), tt.projectID, tt.sourceBranch, tt.targetBranch, tt.title, "description")
+			if err == nil {
+				t.Fatal("OpenMergeRequest returned nil error, want validation error")
+			}
+		})
+	}
+}

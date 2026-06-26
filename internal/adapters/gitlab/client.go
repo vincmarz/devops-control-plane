@@ -160,6 +160,44 @@ func (c *Client) CreateOrUpdateFile(ctx context.Context, projectID int, branch s
 	return created, nil
 }
 
+// OpenMergeRequest apre una Merge Request GitLab tra due branch.
+func (c *Client) OpenMergeRequest(ctx context.Context, projectID int, sourceBranch string, targetBranch string, title string, description string) (MergeRequest, error) {
+	sourceBranch = strings.TrimSpace(sourceBranch)
+	targetBranch = strings.TrimSpace(targetBranch)
+	title = strings.TrimSpace(title)
+	description = strings.TrimSpace(description)
+
+	if projectID <= 0 {
+		return MergeRequest{}, errors.New("gitlab project ID must be greater than zero")
+	}
+	if sourceBranch == "" {
+		return MergeRequest{}, errors.New("gitlab source branch is required")
+	}
+	if targetBranch == "" {
+		return MergeRequest{}, errors.New("gitlab target branch is required")
+	}
+	if title == "" {
+		return MergeRequest{}, errors.New("gitlab merge request title is required")
+	}
+
+	form := url.Values{}
+	form.Set("source_branch", sourceBranch)
+	form.Set("target_branch", targetBranch)
+	form.Set("title", title)
+	form.Set("description", description)
+	form.Set("remove_source_branch", "false")
+	form.Set("squash", "false")
+
+	path := fmt.Sprintf("/api/v4/projects/%d/merge_requests", projectID)
+
+	var created MergeRequest
+	if err := c.doForm(ctx, http.MethodPost, path, form, &created); err != nil {
+		return MergeRequest{}, err
+	}
+
+	return created, nil
+}
+
 func isFileAlreadyExistsError(err error) bool {
 	if err == nil {
 		return false

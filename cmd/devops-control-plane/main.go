@@ -66,6 +66,12 @@ func main() {
 					return err
 				},
 			),
+			app.WithGitOpenMergeRequest(
+				func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, title string, description string) (int, string, error) {
+					mr, err := gitLabClient.OpenMergeRequest(ctx, projectID, sourceBranch, targetBranch, title, description)
+					return mr.IID, mr.WebURL, err
+				},
+			),
 		)
 		logger.Info("gitlab integration enabled", "baseURL", cfg.GitLabBaseURL, "projectID", cfg.GitLabProjectID, "defaultBranch", cfg.GitLabDefaultBranch, "insecureTLS", cfg.GitLabInsecureTLS)
 	} else {
