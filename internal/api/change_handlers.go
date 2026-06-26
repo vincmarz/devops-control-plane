@@ -8,7 +8,11 @@ import (
 )
 
 func (h *Handler) listChanges(w http.ResponseWriter, r *http.Request) {
-	changes := h.deps.Services.Changes.List(r.Context())
+	changes, err := h.deps.Services.Changes.List(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, APIError{Code: "DATABASE_ERROR", Message: "Unable to list ChangeRequests", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
 	writeJSON(w, http.StatusOK, changes, map[string]any{"count": len(changes), "requestId": requestIDFromContext(r.Context())})
 }
 
@@ -37,7 +41,11 @@ func (h *Handler) getChange(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) getChangeEvents(w http.ResponseWriter, r *http.Request, id string) {
-	events := h.deps.Services.Changes.Events(r.Context(), id)
+	events, err := h.deps.Services.Changes.Events(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, APIError{Code: "CHANGE_EVENTS_NOT_FOUND", Message: "Unable to load ChangeRequest events", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
 	writeJSON(w, http.StatusOK, events, map[string]any{"count": len(events), "requestId": requestIDFromContext(r.Context())})
 }
 
@@ -47,25 +55,34 @@ func (h *Handler) getChangeEvidence(w http.ResponseWriter, r *http.Request, id, 
 }
 
 func (h *Handler) createBranch(w http.ResponseWriter, r *http.Request, id string) {
-	writeJSON(w, http.StatusAccepted, h.deps.Services.Changes.MarkStep(id, "BranchCreated"), map[string]any{"requestId": requestIDFromContext(r.Context())})
+	h.markWorkflowStep(w, r, id, "BranchCreated")
 }
 
 func (h *Handler) updateFiles(w http.ResponseWriter, r *http.Request, id string) {
-	writeJSON(w, http.StatusAccepted, h.deps.Services.Changes.MarkStep(id, "CommitCreated"), map[string]any{"requestId": requestIDFromContext(r.Context())})
+	h.markWorkflowStep(w, r, id, "CommitCreated")
 }
 
 func (h *Handler) validateChange(w http.ResponseWriter, r *http.Request, id string) {
-	writeJSON(w, http.StatusAccepted, h.deps.Services.Changes.MarkStep(id, "ValidationRunning"), map[string]any{"requestId": requestIDFromContext(r.Context())})
+	h.markWorkflowStep(w, r, id, "ValidationRunning")
 }
 
 func (h *Handler) openMergeRequest(w http.ResponseWriter, r *http.Request, id string) {
-	writeJSON(w, http.StatusAccepted, h.deps.Services.Changes.MarkStep(id, "MergeRequestOpened"), map[string]any{"requestId": requestIDFromContext(r.Context())})
+	h.markWorkflowStep(w, r, id, "MergeRequestOpened")
 }
 
 func (h *Handler) syncChange(w http.ResponseWriter, r *http.Request, id string) {
-	writeJSON(w, http.StatusAccepted, h.deps.Services.Changes.MarkStep(id, "SyncRunning"), map[string]any{"requestId": requestIDFromContext(r.Context())})
+	h.markWorkflowStep(w, r, id, "SyncRunning")
 }
 
 func (h *Handler) collectEvidence(w http.ResponseWriter, r *http.Request, id string) {
-	writeJSON(w, http.StatusAccepted, h.deps.Services.Changes.MarkStep(id, "EvidenceCollected"), map[string]any{"requestId": requestIDFromContext(r.Context())})
+	h.markWorkflowStep(w, r, id, "EvidenceCollected")
+}
+
+func (h *Handler) markWorkflowStep(w http.ResponseWriter, r *http.Request, id string, status string) {
+	result, err := h.deps.Services.Changes.MarkStep(r.Context(), id, status)
+	if err != nil {
+		writeError(w, http.StatusNotFound, APIError{Code: "CHANGE_NOT_FOUND", Message: "Unable to update ChangeRequest status", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }

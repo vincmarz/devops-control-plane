@@ -32,9 +32,11 @@ func main() {
 	}
 	defer db.Close()
 
+	repositories := database.NewRepositorySet(db)
+
 	services := app.Services{
 		Applications: app.NewApplicationService(),
-		Changes:      app.NewChangeService(),
+		Changes:      app.NewChangeService(repositories.Changes),
 		Evidence:     app.NewEvidenceService(),
 		DB:           db,
 	}
