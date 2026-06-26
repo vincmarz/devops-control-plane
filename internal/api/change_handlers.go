@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/vincmarz/devops-control-plane/internal/domain"
@@ -54,6 +56,43 @@ func (h *Handler) getChangeEvidence(w http.ResponseWriter, r *http.Request, id, 
 	writeJSON(w, http.StatusOK, evidence, map[string]any{"count": len(evidence), "requestId": requestIDFromContext(r.Context())})
 }
 
+type lifecycleTransitionRequest struct {
+	Actor   string `json:"actor"`
+	Message string `json:"message"`
+}
+
+func (h *Handler) submitChange(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "submit")
+}
+
+func (h *Handler) approveChange(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "approve")
+}
+
+func (h *Handler) rejectChange(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "reject")
+}
+
+func (h *Handler) startExecution(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "start-execution")
+}
+
+func (h *Handler) completeExecution(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "complete-execution")
+}
+
+func (h *Handler) failExecution(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "fail-execution")
+}
+
+func (h *Handler) closeChange(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "close")
+}
+
+func (h *Handler) cancelChange(w http.ResponseWriter, r *http.Request, id string) {
+	h.transitionLifecycle(w, r, id, "cancel")
+}
+
 func (h *Handler) createBranch(w http.ResponseWriter, r *http.Request, id string) {
 	h.markWorkflowStep(w, r, id, "BranchCreated")
 }
@@ -76,6 +115,22 @@ func (h *Handler) syncChange(w http.ResponseWriter, r *http.Request, id string) 
 
 func (h *Handler) collectEvidence(w http.ResponseWriter, r *http.Request, id string) {
 	h.markWorkflowStep(w, r, id, "EvidenceCollected")
+}
+
+func (h *Handler) transitionLifecycle(w http.ResponseWriter, r *http.Request, id string, action string) {
+	var req lifecycleTransitionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, APIError{Code: "VALIDATION_INVALID_REQUEST", Message: "Invalid JSON request", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+
+	result, err := h.deps.Services.Changes.TransitionLifecycle(r.Context(), id, action, req.Actor, req.Message)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "CHANGE_TRANSITION_INVALID", Message: "Unable to apply ChangeRequest lifecycle transition", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
 func (h *Handler) markWorkflowStep(w http.ResponseWriter, r *http.Request, id string, status string) {

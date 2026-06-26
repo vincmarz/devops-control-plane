@@ -288,6 +288,144 @@ func (r *ChangeRepository) Events(ctx context.Context, idOrNumber string) ([]dom
 	return events, nil
 }
 
+func (r *ChangeRepository) TransitionLifecycle(ctx context.Context, idOrNumber string, action string, actor string, message string) (map[string]any, error) {
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin lifecycle transition transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var id string
+	var changeNumber string
+	var previousStatus string
+	if err := tx.QueryRow(ctx, `
+		SELECT id::text, change_number, status
+		FROM change_requests
+		WHERE id::text = $1 OR change_number = $1
+	`, idOrNumber).Scan(&id, &changeNumber, &previousStatus); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("change not found: %s", idOrNumber)
+		}
+		return nil, fmt.Errorf("load change for lifecycle transition: %w", err)
+	}
+
+	targetStatus, eventType, timestampColumn, markCompleted, err := lifecycleTransition(action, previousStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	timestampSetClause := ""
+	if timestampColumn != "" {
+		timestampSetClause = fmt.Sprintf(",\n\t\t    %s = now()", timestampColumn)
+	}
+
+	updateSQL := fmt.Sprintf(`
+		UPDATE change_requests
+		SET status = $2,
+		    updated_at = now()%s%s
+		WHERE id = $1::uuid
+	`, timestampSetClause, completedAtClause(markCompleted))
+
+	if _, err := tx.Exec(ctx, updateSQL, id, targetStatus); err != nil {
+		return nil, fmt.Errorf("update change lifecycle status: %w", err)
+	}
+
+	if message == "" {
+		message = fmt.Sprintf("ChangeRequest lifecycle transition: %s", action)
+	}
+
+	eventPayload := map[string]any{
+		"action":         action,
+		"actor":          actor,
+		"previousStatus": previousStatus,
+		"newStatus":      targetStatus,
+	}
+	rawEventPayload, err := json.Marshal(eventPayload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal lifecycle transition payload: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO change_events (
+			change_request_id,
+			event_type,
+			previous_status,
+			new_status,
+			message,
+			source,
+			payload
+		)
+		VALUES (
+			$1::uuid,
+			$2,
+			$3,
+			$4,
+			$5,
+			'workflow',
+			$6::jsonb
+		)
+	`, id, eventType, previousStatus, targetStatus, message, string(rawEventPayload))
+	if err != nil {
+		return nil, fmt.Errorf("insert lifecycle transition event: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit lifecycle transition transaction: %w", err)
+	}
+
+	return map[string]any{
+		"id":             id,
+		"changeNumber":   changeNumber,
+		"action":         action,
+		"actor":          actor,
+		"previousStatus": previousStatus,
+		"status":         targetStatus,
+	}, nil
+}
+
+func lifecycleTransition(action string, currentStatus string) (targetStatus string, eventType string, timestampColumn string, markCompleted bool, err error) {
+	switch action {
+	case "submit":
+		return requireLifecycleStatus(action, currentStatus, domain.ChangeStatusDraft, domain.ChangeStatusSubmitted, domain.ChangeEventSubmitted, "submitted_at", false)
+	case "approve":
+		return requireLifecycleStatus(action, currentStatus, domain.ChangeStatusSubmitted, domain.ChangeStatusApproved, domain.ChangeEventApproved, "approved_at", false)
+	case "reject":
+		return requireLifecycleStatus(action, currentStatus, domain.ChangeStatusSubmitted, domain.ChangeStatusRejected, domain.ChangeEventRejected, "rejected_at", true)
+	case "start-execution":
+		return requireLifecycleStatus(action, currentStatus, domain.ChangeStatusApproved, domain.ChangeStatusExecuting, domain.ChangeEventExecutionStarted, "", false)
+	case "complete-execution":
+		return requireLifecycleStatus(action, currentStatus, domain.ChangeStatusExecuting, domain.ChangeStatusExecuted, domain.ChangeEventExecutionCompleted, "executed_at", false)
+	case "fail-execution":
+		return requireLifecycleStatus(action, currentStatus, domain.ChangeStatusExecuting, domain.ChangeStatusFailed, domain.ChangeEventExecutionFailed, "executed_at", true)
+	case "close":
+		if currentStatus != domain.ChangeStatusExecuted && currentStatus != domain.ChangeStatusFailed {
+			return "", "", "", false, fmt.Errorf("invalid lifecycle transition %q from status %q", action, currentStatus)
+		}
+		return domain.ChangeStatusClosed, domain.ChangeEventClosed, "closed_at", true, nil
+	case "cancel":
+		if currentStatus != domain.ChangeStatusDraft && currentStatus != domain.ChangeStatusSubmitted && currentStatus != domain.ChangeStatusApproved {
+			return "", "", "", false, fmt.Errorf("invalid lifecycle transition %q from status %q", action, currentStatus)
+		}
+		return domain.ChangeStatusCancelled, domain.ChangeEventCancelled, "cancelled_at", true, nil
+	default:
+		return "", "", "", false, fmt.Errorf("unsupported lifecycle action %q", action)
+	}
+}
+
+func requireLifecycleStatus(action string, currentStatus string, requiredStatus string, targetStatus string, eventType string, timestampColumn string, markCompleted bool) (string, string, string, bool, error) {
+	if currentStatus != requiredStatus {
+		return "", "", "", false, fmt.Errorf("invalid lifecycle transition %q from status %q: expected %q", action, currentStatus, requiredStatus)
+	}
+	return targetStatus, eventType, timestampColumn, markCompleted, nil
+}
+
+func completedAtClause(markCompleted bool) string {
+	if markCompleted {
+		return ", completed_at = now()"
+	}
+	return ""
+}
+
 // MarkStep registra uno step tecnico del workflow.
 //
 // Nota importante:

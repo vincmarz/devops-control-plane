@@ -77,6 +77,22 @@ func (h *Handler) changeSubrouter(w http.ResponseWriter, r *http.Request) {
 		h.getChangeEvents(w, r, id)
 	case len(parts) == 2 && parts[1] == "evidence" && r.Method == http.MethodGet:
 		h.getChangeEvidence(w, r, id, "")
+	case len(parts) == 2 && parts[1] == "submit" && r.Method == http.MethodPost:
+		h.submitChange(w, r, id)
+	case len(parts) == 2 && parts[1] == "approve" && r.Method == http.MethodPost:
+		h.approveChange(w, r, id)
+	case len(parts) == 2 && parts[1] == "reject" && r.Method == http.MethodPost:
+		h.rejectChange(w, r, id)
+	case len(parts) == 2 && parts[1] == "start-execution" && r.Method == http.MethodPost:
+		h.startExecution(w, r, id)
+	case len(parts) == 2 && parts[1] == "complete-execution" && r.Method == http.MethodPost:
+		h.completeExecution(w, r, id)
+	case len(parts) == 2 && parts[1] == "fail-execution" && r.Method == http.MethodPost:
+		h.failExecution(w, r, id)
+	case len(parts) == 2 && parts[1] == "close" && r.Method == http.MethodPost:
+		h.closeChange(w, r, id)
+	case len(parts) == 2 && parts[1] == "cancel" && r.Method == http.MethodPost:
+		h.cancelChange(w, r, id)
 	case len(parts) == 3 && parts[1] == "evidence" && r.Method == http.MethodGet:
 		h.getChangeEvidence(w, r, id, parts[2])
 	case len(parts) == 2 && parts[1] == "validate" && r.Method == http.MethodPost:

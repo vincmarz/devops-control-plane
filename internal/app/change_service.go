@@ -13,6 +13,7 @@ type ChangeStore interface {
 	Create(ctx context.Context, req domain.CreateChangeRequest) (domain.ChangeRequest, error)
 	Get(ctx context.Context, idOrNumber string) (domain.ChangeRequest, error)
 	Events(ctx context.Context, idOrNumber string) ([]domain.ChangeEvent, error)
+	TransitionLifecycle(ctx context.Context, idOrNumber string, action string, actor string, message string) (map[string]any, error)
 	MarkStep(ctx context.Context, idOrNumber string, status string) (map[string]any, error)
 }
 
@@ -69,6 +70,33 @@ func (s *ChangeService) Get(ctx context.Context, idOrNumber string) (domain.Chan
 
 func (s *ChangeService) Events(ctx context.Context, idOrNumber string) ([]domain.ChangeEvent, error) {
 	return s.store.Events(ctx, idOrNumber)
+}
+
+// TransitionLifecycle applica una transizione governata della ChangeRequest.
+//
+// Nota importante:
+// Questo metodo lavora sul lifecycle status della change, ad esempio:
+// draft -> submitted -> approved -> executing -> executed -> closed.
+//
+// Non deve essere usato per step tecnici come create-branch, update-files o sync,
+// che restano tracciati tramite MarkStep/runtime_status.
+func (s *ChangeService) TransitionLifecycle(ctx context.Context, idOrNumber string, action string, actor string, message string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	action = strings.TrimSpace(action)
+	actor = strings.TrimSpace(actor)
+	message = strings.TrimSpace(message)
+
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if action == "" {
+		return nil, errors.New("lifecycle action is required")
+	}
+	if actor == "" {
+		return nil, errors.New("actor is required")
+	}
+
+	return s.store.TransitionLifecycle(ctx, idOrNumber, action, actor, message)
 }
 
 // MarkStep registra uno step tecnico del workflow.
