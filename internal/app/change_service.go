@@ -59,6 +59,9 @@ type EvidenceStore interface {
 // DeploymentEvidenceCollectorFunc rappresenta la porta applicativa minima per raccogliere evidenze post-deployment.
 type DeploymentEvidenceCollectorFunc func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error)
 
+// KubernetesRuntimeEvidenceCollectorFunc rappresenta la porta applicativa minima per raccogliere evidenze runtime Kubernetes/OpenShift.
+type KubernetesRuntimeEvidenceCollectorFunc func(ctx context.Context, change domain.ChangeRequest) (map[string]any, error)
+
 // GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
 type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
 
@@ -90,6 +93,10 @@ func WithDeploymentEvidenceCollector(fn DeploymentEvidenceCollectorFunc) ChangeS
 	return func(s *ChangeService) { s.deploymentEvidenceCollector = fn }
 }
 
+func WithKubernetesRuntimeEvidenceCollector(fn KubernetesRuntimeEvidenceCollectorFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.kubernetesRuntimeEvidenceCollector = fn }
+}
+
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
 	return func(s *ChangeService) {
 		s.gitCreateBranch = fn
@@ -119,11 +126,12 @@ func WithGitMergeRequest(fn GitMergeRequestFunc) ChangeServiceOption {
 type ChangeService struct {
 	store ChangeStore
 
-	tektonRunPipeline           TektonRunPipelineFunc
-	tektonCheckValidation       TektonCheckValidationFunc
-	argocdCheckDeployment       ArgoCDCheckDeploymentFunc
-	evidenceStore               EvidenceStore
-	deploymentEvidenceCollector DeploymentEvidenceCollectorFunc
+	tektonRunPipeline                  TektonRunPipelineFunc
+	tektonCheckValidation              TektonCheckValidationFunc
+	argocdCheckDeployment              ArgoCDCheckDeploymentFunc
+	evidenceStore                      EvidenceStore
+	deploymentEvidenceCollector        DeploymentEvidenceCollectorFunc
+	kubernetesRuntimeEvidenceCollector KubernetesRuntimeEvidenceCollectorFunc
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -550,6 +558,17 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 		evidence.ChangeNumber = change.ChangeNumber
 	}
 	evidence.Sanitized = true
+
+	if s.kubernetesRuntimeEvidenceCollector != nil {
+		runtimeEvidence, err := s.kubernetesRuntimeEvidenceCollector(ctx, change)
+		if err != nil {
+			return nil, fmt.Errorf("collect kubernetes runtime evidence for %q: %w", change.ChangeNumber, err)
+		}
+		if evidence.Payload == nil {
+			evidence.Payload = map[string]any{}
+		}
+		evidence.Payload["kubernetes"] = runtimeEvidence
+	}
 
 	savedEvidence, err := s.evidenceStore.Create(ctx, change.ID, evidence)
 	if err != nil {

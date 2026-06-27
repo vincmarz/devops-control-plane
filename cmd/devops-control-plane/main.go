@@ -13,6 +13,7 @@ import (
 
 	argocdadapter "github.com/vincmarz/devops-control-plane/internal/adapters/argocd"
 	gitlabadapter "github.com/vincmarz/devops-control-plane/internal/adapters/gitlab"
+	kubernetesadapter "github.com/vincmarz/devops-control-plane/internal/adapters/kubernetes"
 	tektonadapter "github.com/vincmarz/devops-control-plane/internal/adapters/tekton"
 	"github.com/vincmarz/devops-control-plane/internal/api"
 	"github.com/vincmarz/devops-control-plane/internal/app"
@@ -93,6 +94,15 @@ func main() {
 	}
 
 	if cfg.KubernetesAPIURL != "" || cfg.KubernetesToken != "" {
+		kubernetesRuntimeClient, err := kubernetesadapter.New(kubernetesadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS})
+		if err != nil {
+			logger.Error("kubernetes client initialization failed", "error", err)
+			os.Exit(1)
+		}
+		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (map[string]any, error) {
+			return kubernetesRuntimeClient.CollectRuntimeEvidence(ctx, cfg.KubernetesNamespace, change.ApplicationName)
+		}))
+
 		tektonClient, err := tektonadapter.New(tektonadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS})
 		if err != nil {
 			logger.Error("tekton client initialization failed", "error", err)
