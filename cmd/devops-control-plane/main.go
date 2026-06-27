@@ -39,7 +39,7 @@ func main() {
 
 	repositories := database.NewRepositorySet(db)
 
-	changeServiceOptions := []app.ChangeServiceOption{}
+	changeServiceOptions := []app.ChangeServiceOption{app.WithEvidenceStore(repositories.Evidences)}
 	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" || cfg.GitLabProjectID > 0 {
 		gitLabClient, err := gitlabadapter.New(gitlabadapter.Config{
 			BaseURL:        cfg.GitLabBaseURL,
@@ -123,6 +123,39 @@ func main() {
 			argoApp, err := argoCDClient.GetApplication(ctx, change.ApplicationName)
 			return app.ArgoCDDeploymentResult{ApplicationName: argoApp.Name, Project: argoApp.Project, SyncStatus: argoApp.SyncStatus, HealthStatus: argoApp.HealthStatus, Revision: argoApp.CurrentRevision}, err
 		}))
+		changeServiceOptions = append(changeServiceOptions, app.WithDeploymentEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error) {
+			argoApp, err := argoCDClient.GetApplication(ctx, change.ApplicationName)
+			if err != nil {
+				return domain.Evidence{}, err
+			}
+			return domain.Evidence{
+				ChangeNumber: change.ChangeNumber,
+				EvidenceType: "deployment",
+				Name:         "deployment-evidence",
+				Summary:      "Post-deployment evidence for " + change.ApplicationName,
+				Sanitized:    true,
+				ExternalRef:  argoApp.CurrentRevision,
+				Payload: map[string]any{
+					"change": map[string]any{
+						"changeNumber":      change.ChangeNumber,
+						"applicationName":   change.ApplicationName,
+						"targetEnvironment": change.TargetEnvironment,
+						"lifecycleStatus":   change.Status,
+					},
+					"argocd": map[string]any{
+						"applicationName": argoApp.Name,
+						"project":         argoApp.Project,
+						"syncStatus":      argoApp.SyncStatus,
+						"healthStatus":    argoApp.HealthStatus,
+						"revision":        argoApp.CurrentRevision,
+						"repoUrl":         argoApp.RepoURL,
+						"targetRevision":  argoApp.TargetRevision,
+						"path":            argoApp.Path,
+						"conditions":      argoApp.Conditions,
+					},
+				},
+			}, nil
+		}))
 		logger.Info("argocd integration enabled", "baseURL", cfg.ArgoCDBaseURL, "insecureTLS", cfg.ArgoCDInsecureTLS)
 	} else {
 		logger.Info("argocd integration disabled; check-deployment endpoint will require Argo CD configuration")
@@ -131,7 +164,7 @@ func main() {
 	services := app.Services{
 		Applications: applicationService,
 		Changes:      app.NewChangeService(repositories.Changes, changeServiceOptions...),
-		Evidence:     app.NewEvidenceService(),
+		Evidence:     app.NewEvidenceService(repositories.Evidences),
 		DB:           db,
 	}
 

@@ -52,6 +52,13 @@ type ArgoCDDeploymentResult struct {
 // ArgoCDCheckDeploymentFunc rappresenta la porta applicativa minima per leggere lo stato deployment da Argo CD.
 type ArgoCDCheckDeploymentFunc func(ctx context.Context, change domain.ChangeRequest) (ArgoCDDeploymentResult, error)
 
+type EvidenceStore interface {
+	Create(ctx context.Context, changeID string, evidence domain.Evidence) (domain.Evidence, error)
+}
+
+// DeploymentEvidenceCollectorFunc rappresenta la porta applicativa minima per raccogliere evidenze post-deployment.
+type DeploymentEvidenceCollectorFunc func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error)
+
 // GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
 type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
 
@@ -73,6 +80,14 @@ func WithTektonCheckValidation(fn TektonCheckValidationFunc) ChangeServiceOption
 
 func WithArgoCDCheckDeployment(fn ArgoCDCheckDeploymentFunc) ChangeServiceOption {
 	return func(s *ChangeService) { s.argocdCheckDeployment = fn }
+}
+
+func WithEvidenceStore(store EvidenceStore) ChangeServiceOption {
+	return func(s *ChangeService) { s.evidenceStore = store }
+}
+
+func WithDeploymentEvidenceCollector(fn DeploymentEvidenceCollectorFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.deploymentEvidenceCollector = fn }
 }
 
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
@@ -104,9 +119,11 @@ func WithGitMergeRequest(fn GitMergeRequestFunc) ChangeServiceOption {
 type ChangeService struct {
 	store ChangeStore
 
-	tektonRunPipeline     TektonRunPipelineFunc
-	tektonCheckValidation TektonCheckValidationFunc
-	argocdCheckDeployment ArgoCDCheckDeploymentFunc
+	tektonRunPipeline           TektonRunPipelineFunc
+	tektonCheckValidation       TektonCheckValidationFunc
+	argocdCheckDeployment       ArgoCDCheckDeploymentFunc
+	evidenceStore               EvidenceStore
+	deploymentEvidenceCollector DeploymentEvidenceCollectorFunc
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -497,6 +514,59 @@ func (s *ChangeService) MergeRequest(ctx context.Context, idOrNumber string) (ma
 		"mergeRequestIID": mrIID,
 		"mergeRequestURL": mrWebURL,
 		"mergeCommitSHA":  mergeCommitSHA,
+	}
+	return result, nil
+}
+
+// CollectEvidence raccoglie e persiste evidenze post-deployment e marca lo step tecnico EvidenceCollected.
+func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.evidenceStore == nil {
+		return nil, errors.New("evidence store is not configured")
+	}
+	if s.deploymentEvidenceCollector == nil {
+		return nil, errors.New("deployment evidence collector is not configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	evidence, err := s.deploymentEvidenceCollector(ctx, change)
+	if err != nil {
+		return nil, fmt.Errorf("collect deployment evidence for %q: %w", change.ChangeNumber, err)
+	}
+	if evidence.EvidenceType == "" {
+		evidence.EvidenceType = "deployment"
+	}
+	if evidence.Name == "" {
+		evidence.Name = "deployment-evidence"
+	}
+	if evidence.ChangeNumber == "" {
+		evidence.ChangeNumber = change.ChangeNumber
+	}
+	evidence.Sanitized = true
+
+	savedEvidence, err := s.evidenceStore.Create(ctx, change.ID, evidence)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.store.MarkStep(ctx, idOrNumber, "EvidenceCollected")
+	if err != nil {
+		return nil, err
+	}
+	result["evidence"] = map[string]any{
+		"id":           savedEvidence.ID,
+		"evidenceType": savedEvidence.EvidenceType,
+		"name":         savedEvidence.Name,
+		"summary":      savedEvidence.Summary,
+		"sanitized":    savedEvidence.Sanitized,
+		"createdAt":    savedEvidence.CreatedAt,
 	}
 	return result, nil
 }

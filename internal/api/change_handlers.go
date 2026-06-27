@@ -52,7 +52,11 @@ func (h *Handler) getChangeEvents(w http.ResponseWriter, r *http.Request, id str
 }
 
 func (h *Handler) getChangeEvidence(w http.ResponseWriter, r *http.Request, id, evidenceType string) {
-	evidence := h.deps.Services.Evidence.List(r.Context(), id, evidenceType)
+	evidence, err := h.deps.Services.Evidence.List(r.Context(), id, evidenceType)
+	if err != nil {
+		writeError(w, http.StatusNotFound, APIError{Code: "EVIDENCE_NOT_FOUND", Message: "Unable to load ChangeRequest evidence", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
 	writeJSON(w, http.StatusOK, evidence, map[string]any{"count": len(evidence), "requestId": requestIDFromContext(r.Context())})
 }
 
@@ -161,7 +165,12 @@ func (h *Handler) syncChange(w http.ResponseWriter, r *http.Request, id string) 
 }
 
 func (h *Handler) collectEvidence(w http.ResponseWriter, r *http.Request, id string) {
-	h.markWorkflowStep(w, r, id, "EvidenceCollected")
+	result, err := h.deps.Services.Changes.CollectEvidence(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "EVIDENCE_COLLECTION_FAILED", Message: "Unable to collect post-deployment evidence for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
 func (h *Handler) transitionLifecycle(w http.ResponseWriter, r *http.Request, id string, action string) {
