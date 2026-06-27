@@ -72,6 +72,7 @@ type CreatePipelineRunRequest struct {
 	ChangeNumber       string
 	GitURL             string
 	GitRevision        string
+	ValidationPath     string
 	Image              string
 	WorkspacePVC       string
 	DockerConfigSecret string
@@ -85,6 +86,7 @@ func (c *Client) CreatePipelineRun(ctx context.Context, r CreatePipelineRunReque
 	r.ChangeNumber = strings.TrimSpace(r.ChangeNumber)
 	r.GitURL = strings.TrimSpace(r.GitURL)
 	r.GitRevision = strings.TrimSpace(r.GitRevision)
+	r.ValidationPath = strings.TrimSpace(r.ValidationPath)
 	r.Image = strings.TrimSpace(r.Image)
 	r.WorkspacePVC = strings.TrimSpace(r.WorkspacePVC)
 	r.DockerConfigSecret = strings.TrimSpace(r.DockerConfigSecret)
@@ -118,7 +120,45 @@ func (c *Client) CreatePipelineRun(ctx context.Context, r CreatePipelineRunReque
 	if r.GitRevision == "" {
 		r.GitRevision = "main"
 	}
-	payload := map[string]any{"apiVersion": "tekton.dev/v1", "kind": "PipelineRun", "metadata": map[string]any{"generateName": r.GenerateName, "namespace": r.Namespace, "labels": map[string]string{"app.kubernetes.io/managed-by": "devops-control-plane", "devops-control-plane/change-number": r.ChangeNumber}}, "spec": map[string]any{"pipelineRef": map[string]string{"name": r.PipelineName}, "taskRunTemplate": map[string]string{"serviceAccountName": r.ServiceAccountName}, "params": []map[string]string{{"name": "GIT_URL", "value": r.GitURL}, {"name": "GIT_REVISION", "value": r.GitRevision}, {"name": "IMAGE", "value": r.Image}}, "workspaces": []map[string]any{{"name": "shared-workspace", "persistentVolumeClaim": map[string]string{"claimName": r.WorkspacePVC}}, {"name": "dockerconfig", "secret": map[string]string{"secretName": r.DockerConfigSecret}}}}}
+	params := []map[string]string{
+		{"name": "GIT_URL", "value": r.GitURL},
+		{"name": "GIT_REVISION", "value": r.GitRevision},
+		{"name": "IMAGE", "value": r.Image},
+	}
+	validationPath := r.ValidationPath
+	if validationPath != "" {
+		params = append(params, map[string]string{"name": "VALIDATION_PATH", "value": validationPath})
+	}
+
+	labels := map[string]string{
+		"app.kubernetes.io/managed-by":       "devops-control-plane",
+		"devops-control-plane/change-number": r.ChangeNumber,
+	}
+	if validationPath != "" {
+		labels["devops-control-plane/validation-type"] = "gitops"
+	}
+
+	payload := map[string]any{
+		"apiVersion": "tekton.dev/v1",
+		"kind":       "PipelineRun",
+		"metadata": map[string]any{
+			"generateName": r.GenerateName,
+			"namespace":    r.Namespace,
+			"labels":       labels,
+		},
+		"spec": map[string]any{
+			"pipelineRef": map[string]string{"name": r.PipelineName},
+			"taskRunTemplate": map[string]string{
+				"serviceAccountName": r.ServiceAccountName,
+			},
+			"params": params,
+			"workspaces": []map[string]any{
+				{"name": "shared-workspace", "persistentVolumeClaim": map[string]string{"claimName": r.WorkspacePVC}},
+				{"name": "dockerconfig", "secret": map[string]string{"secretName": r.DockerConfigSecret}},
+			},
+		},
+	}
+
 	created, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/apis/tekton.dev/v1/namespaces/%s/pipelineruns", r.Namespace), payload)
 	if err != nil {
 		return PipelineRunRef{}, err

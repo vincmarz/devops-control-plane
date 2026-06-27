@@ -39,6 +39,17 @@ func TestCreatePipelineRun(t *testing.T) {
 		if spec["pipelineRef"].(map[string]any)["name"] != "go-build-and-push" {
 			t.Fatalf("bad pipelineRef")
 		}
+		params := spec["params"].([]any)
+		var gotValidationPath string
+		for _, raw := range params {
+			param := raw.(map[string]any)
+			if param["name"] == "VALIDATION_PATH" {
+				gotValidationPath, _ = param["value"].(string)
+			}
+		}
+		if gotValidationPath != "apps/demo-go-color-app" {
+			t.Fatalf("VALIDATION_PATH = %q", gotValidationPath)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"name": "devops-cp-validate-chg-2026-0005-abcde", "namespace": "devops-ci-demo", "uid": "uid-123"}})
 	}))
@@ -47,7 +58,7 @@ func TestCreatePipelineRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref, err := c.CreatePipelineRun(context.Background(), CreatePipelineRunRequest{Namespace: "devops-ci-demo", PipelineName: "go-build-and-push", ServiceAccountName: "pipeline", GenerateName: "devops-cp-validate-chg-2026-0005-", ChangeNumber: "CHG-2026-0005", GitURL: "https://github.com/vincmarz/demo-go-color-app.git", GitRevision: "main", Image: "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest", WorkspacePVC: "pipeline-workspace", DockerConfigSecret: "pipeline-registry-dockerconfig"})
+	ref, err := c.CreatePipelineRun(context.Background(), CreatePipelineRunRequest{Namespace: "devops-ci-demo", PipelineName: "go-build-and-push", ServiceAccountName: "pipeline", GenerateName: "devops-cp-validate-chg-2026-0005-", ChangeNumber: "CHG-2026-0005", GitURL: "https://github.com/vincmarz/demo-go-color-app.git", GitRevision: "main", Image: "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest", WorkspacePVC: "pipeline-workspace", DockerConfigSecret: "pipeline-registry-dockerconfig", ValidationPath: "apps/demo-go-color-app"})
 	if err != nil {
 		t.Fatal(err)
 	}

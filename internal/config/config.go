@@ -24,16 +24,18 @@ type Config struct {
 	GitLabTimeoutSeconds int
 	GitLabInsecureTLS    bool
 
-	TektonNamespace          string
-	TektonPipelineName       string
-	TektonServiceAccount     string
-	TektonTimeoutSeconds     int
-	TektonPollIntervalSecs   int
-	TektonGitURL             string
-	TektonGitRevision        string
-	TektonImage              string
-	TektonWorkspacePVC       string
-	TektonDockerConfigSecret string
+	TektonNamespace           string
+	TektonPipelineName        string
+	TektonServiceAccount      string
+	TektonTimeoutSeconds      int
+	TektonPollIntervalSecs    int
+	TektonGitURL              string
+	TektonGitRevision         string
+	TektonGitRevisionTemplate string
+	TektonValidationPath      string
+	TektonImage               string
+	TektonWorkspacePVC        string
+	TektonDockerConfigSecret  string
 
 	KubernetesAPIURL      string
 	KubernetesToken       string
@@ -62,16 +64,18 @@ func Load() Config {
 		GitLabTimeoutSeconds: getIntEnv("GITLAB_TIMEOUT_SECONDS", 30),
 		GitLabInsecureTLS:    getBoolEnv("GITLAB_INSECURE_TLS", false),
 
-		TektonNamespace:          getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
-		TektonPipelineName:       getEnv("TEKTON_PIPELINE_NAME", "go-build-and-push"),
-		TektonServiceAccount:     getEnv("TEKTON_SERVICE_ACCOUNT", "pipeline"),
-		TektonTimeoutSeconds:     getIntEnv("TEKTON_TIMEOUT_SECONDS", 900),
-		TektonPollIntervalSecs:   getIntEnv("TEKTON_POLL_INTERVAL_SECONDS", 5),
-		TektonGitURL:             getEnv("TEKTON_GIT_URL", "https://github.com/vincmarz/demo-go-color-app.git"),
-		TektonGitRevision:        getEnv("TEKTON_GIT_REVISION", "main"),
-		TektonImage:              getEnv("TEKTON_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest"),
-		TektonWorkspacePVC:       getEnv("TEKTON_WORKSPACE_PVC", "pipeline-workspace"),
-		TektonDockerConfigSecret: getEnv("TEKTON_DOCKERCONFIG_SECRET", "pipeline-registry-dockerconfig"),
+		TektonNamespace:           getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
+		TektonPipelineName:        getEnv("TEKTON_PIPELINE_NAME", "go-build-and-push"),
+		TektonServiceAccount:      getEnv("TEKTON_SERVICE_ACCOUNT", "pipeline"),
+		TektonTimeoutSeconds:      getIntEnv("TEKTON_TIMEOUT_SECONDS", 900),
+		TektonPollIntervalSecs:    getIntEnv("TEKTON_POLL_INTERVAL_SECONDS", 5),
+		TektonGitURL:              getEnv("TEKTON_GIT_URL", "https://github.com/vincmarz/demo-go-color-app.git"),
+		TektonGitRevision:         getEnv("TEKTON_GIT_REVISION", "main"),
+		TektonGitRevisionTemplate: getEnv("TEKTON_GIT_REVISION_TEMPLATE", ""),
+		TektonValidationPath:      getEnv("TEKTON_VALIDATION_PATH", ""),
+		TektonImage:               getEnv("TEKTON_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest"),
+		TektonWorkspacePVC:        getEnv("TEKTON_WORKSPACE_PVC", "pipeline-workspace"),
+		TektonDockerConfigSecret:  getEnv("TEKTON_DOCKERCONFIG_SECRET", "pipeline-registry-dockerconfig"),
 
 		KubernetesAPIURL:      getEnv("KUBERNETES_API_URL", ""),
 		KubernetesToken:       getEnv("KUBERNETES_TOKEN", ""),
