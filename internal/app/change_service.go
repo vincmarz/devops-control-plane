@@ -40,6 +40,18 @@ type TektonValidationResult struct {
 // TektonCheckValidationFunc rappresenta la porta applicativa minima per leggere lo stato di una PipelineRun Tekton.
 type TektonCheckValidationFunc func(ctx context.Context, change domain.ChangeRequest) (TektonValidationResult, error)
 
+type ArgoCDDeploymentResult struct {
+	ApplicationName string
+	Project         string
+	SyncStatus      string
+	HealthStatus    string
+	Revision        string
+	RuntimeStatus   string
+}
+
+// ArgoCDCheckDeploymentFunc rappresenta la porta applicativa minima per leggere lo stato deployment da Argo CD.
+type ArgoCDCheckDeploymentFunc func(ctx context.Context, change domain.ChangeRequest) (ArgoCDDeploymentResult, error)
+
 // GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
 type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
 
@@ -57,6 +69,10 @@ func WithTektonRunPipeline(fn TektonRunPipelineFunc) ChangeServiceOption {
 
 func WithTektonCheckValidation(fn TektonCheckValidationFunc) ChangeServiceOption {
 	return func(s *ChangeService) { s.tektonCheckValidation = fn }
+}
+
+func WithArgoCDCheckDeployment(fn ArgoCDCheckDeploymentFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.argocdCheckDeployment = fn }
 }
 
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
@@ -90,6 +106,7 @@ type ChangeService struct {
 
 	tektonRunPipeline     TektonRunPipelineFunc
 	tektonCheckValidation TektonCheckValidationFunc
+	argocdCheckDeployment ArgoCDCheckDeploymentFunc
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -244,8 +261,62 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 	return result, nil
 }
 
-// CreateBranch esegue lo step tecnico GitLab create-branch e poi marca
-// la ChangeRequest con runtime_status BranchCreated.
+// CheckDeployment legge lo stato reale della application Argo CD e aggiorna il runtime_status.
+func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.argocdCheckDeployment == nil {
+		return nil, errors.New("argocd check deployment client is not configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	deployment, err := s.argocdCheckDeployment(ctx, change)
+	if err != nil {
+		return nil, fmt.Errorf("check argocd deployment for %q: %w", change.ChangeNumber, err)
+	}
+
+	runtimeStatus := mapArgoCDDeploymentRuntimeStatus(deployment.SyncStatus, deployment.HealthStatus)
+	deployment.RuntimeStatus = runtimeStatus
+
+	result, err := s.store.MarkStep(ctx, idOrNumber, runtimeStatus)
+	if err != nil {
+		return nil, err
+	}
+	result["argocd"] = map[string]any{
+		"applicationName": deployment.ApplicationName,
+		"project":         deployment.Project,
+		"syncStatus":      deployment.SyncStatus,
+		"healthStatus":    deployment.HealthStatus,
+		"revision":        deployment.Revision,
+	}
+	return result, nil
+}
+
+func mapArgoCDDeploymentRuntimeStatus(syncStatus string, healthStatus string) string {
+	syncStatus = strings.TrimSpace(syncStatus)
+	healthStatus = strings.TrimSpace(healthStatus)
+
+	if healthStatus == "Degraded" {
+		return "DeploymentDegraded"
+	}
+	if syncStatus == "OutOfSync" {
+		return "DeploymentOutOfSync"
+	}
+	if syncStatus == "Synced" && healthStatus == "Healthy" {
+		return "DeploymentSyncedHealthy"
+	}
+	if syncStatus == "Synced" && healthStatus == "Progressing" {
+		return "DeploymentProgressing"
+	}
+	return "DeploymentUnknown"
+}
+
 func (s *ChangeService) CreateBranch(ctx context.Context, idOrNumber string) (map[string]any, error) {
 	idOrNumber = strings.TrimSpace(idOrNumber)
 	if idOrNumber == "" {

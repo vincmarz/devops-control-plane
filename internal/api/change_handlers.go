@@ -129,6 +129,15 @@ func (h *Handler) checkValidation(w http.ResponseWriter, r *http.Request, id str
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
+func (h *Handler) checkDeployment(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := h.deps.Services.Changes.CheckDeployment(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "ARGOCD_CHECK_DEPLOYMENT_FAILED", Message: "Unable to check Argo CD deployment for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
+}
+
 func (h *Handler) openMergeRequest(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := h.deps.Services.Changes.OpenMergeRequest(r.Context(), id)
 	if err != nil {

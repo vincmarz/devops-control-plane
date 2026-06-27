@@ -3,47 +3,54 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/vincmarz/devops-control-plane/internal/domain"
 )
 
-type ApplicationService struct{}
+type ArgoCDApplicationClient interface {
+	ListApplications(ctx context.Context) ([]domain.Application, error)
+	GetApplication(ctx context.Context, name string) (domain.Application, error)
+}
 
-func NewApplicationService() *ApplicationService { return &ApplicationService{} }
+type ApplicationService struct {
+	argocd ArgoCDApplicationClient
+}
+
+func NewApplicationService(clients ...ArgoCDApplicationClient) *ApplicationService {
+	service := &ApplicationService{}
+	if len(clients) > 0 {
+		service.argocd = clients[0]
+	}
+	return service
+}
 
 func (s *ApplicationService) List(ctx context.Context) ([]domain.Application, error) {
-	return []domain.Application{
-		{
-			Name:            "demo-go-color-app",
-			ArgoCDNamespace: "openshift-gitops",
-			Project:         "devops-ci-demo",
-			TargetNamespace: "devops-ci-demo",
-			RepoURL:         "https://gitlab.example.local/group/demo-app-gitops.git",
-			TargetRevision:  "main",
-			Path:            "apps/demo-go-color-app",
-			SyncStatus:      "Unknown",
-			HealthStatus:    "Unknown",
-			CurrentRevision: "",
-		},
-	}, nil
+	if s.argocd == nil {
+		return nil, errors.New("argocd application client is not configured")
+	}
+	return s.argocd.ListApplications(ctx)
 }
 
 func (s *ApplicationService) Get(ctx context.Context, name string) (domain.Application, error) {
-	apps, _ := s.List(ctx)
-	for _, app := range apps {
-		if app.Name == name {
-			app.Source = map[string]string{"repoUrl": app.RepoURL, "targetRevision": app.TargetRevision, "path": app.Path}
-			app.Destination = map[string]string{"server": "https://kubernetes.default.svc", "namespace": app.TargetNamespace}
-			return app, nil
-		}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return domain.Application{}, errors.New("application name is required")
 	}
-	return domain.Application{}, errors.New("application not found in placeholder service")
+	if s.argocd == nil {
+		return domain.Application{}, errors.New("argocd application client is not configured")
+	}
+	return s.argocd.GetApplication(ctx, name)
 }
 
 func (s *ApplicationService) Resources(ctx context.Context, name string) []domain.ApplicationResource {
+	app, err := s.Get(ctx, name)
+	if err != nil {
+		return []domain.ApplicationResource{}
+	}
 	return []domain.ApplicationResource{
-		{Group: "apps", Kind: "Deployment", Namespace: "devops-ci-demo", Name: name, Status: "Unknown", Health: "Unknown", Orphaned: false},
-		{Group: "", Kind: "Service", Namespace: "devops-ci-demo", Name: name, Status: "Unknown", Health: "Unknown", Orphaned: false},
+		{Group: "apps", Kind: "Deployment", Namespace: app.TargetNamespace, Name: app.Name, Status: app.SyncStatus, Health: app.HealthStatus, Orphaned: false},
+		{Group: "", Kind: "Service", Namespace: app.TargetNamespace, Name: app.Name, Status: app.SyncStatus, Health: app.HealthStatus, Orphaned: false},
 	}
 }
 
@@ -52,9 +59,17 @@ func (s *ApplicationService) History(ctx context.Context, name string) []domain.
 }
 
 func (s *ApplicationService) Runtime(ctx context.Context, name string) map[string]any {
+	app, err := s.Get(ctx, name)
+	if err != nil {
+		return map[string]any{"application": name, "error": err.Error()}
+	}
 	return map[string]any{
-		"namespace": "devops-ci-demo",
-		"deployment": map[string]any{"name": name, "desiredReplicas": 0, "readyReplicas": 0, "availableReplicas": 0},
-		"pods": []any{},
+		"application":     app.Name,
+		"namespace":       app.TargetNamespace,
+		"syncStatus":      app.SyncStatus,
+		"healthStatus":    app.HealthStatus,
+		"currentRevision": app.CurrentRevision,
+		"source":          app.Source,
+		"destination":     app.Destination,
 	}
 }

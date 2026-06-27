@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	argocdadapter "github.com/vincmarz/devops-control-plane/internal/adapters/argocd"
 	gitlabadapter "github.com/vincmarz/devops-control-plane/internal/adapters/gitlab"
 	tektonadapter "github.com/vincmarz/devops-control-plane/internal/adapters/tekton"
 	"github.com/vincmarz/devops-control-plane/internal/api"
@@ -110,8 +111,25 @@ func main() {
 		logger.Info("tekton integration disabled; validate endpoint will require Kubernetes API configuration")
 	}
 
+	applicationService := app.NewApplicationService()
+	if cfg.ArgoCDBaseURL != "" || cfg.ArgoCDAuthToken != "" {
+		argoCDClient, err := argocdadapter.New(argocdadapter.Config{BaseURL: cfg.ArgoCDBaseURL, AuthToken: cfg.ArgoCDAuthToken, TimeoutSeconds: cfg.ArgoCDTimeoutSeconds, InsecureTLS: cfg.ArgoCDInsecureTLS})
+		if err != nil {
+			logger.Error("argocd client initialization failed", "error", err)
+			os.Exit(1)
+		}
+		applicationService = app.NewApplicationService(argoCDClient)
+		changeServiceOptions = append(changeServiceOptions, app.WithArgoCDCheckDeployment(func(ctx context.Context, change domain.ChangeRequest) (app.ArgoCDDeploymentResult, error) {
+			argoApp, err := argoCDClient.GetApplication(ctx, change.ApplicationName)
+			return app.ArgoCDDeploymentResult{ApplicationName: argoApp.Name, Project: argoApp.Project, SyncStatus: argoApp.SyncStatus, HealthStatus: argoApp.HealthStatus, Revision: argoApp.CurrentRevision}, err
+		}))
+		logger.Info("argocd integration enabled", "baseURL", cfg.ArgoCDBaseURL, "insecureTLS", cfg.ArgoCDInsecureTLS)
+	} else {
+		logger.Info("argocd integration disabled; check-deployment endpoint will require Argo CD configuration")
+	}
+
 	services := app.Services{
-		Applications: app.NewApplicationService(),
+		Applications: applicationService,
 		Changes:      app.NewChangeService(repositories.Changes, changeServiceOptions...),
 		Evidence:     app.NewEvidenceService(),
 		DB:           db,
