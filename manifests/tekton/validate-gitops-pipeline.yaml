@@ -1,0 +1,138 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: validate-gitops
+  namespace: devops-ci-demo
+  labels:
+    app: demo-go-color-app
+    lab: openshift-devops-go
+    devops-control-plane/validation-type: gitops
+spec:
+  description: |
+    Pipeline GitOps validation for DevOps Control Plane.
+    It clones the GitOps repository and validates Kubernetes/OpenShift manifests
+    before the deployment status is checked through Argo CD.
+  params:
+    - name: GIT_URL
+      type: string
+      description: GitOps repository URL.
+      default: https://github.com/vincmarz/demo-app-gitops.git
+    - name: GIT_REVISION
+      type: string
+      description: Branch, tag, SHA or ref to validate.
+      default: main
+    - name: IMAGE
+      type: string
+      description: Compatibility parameter for the current DevOps Control Plane Tekton adapter. Not used by this validation pipeline.
+      default: unused
+    - name: VALIDATION_PATH
+      type: string
+      description: Repository path containing GitOps manifests to validate.
+      default: apps/demo-go-color-app
+  workspaces:
+    - name: shared-workspace
+      description: Workspace shared between git-clone and validation task.
+    - name: dockerconfig
+      description: Compatibility workspace for the current DevOps Control Plane Tekton adapter. Not used by this validation pipeline.
+  tasks:
+    - name: clone-repository
+      taskRef:
+        kind: Task
+        name: git-clone
+      params:
+        - name: URL
+          value: $(params.GIT_URL)
+        - name: REVISION
+          value: $(params.GIT_REVISION)
+        - name: DELETE_EXISTING
+          value: "true"
+        - name: VERBOSE
+          value: "true"
+        - name: DEPTH
+          value: "1"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+    - name: validate-gitops-manifests
+      runAfter:
+        - clone-repository
+      params:
+        - name: VALIDATION_PATH
+          value: $(params.VALIDATION_PATH)
+        - name: CLONED_COMMIT
+          value: $(tasks.clone-repository.results.COMMIT)
+      taskSpec:
+        params:
+          - name: VALIDATION_PATH
+            type: string
+          - name: CLONED_COMMIT
+            type: string
+        workspaces:
+          - name: source
+        steps:
+          - name: validate
+            image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+            workingDir: $(workspaces.source.path)
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+
+              VALIDATION_PATH="$(params.VALIDATION_PATH)"
+              CLONED_COMMIT="$(params.CLONED_COMMIT)"
+
+              echo "== DevOps Control Plane GitOps validation =="
+              echo "workspace=$(pwd)"
+              echo "validationPath=${VALIDATION_PATH}"
+              echo "clonedCommit=${CLONED_COMMIT}"
+
+              if [ ! -d "${VALIDATION_PATH}" ]; then
+                echo "ERROR: validation path not found: ${VALIDATION_PATH}" >&2
+                exit 1
+              fi
+
+              echo
+              echo "== manifest files =="
+              find "${VALIDATION_PATH}" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort | tee /tmp/manifest-files.txt
+              if [ ! -s /tmp/manifest-files.txt ]; then
+                echo "ERROR: no YAML manifests found under ${VALIDATION_PATH}" >&2
+                exit 1
+              fi
+
+              echo
+              echo "== basic anti-secret checks =="
+              if grep -RInE '(^|[[:space:]])(AWS_SECRET_ACCESS_KEY|PRIVATE KEY|client_secret|authToken|password:[[:space:]]*[^[:space:]]+|token:[[:space:]]*[^[:space:]]+)' "${VALIDATION_PATH}"; then
+                echo "ERROR: potential secret-like content found in GitOps manifests" >&2
+                exit 1
+              fi
+              if grep -RInE '^kind:[[:space:]]*Secret[[:space:]]*$' "${VALIDATION_PATH}"; then
+                echo "ERROR: Secret manifests are not allowed in this MVP validation pipeline" >&2
+                exit 1
+              fi
+              echo "anti-secret checks passed"
+
+              echo
+              echo "== kubernetes client-side validation =="
+              # Kustomization files are not Kubernetes resources. If kustomization.yaml exists,
+              # validate the rendered output first; then validate plain manifests excluding
+              # kustomization descriptors.
+              if [ -f "${VALIDATION_PATH}/kustomization.yaml" ] || [ -f "${VALIDATION_PATH}/kustomization.yml" ]; then
+                echo "-- dry-run rendered kustomize output from ${VALIDATION_PATH}"
+                oc kustomize "${VALIDATION_PATH}" | oc apply --dry-run=client -f -
+              fi
+
+              grep -Ev '(^|/)(kustomization.yaml|kustomization.yml)$' /tmp/manifest-files.txt > /tmp/plain-manifest-files.txt || true
+              if [ -s /tmp/plain-manifest-files.txt ]; then
+                while IFS= read -r manifest; do
+                  echo "-- dry-run ${manifest}"
+                  oc apply --dry-run=client -f "${manifest}"
+                done < /tmp/plain-manifest-files.txt
+              else
+                echo "No plain Kubernetes manifest files to validate outside kustomization descriptors"
+              fi
+
+              echo
+              echo "== validation summary =="
+              echo "GitOps validation succeeded for path ${VALIDATION_PATH} at commit ${CLONED_COMMIT}"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
