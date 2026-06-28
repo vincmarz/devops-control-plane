@@ -53,6 +53,7 @@ type ChangeRequest struct {
 	TargetEnvironment string         `json:"targetEnvironment"`
 	ChangeType        string         `json:"changeType"`
 	Status            string         `json:"status"`
+	RuntimeStatus     string         `json:"runtimeStatus,omitempty"`
 	RiskLevel         string         `json:"riskLevel"`
 	RequestedBy       string         `json:"requestedBy,omitempty"`
 	Description       string         `json:"description,omitempty"`
