@@ -7,7 +7,11 @@ This directory contains the first OpenShift deployment skeleton for the DevOps C
 - `namespace.yaml`: creates the `devops-control-plane` namespace.
 - `serviceaccount.yaml`: service account used by the Control Plane pod.
 - `configmap.yaml`: non-sensitive runtime configuration.
-- `secret-template.yaml`: placeholder secret template. Replace placeholders locally before applying. Do not commit real values.
+- `secret-template.yaml`: placeholder application secret template. Replace placeholders locally before applying. Do not commit real values.
+- `postgresql-secret-template.yaml`: placeholder PostgreSQL secret template. Replace placeholders locally before applying. Do not commit real values.
+- `postgresql-pvc.yaml`: persistent storage for PostgreSQL.
+- `postgresql-deployment.yaml`: PostgreSQL database used by the Control Plane MVP deployment.
+- `postgresql-service.yaml`: in-cluster PostgreSQL service named `postgresql`.
 - `role.yaml`: permissions in `devops-ci-demo` for Tekton PipelineRuns and runtime evidence collection.
 - `rolebinding.yaml`: binds the `devops-control-plane` service account to the role in `devops-ci-demo`.
 - `deployment.yaml`: app deployment and probes.
@@ -23,6 +27,7 @@ The following values must be provided through `devops-control-plane-secrets` and
 - `GITLAB_TOKEN`
 - `ARGOCD_AUTH_TOKEN`
 - `KUBERNETES_TOKEN`
+- `POSTGRESQL_PASSWORD` in `postgresql-secret`
 
 ## Build image example
 
@@ -42,13 +47,13 @@ Alternatively, adapt the deployment image to the registry used by the lab.
 
 ## Apply manifests
 
-Create the real Secret separately from `secret-template.yaml` without committing real values, then apply the non-sensitive manifests:
+Create the PostgreSQL Secret from `postgresql-secret-template.yaml` and the application Secret from `secret-template.yaml` without committing real values, then apply the non-sensitive manifests:
 
 ```bash
 oc apply -k manifests
 ```
 
-The file `secret-template.yaml` is intentionally not included in `kustomization.yaml`.
+The files `secret-template.yaml` and `postgresql-secret-template.yaml` are intentionally not included in `kustomization.yaml`.
 
 ## Validate
 

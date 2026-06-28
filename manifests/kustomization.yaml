@@ -6,6 +6,9 @@ resources:
   - configmap.yaml
   - role.yaml
   - rolebinding.yaml
+  - postgresql-service.yaml
+  - postgresql-deployment.yaml
+  - postgresql-pvc.yaml
   - deployment.yaml
   - service.yaml
   - route.yaml
