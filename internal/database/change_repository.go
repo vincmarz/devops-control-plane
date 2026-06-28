@@ -119,13 +119,13 @@ func (r *ChangeRepository) Create(ctx context.Context, req domain.CreateChangeRe
             target_environment,
             change_type,
             status,
-            COALESCE(runtime_status, ''),
+            runtime_status,
             risk_level,
             requested_by,
             description,
             request_payload
         )
-        VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7, $8, $9::jsonb)
+        VALUES ($1, $2, $3, $4, $5, 'draft', '', $6, $7, $8, $9::jsonb)
         RETURNING
             id::text,
             change_number,
