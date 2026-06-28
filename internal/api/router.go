@@ -34,6 +34,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("POST /ui/changes/", h.uiChangeAction)
 	mux.HandleFunc("GET /ui/applications", h.uiApplications)
 	mux.HandleFunc("GET /ui/applications/", h.uiApplicationDetail)
+	mux.HandleFunc("GET /ui/settings", h.uiSettings)
 
 	mux.HandleFunc("GET /api/v1/applications", h.listApplications)
 	mux.HandleFunc("GET /api/v1/applications/", h.applicationSubrouter)
