@@ -1,0 +1,8 @@
+.git
+bin
+coverage.out
+coverage.html
+.env
+*.zip
+README-ui-*.md
+fix_*.py

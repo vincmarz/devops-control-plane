@@ -6,8 +6,37 @@ metadata:
 data:
   HTTP_ADDR: ":8080"
   LOG_LEVEL: "info"
-  TEKTON_NAMESPACE: "devops-control-plane"
+
+  # GitLab lab integration. Token is stored in Secret.
+  GITLAB_BASE_URL: "https://gitlab-devops-gitlab.apps.ocp4.mim.lan"
+  GITLAB_PROJECT_ID: "1"
+  GITLAB_DEFAULT_BRANCH: "main"
+  GITLAB_TIMEOUT_SECONDS: "30"
+  GITLAB_INSECURE_TLS: "true"
+
+  # Argo CD / OpenShift GitOps lab integration. Token is stored in Secret.
+  ARGOCD_BASE_URL: "https://openshift-gitops-server-openshift-gitops.apps.ocp4.mim.lan"
+  ARGOCD_INSECURE_TLS: "true"
+  ARGOCD_TIMEOUT_SECONDS: "30"
+  ARGOCD_POLL_INTERVAL_SECONDS: "5"
+
+  # Tekton validation runs in the application/CI namespace.
+  TEKTON_NAMESPACE: "devops-ci-demo"
   TEKTON_PIPELINE_NAME: "validate-gitops-change"
   TEKTON_SERVICE_ACCOUNT: "pipeline"
   TEKTON_TIMEOUT_SECONDS: "900"
   TEKTON_POLL_INTERVAL_SECONDS: "5"
+  TEKTON_GIT_URL: "https://github.com/vincmarz/demo-app-gitops.git"
+  TEKTON_GIT_REVISION: "main"
+  TEKTON_GIT_REVISION_TEMPLATE: "change/{changeNumber}"
+  TEKTON_VALIDATION_PATH: "apps/demo-go-color-app"
+  TEKTON_IMAGE: "unused"
+  TEKTON_WORKSPACE_PVC: "pipeline-workspace"
+  TEKTON_DOCKERCONFIG_SECRET: "pipeline-registry-dockerconfig"
+
+  # Kubernetes API access for Tekton and runtime evidence collection.
+  # MVP uses explicit API URL/token. Future hardening can switch to an in-cluster SA token file.
+  KUBERNETES_API_URL: "https://api.ocp4.mim.lan:6443"
+  KUBERNETES_INSECURE_TLS: "true"
+  KUBERNETES_NAMESPACE: "devops-ci-demo"
+  EVIDENCE_BASE_PATH: ""

@@ -16,8 +16,8 @@ spec:
       serviceAccountName: devops-control-plane
       containers:
         - name: devops-control-plane
-          image: devops-control-plane:latest
-          imagePullPolicy: IfNotPresent
+          image: image-registry.openshift-image-registry.svc:5000/devops-control-plane/devops-control-plane:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http
@@ -30,10 +30,25 @@ spec:
             httpGet:
               path: /healthz
               port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /readyz
               port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
