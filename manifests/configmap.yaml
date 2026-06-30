@@ -22,7 +22,7 @@ data:
 
   # Tekton validation runs in the application/CI namespace.
   TEKTON_NAMESPACE: "devops-ci-demo"
-  TEKTON_PIPELINE_NAME: "validate-gitops-change"
+  TEKTON_PIPELINE_NAME: "validate-gitops"
   TEKTON_SERVICE_ACCOUNT: "pipeline"
   TEKTON_TIMEOUT_SECONDS: "900"
   TEKTON_POLL_INTERVAL_SECONDS: "5"
