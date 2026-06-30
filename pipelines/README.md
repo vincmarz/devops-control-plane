@@ -47,3 +47,30 @@ The pipeline:
 ## Compatibility notes
 
 The `IMAGE` parameter and `dockerconfig` workspace are currently retained for compatibility with the existing DevOps Control Plane Tekton adapter, but this validation pipeline does not use them directly.
+
+## MVP policy and anti-secret guardrails
+
+The current MVP validation pipeline includes lightweight policy checks directly in the Tekton validation script.
+
+### Blocked
+
+The pipeline fails when it finds:
+
+- Kubernetes `Secret` manifests under the validated GitOps path;
+- obvious inline secret-like values, such as `password: ...`, `token: ...`, `client_secret`, `authToken`, `secret_key`, private key headers, AWS access key markers, bearer/authorization inline values.
+
+### Allowed as references
+
+The MVP does not block normal references to externally managed secrets, for example:
+
+```yaml
+secretName: existing-platform-secret
+imagePullSecrets:
+  - name: existing-pull-secret
+```
+
+These references are expected to point to secrets managed outside the GitOps repository.
+
+### Future hardening
+
+Future phases may replace or complement the shell-based checks with a policy engine such as OPA/Conftest or cluster-side policy admission through Kyverno/OpenShift policy mechanisms.

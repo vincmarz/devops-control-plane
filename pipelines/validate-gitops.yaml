@@ -99,16 +99,23 @@ spec:
               fi
 
               echo
-              echo "== basic anti-secret checks =="
-              if grep -RInE '(^|[[:space:]])(AWS_SECRET_ACCESS_KEY|PRIVATE KEY|client_secret|authToken|password:[[:space:]]*[^[:space:]]+|token:[[:space:]]*[^[:space:]]+)' "${VALIDATION_PATH}"; then
-                echo "ERROR: potential secret-like content found in GitOps manifests" >&2
-                exit 1
-              fi
+              echo "== policy checks: anti-secret and manifest guardrails =="
+
+              echo "-- policy: Kubernetes Secret manifests are not allowed"
               if grep -RInE '^kind:[[:space:]]*Secret[[:space:]]*$' "${VALIDATION_PATH}"; then
-                echo "ERROR: Secret manifests are not allowed in this MVP validation pipeline" >&2
+                echo "ERROR: policy violation: Kubernetes Secret manifests are not allowed in this MVP GitOps validation pipeline" >&2
+                echo "HINT: store secret values in the platform secret manager and reference existing Secret names when needed" >&2
                 exit 1
               fi
-              echo "anti-secret checks passed"
+
+              echo "-- policy: inline secret-like values are not allowed"
+              if grep -RInE '(^|[[:space:]])(AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID|BEGIN[[:space:]]+(RSA[[:space:]]+|OPENSSH[[:space:]]+)?PRIVATE[[:space:]]+KEY|PRIVATE[[:space:]]+KEY|client_secret|secret_key|private_key|authToken|bearer[[:space:]]+[A-Za-z0-9._~+/-]+|authorization:[[:space:]]*[^[:space:]]+|password:[[:space:]]*[^[:space:]]+|passwd:[[:space:]]*[^[:space:]]+|pwd:[[:space:]]*[^[:space:]]+|token:[[:space:]]*[^[:space:]]+)' "${VALIDATION_PATH}"; then
+                echo "ERROR: policy violation: potential inline secret-like content found in GitOps manifests" >&2
+                echo "HINT: references such as secretName/imagePullSecrets may be valid, but inline secret values are blocked" >&2
+                exit 1
+              fi
+
+              echo "policy checks passed"
 
               echo
               echo "== kubernetes client-side validation =="
