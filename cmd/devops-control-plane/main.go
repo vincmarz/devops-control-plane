@@ -132,7 +132,11 @@ func main() {
 
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonCheckValidation(func(ctx context.Context, change domain.ChangeRequest) (app.TektonValidationResult, error) {
 			status, err := tektonClient.FindLatestPipelineRunByChange(ctx, cfg.TektonNamespace, change.ChangeNumber)
-			return app.TektonValidationResult{PipelineRunName: status.Name, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message}, err
+			revision := cfg.TektonGitRevision
+			if cfg.TektonGitRevisionTemplate != "" {
+				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
+			}
+			return app.TektonValidationResult{PipelineRunName: status.Name, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: cfg.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: cfg.TektonValidationPath}, err
 		}))
 		logger.Info("tekton integration enabled", "namespace", cfg.TektonNamespace, "pipeline", cfg.TektonPipelineName, "serviceAccount", cfg.TektonServiceAccount, "apiURL", cfg.KubernetesAPIURL, "insecureTLS", cfg.KubernetesInsecureTLS)
 	} else {

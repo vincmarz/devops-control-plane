@@ -35,6 +35,10 @@ type TektonValidationResult struct {
 	Status          string
 	Reason          string
 	Message         string
+	PipelineName    string
+	GitURL          string
+	GitRevision     string
+	ValidationPath  string
 }
 
 // TektonCheckValidationFunc rappresenta la porta applicativa minima per leggere lo stato di una PipelineRun Tekton.
@@ -282,7 +286,47 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
-	result["tekton"] = map[string]any{"pipelineRunName": validation.PipelineRunName, "namespace": validation.Namespace, "uid": validation.UID, "status": validation.Status, "reason": validation.Reason, "message": validation.Message}
+	tektonPayload := map[string]any{"pipelineRunName": validation.PipelineRunName, "namespace": validation.Namespace, "uid": validation.UID, "status": validation.Status, "reason": validation.Reason, "message": validation.Message}
+	result["tekton"] = tektonPayload
+
+	if s.evidenceStore != nil && (runtimeStatus == "ValidationSucceeded" || runtimeStatus == "ValidationFailed") {
+		evidence := domain.Evidence{
+			ChangeNumber: change.ChangeNumber,
+			EvidenceType: "validation",
+			Name:         "tekton-validation-evidence",
+			Summary:      "Tekton GitOps validation result for " + change.ChangeNumber,
+			Sanitized:    true,
+			ExternalRef:  validation.PipelineRunName,
+			Payload: map[string]any{
+				"change": map[string]any{
+					"changeNumber":      change.ChangeNumber,
+					"applicationName":   change.ApplicationName,
+					"targetEnvironment": change.TargetEnvironment,
+					"lifecycleStatus":   change.Status,
+				},
+				"tekton": tektonPayload,
+				"gitops": map[string]any{
+					"pipelineName":    validation.PipelineName,
+					"tektonNamespace": validation.Namespace,
+					"repoURL":         validation.GitURL,
+					"revision":        validation.GitRevision,
+					"validationPath":  validation.ValidationPath,
+				},
+			},
+		}
+		savedEvidence, err := s.evidenceStore.Create(ctx, change.ID, evidence)
+		if err != nil {
+			return nil, err
+		}
+		result["evidence"] = map[string]any{
+			"id":           savedEvidence.ID,
+			"evidenceType": savedEvidence.EvidenceType,
+			"name":         savedEvidence.Name,
+			"summary":      savedEvidence.Summary,
+			"sanitized":    savedEvidence.Sanitized,
+			"createdAt":    savedEvidence.CreatedAt,
+		}
+	}
 	return result, nil
 }
 
