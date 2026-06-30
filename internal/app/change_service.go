@@ -672,6 +672,10 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 		}
 		evidence.Payload["kubernetes"] = runtimeEvidence
 	}
+	if evidence.Payload == nil {
+		evidence.Payload = map[string]any{}
+	}
+	evidence.Payload["diagnostics"] = deploymentEvidenceDiagnostics(evidence.Payload)
 
 	savedEvidence, err := s.evidenceStore.Create(ctx, change.ID, evidence)
 	if err != nil {
@@ -691,6 +695,167 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 		"createdAt":    savedEvidence.CreatedAt,
 	}
 	return result, nil
+}
+
+func deploymentEvidenceDiagnostics(payload map[string]any) map[string]any {
+	argocd, _ := payload["argocd"].(map[string]any)
+	kubernetesPayload, _ := payload["kubernetes"].(map[string]any)
+
+	syncStatus := strings.TrimSpace(stringFromMap(argocd, "syncStatus"))
+	healthStatus := strings.TrimSpace(stringFromMap(argocd, "healthStatus"))
+	appName := strings.TrimSpace(stringFromMap(argocd, "applicationName"))
+	if appName == "" {
+		if change, ok := payload["change"].(map[string]any); ok {
+			appName = strings.TrimSpace(stringFromMap(change, "applicationName"))
+		}
+	}
+	if appName == "" {
+		appName = "application"
+	}
+
+	deployment, _ := kubernetesPayload["deployment"].(map[string]any)
+	desiredReplicas := intFromMap(deployment, "desiredReplicas")
+	readyReplicas := intFromMap(deployment, "readyReplicas")
+	availableReplicas := intFromMap(deployment, "availableReplicas")
+	updatedReplicas := intFromMap(deployment, "updatedReplicas")
+	generation := intFromMap(deployment, "generation")
+	observedGeneration := intFromMap(deployment, "observedGeneration")
+	deploymentReady := desiredReplicas > 0 && readyReplicas >= desiredReplicas && availableReplicas >= desiredReplicas && updatedReplicas >= desiredReplicas
+	generationObserved := generation == 0 || observedGeneration >= generation
+
+	podsRaw, _ := kubernetesPayload["pods"].([]map[string]any)
+	if podsRaw == nil {
+		if genericPods, ok := kubernetesPayload["pods"].([]any); ok {
+			podsRaw = make([]map[string]any, 0, len(genericPods))
+			for _, rawPod := range genericPods {
+				if pod, ok := rawPod.(map[string]any); ok {
+					podsRaw = append(podsRaw, pod)
+				}
+			}
+		}
+	}
+	podsReady := 0
+	totalRestarts := 0
+	for _, pod := range podsRaw {
+		if boolFromMap(pod, "ready") {
+			podsReady++
+		}
+		totalRestarts += intFromMap(pod, "restartCount")
+	}
+
+	route, _ := kubernetesPayload["route"].(map[string]any)
+	routeAvailable := strings.TrimSpace(stringFromMap(route, "host")) != "" && strings.TrimSpace(stringFromMap(route, "error")) == ""
+	service, _ := kubernetesPayload["service"].(map[string]any)
+	serviceAvailable := strings.TrimSpace(stringFromMap(service, "clusterIP")) != "" && strings.TrimSpace(stringFromMap(service, "error")) == ""
+
+	warnings := argocdConditionWarnings(argocd)
+	if !generationObserved {
+		warnings = append(warnings, "Deployment observedGeneration is behind generation")
+	}
+	if totalRestarts > 0 {
+		warnings = append(warnings, fmt.Sprintf("Pods reported %d total restarts", totalRestarts))
+	}
+	if !routeAvailable {
+		warnings = append(warnings, "Route is not available or has no host")
+	}
+	if !serviceAvailable {
+		warnings = append(warnings, "Service is not available or has no ClusterIP")
+	}
+
+	summary := fmt.Sprintf("Application %s status: Argo CD %s/%s, replicas %d/%d ready, pods %d/%d ready", appName, valueOrUnknown(syncStatus), valueOrUnknown(healthStatus), readyReplicas, desiredReplicas, podsReady, len(podsRaw))
+	if syncStatus == "Synced" && healthStatus == "Healthy" && deploymentReady {
+		summary = fmt.Sprintf("Application %s is Synced/Healthy with %d/%d replicas ready", appName, readyReplicas, desiredReplicas)
+	}
+	if len(warnings) > 0 {
+		summary = fmt.Sprintf("%s; warnings: %d", summary, len(warnings))
+	}
+
+	return map[string]any{
+		"argocdSynced":       syncStatus == "Synced",
+		"argocdHealthy":      healthStatus == "Healthy",
+		"deploymentReady":    deploymentReady,
+		"generationObserved": generationObserved,
+		"readyReplicas":      fmt.Sprintf("%d/%d", readyReplicas, desiredReplicas),
+		"availableReplicas":  availableReplicas,
+		"updatedReplicas":    updatedReplicas,
+		"podsReady":          fmt.Sprintf("%d/%d", podsReady, len(podsRaw)),
+		"totalRestarts":      totalRestarts,
+		"serviceAvailable":   serviceAvailable,
+		"routeAvailable":     routeAvailable,
+		"warnings":           warnings,
+		"summary":            summary,
+	}
+}
+
+func argocdConditionWarnings(argocd map[string]any) []string {
+	warnings := make([]string, 0)
+	conditionsRaw := argocd["conditions"]
+	switch conditions := conditionsRaw.(type) {
+	case []map[string]any:
+		for _, condition := range conditions {
+			warnings = appendConditionWarning(warnings, condition)
+		}
+	case []any:
+		for _, rawCondition := range conditions {
+			if condition, ok := rawCondition.(map[string]any); ok {
+				warnings = appendConditionWarning(warnings, condition)
+			}
+		}
+	}
+	return warnings
+}
+
+func appendConditionWarning(warnings []string, condition map[string]any) []string {
+	conditionType := strings.TrimSpace(stringFromMap(condition, "type"))
+	message := strings.TrimSpace(stringFromMap(condition, "message"))
+	if conditionType == "" && message == "" {
+		return warnings
+	}
+	if message == "" {
+		return append(warnings, conditionType)
+	}
+	return append(warnings, fmt.Sprintf("%s: %s", conditionType, message))
+}
+
+func stringFromMap(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, _ := values[key].(string)
+	return value
+}
+
+func boolFromMap(values map[string]any, key string) bool {
+	if values == nil {
+		return false
+	}
+	value, _ := values[key].(bool)
+	return value
+}
+
+func intFromMap(values map[string]any, key string) int {
+	if values == nil {
+		return 0
+	}
+	switch value := values[key].(type) {
+	case int:
+		return value
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+func valueOrUnknown(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "Unknown"
+	}
+	return value
 }
 
 // MarkStep registra uno step tecnico del workflow.
