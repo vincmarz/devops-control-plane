@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/vincmarz/devops-control-plane/internal/adapters/tlsutil"
 )
 
 const defaultTimeoutSeconds = 30
@@ -21,6 +23,7 @@ type Config struct {
 	Token          string
 	TimeoutSeconds int
 	InsecureTLS    bool
+	CAFile         string
 }
 
 // Client implementa un client minimale per GitLab REST API v4.
@@ -63,6 +66,12 @@ func New(cfg Config, opts ...Option) (*Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.InsecureTLS {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // Lab-only option for self-signed GitLab routes.
+	} else if strings.TrimSpace(cfg.CAFile) != "" {
+		tlsConfig, err := tlsutil.TLSConfigFromCAFile(cfg.CAFile)
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig = tlsConfig
 	}
 
 	client := &Client{

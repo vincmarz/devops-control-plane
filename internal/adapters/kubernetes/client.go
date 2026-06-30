@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vincmarz/devops-control-plane/internal/adapters/tlsutil"
 )
 
 const defaultTimeoutSeconds = 30
@@ -21,6 +23,7 @@ type Config struct {
 	Token          string
 	TimeoutSeconds int
 	InsecureTLS    bool
+	CAFile         string
 }
 
 type Client struct {
@@ -55,6 +58,12 @@ func New(cfg Config, opts ...Option) (*Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.InsecureTLS {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	} else if strings.TrimSpace(cfg.CAFile) != "" {
+		tlsConfig, err := tlsutil.TLSConfigFromCAFile(cfg.CAFile)
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig = tlsConfig
 	}
 	client := &Client{apiURL: apiURL, token: token, httpClient: &http.Client{Timeout: time.Duration(timeout) * time.Second, Transport: transport}}
 	for _, opt := range opts {

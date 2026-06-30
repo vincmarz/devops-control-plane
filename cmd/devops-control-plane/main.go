@@ -47,6 +47,7 @@ func main() {
 			Token:          cfg.GitLabToken,
 			TimeoutSeconds: cfg.GitLabTimeoutSeconds,
 			InsecureTLS:    cfg.GitLabInsecureTLS,
+			CAFile:         cfg.GitLabCAFile,
 		})
 		if err != nil {
 			logger.Error("gitlab client initialization failed", "error", err)
@@ -94,7 +95,7 @@ func main() {
 	}
 
 	if cfg.KubernetesAPIURL != "" || cfg.KubernetesToken != "" {
-		kubernetesRuntimeClient, err := kubernetesadapter.New(kubernetesadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS})
+		kubernetesRuntimeClient, err := kubernetesadapter.New(kubernetesadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS, CAFile: cfg.KubernetesCAFile})
 		if err != nil {
 			logger.Error("kubernetes client initialization failed", "error", err)
 			os.Exit(1)
@@ -103,7 +104,7 @@ func main() {
 			return kubernetesRuntimeClient.CollectRuntimeEvidence(ctx, cfg.KubernetesNamespace, change.ApplicationName)
 		}))
 
-		tektonClient, err := tektonadapter.New(tektonadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS})
+		tektonClient, err := tektonadapter.New(tektonadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS, CAFile: cfg.KubernetesCAFile})
 		if err != nil {
 			logger.Error("tekton client initialization failed", "error", err)
 			os.Exit(1)
@@ -155,7 +156,7 @@ func main() {
 
 	applicationService := app.NewApplicationService()
 	if cfg.ArgoCDBaseURL != "" || cfg.ArgoCDAuthToken != "" {
-		argoCDClient, err := argocdadapter.New(argocdadapter.Config{BaseURL: cfg.ArgoCDBaseURL, AuthToken: cfg.ArgoCDAuthToken, TimeoutSeconds: cfg.ArgoCDTimeoutSeconds, InsecureTLS: cfg.ArgoCDInsecureTLS})
+		argoCDClient, err := argocdadapter.New(argocdadapter.Config{BaseURL: cfg.ArgoCDBaseURL, AuthToken: cfg.ArgoCDAuthToken, TimeoutSeconds: cfg.ArgoCDTimeoutSeconds, InsecureTLS: cfg.ArgoCDInsecureTLS, CAFile: cfg.ArgoCDCAFile})
 		if err != nil {
 			logger.Error("argocd client initialization failed", "error", err)
 			os.Exit(1)

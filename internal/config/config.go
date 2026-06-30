@@ -14,6 +14,7 @@ type Config struct {
 	ArgoCDBaseURL          string
 	ArgoCDAuthToken        string
 	ArgoCDInsecureTLS      bool
+	ArgoCDCAFile           string
 	ArgoCDTimeoutSeconds   int
 	ArgoCDPollIntervalSecs int
 
@@ -23,6 +24,7 @@ type Config struct {
 	GitLabDefaultBranch  string
 	GitLabTimeoutSeconds int
 	GitLabInsecureTLS    bool
+	GitLabCAFile         string
 
 	TektonNamespace           string
 	TektonPipelineName        string
@@ -40,6 +42,7 @@ type Config struct {
 	KubernetesAPIURL      string
 	KubernetesToken       string
 	KubernetesInsecureTLS bool
+	KubernetesCAFile      string
 	KubernetesNamespace   string
 	EvidenceBasePath      string
 }
@@ -54,6 +57,7 @@ func Load() Config {
 		ArgoCDBaseURL:          getEnv("ARGOCD_BASE_URL", ""),
 		ArgoCDAuthToken:        getEnv("ARGOCD_AUTH_TOKEN", ""),
 		ArgoCDInsecureTLS:      getBoolEnv("ARGOCD_INSECURE_TLS", false),
+		ArgoCDCAFile:           getEnv("ARGOCD_CA_FILE", ""),
 		ArgoCDTimeoutSeconds:   getIntEnv("ARGOCD_TIMEOUT_SECONDS", 30),
 		ArgoCDPollIntervalSecs: getIntEnv("ARGOCD_POLL_INTERVAL_SECONDS", 5),
 
@@ -63,6 +67,7 @@ func Load() Config {
 		GitLabDefaultBranch:  getEnv("GITLAB_DEFAULT_BRANCH", "main"),
 		GitLabTimeoutSeconds: getIntEnv("GITLAB_TIMEOUT_SECONDS", 30),
 		GitLabInsecureTLS:    getBoolEnv("GITLAB_INSECURE_TLS", false),
+		GitLabCAFile:         getEnv("GITLAB_CA_FILE", ""),
 
 		TektonNamespace:           getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
 		TektonPipelineName:        getEnv("TEKTON_PIPELINE_NAME", "go-build-and-push"),
@@ -80,6 +85,7 @@ func Load() Config {
 		KubernetesAPIURL:      getEnv("KUBERNETES_API_URL", ""),
 		KubernetesToken:       getEnv("KUBERNETES_TOKEN", ""),
 		KubernetesInsecureTLS: getBoolEnv("KUBERNETES_INSECURE_TLS", false),
+		KubernetesCAFile:      getEnv("KUBERNETES_CA_FILE", ""),
 		KubernetesNamespace:   getEnv("KUBERNETES_NAMESPACE", "devops-ci-demo"),
 		EvidenceBasePath:      getEnv("EVIDENCE_BASE_PATH", ""),
 	}

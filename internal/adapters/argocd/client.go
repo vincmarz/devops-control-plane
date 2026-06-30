@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vincmarz/devops-control-plane/internal/adapters/tlsutil"
 	"github.com/vincmarz/devops-control-plane/internal/domain"
 )
 
@@ -37,6 +38,12 @@ func New(cfg Config) (*Client, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg.InsecureTLS {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // Lab/self-signed OpenShift GitOps route support.
+	} else if strings.TrimSpace(cfg.CAFile) != "" {
+		tlsConfig, err := tlsutil.TLSConfigFromCAFile(cfg.CAFile)
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig = tlsConfig
 	}
 
 	return &Client{

@@ -7,6 +7,7 @@ type Config struct {
 	AuthToken      string
 	TimeoutSeconds int
 	InsecureTLS    bool
+	CAFile         string
 }
 
 type ApplicationStatus struct {

@@ -13,10 +13,12 @@ data:
   GITLAB_DEFAULT_BRANCH: "main"
   GITLAB_TIMEOUT_SECONDS: "30"
   GITLAB_INSECURE_TLS: "true"
+  GITLAB_CA_FILE: ""
 
   # Argo CD / OpenShift GitOps lab integration. Token is stored in Secret.
   ARGOCD_BASE_URL: "https://openshift-gitops-server-openshift-gitops.apps.ocp4.mim.lan"
   ARGOCD_INSECURE_TLS: "true"
+  ARGOCD_CA_FILE: ""
   ARGOCD_TIMEOUT_SECONDS: "30"
   ARGOCD_POLL_INTERVAL_SECONDS: "5"
 
@@ -38,5 +40,6 @@ data:
   # MVP uses explicit API URL/token. Future hardening can switch to an in-cluster SA token file.
   KUBERNETES_API_URL: "https://api.ocp4.mim.lan:6443"
   KUBERNETES_INSECURE_TLS: "true"
+  KUBERNETES_CA_FILE: ""
   KUBERNETES_NAMESPACE: "devops-ci-demo"
   EVIDENCE_BASE_PATH: ""
