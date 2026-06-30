@@ -16,8 +16,13 @@ type PipelineRunStatus struct {
 	CompletionTime    string
 }
 type TaskRunStatus struct {
-	Name     string
-	TaskName string
-	Status   string
-	Reason   string
+	Name             string
+	Namespace        string
+	PipelineTaskName string
+	TaskName         string
+	Status           string
+	Reason           string
+	Message          string
+	StartTime        string
+	CompletionTime   string
 }

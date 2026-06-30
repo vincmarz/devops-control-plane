@@ -241,6 +241,70 @@ func (c *Client) FindLatestPipelineRunByChange(ctx context.Context, namespace st
 	return result, nil
 }
 
+// ListTaskRunsByPipelineRun returns TaskRun status details associated with a PipelineRun.
+func (c *Client) ListTaskRunsByPipelineRun(ctx context.Context, namespace string, pipelineRunName string) ([]TaskRunStatus, error) {
+	namespace = strings.TrimSpace(namespace)
+	pipelineRunName = strings.TrimSpace(pipelineRunName)
+	if namespace == "" {
+		return nil, errors.New("tekton namespace is required")
+	}
+	if pipelineRunName == "" {
+		return nil, errors.New("tekton PipelineRun name is required")
+	}
+
+	query := url.Values{}
+	query.Set("labelSelector", "tekton.dev/pipelineRun="+pipelineRunName)
+	path := fmt.Sprintf("/apis/tekton.dev/v1/namespaces/%s/taskruns?%s", namespace, query.Encode())
+	list, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	items, _ := list["items"].([]any)
+	results := make([]TaskRunStatus, 0, len(items))
+	for _, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		metadata, _ := item["metadata"].(map[string]any)
+		labels, _ := metadata["labels"].(map[string]any)
+		statusBlock, _ := item["status"].(map[string]any)
+		conditions, _ := statusBlock["conditions"].([]any)
+
+		tr := TaskRunStatus{
+			Name:             stringValue(metadata, "name"),
+			Namespace:        stringValue(metadata, "namespace"),
+			PipelineTaskName: stringValue(labels, "tekton.dev/pipelineTask"),
+			TaskName:         stringValue(labels, "tekton.dev/task"),
+			StartTime:        stringValue(statusBlock, "startTime"),
+			CompletionTime:   stringValue(statusBlock, "completionTime"),
+		}
+		if tr.Namespace == "" {
+			tr.Namespace = namespace
+		}
+		for _, rawCondition := range conditions {
+			condition, ok := rawCondition.(map[string]any)
+			if !ok {
+				continue
+			}
+			if stringValue(condition, "type") == "Succeeded" {
+				tr.Status = stringValue(condition, "status")
+				tr.Reason = stringValue(condition, "reason")
+				tr.Message = stringValue(condition, "message")
+				break
+			}
+		}
+		if tr.Status == "" {
+			tr.Status = "Unknown"
+			tr.Reason = "Pending"
+			tr.Message = "TaskRun has no Succeeded condition yet"
+		}
+		results = append(results, tr)
+	}
+	return results, nil
+}
+
 func stringValue(values map[string]any, key string) string {
 	if values == nil {
 		return ""

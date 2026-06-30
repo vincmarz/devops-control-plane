@@ -110,3 +110,52 @@ func TestFindLatestPipelineRunByChangeNotFound(t *testing.T) {
 		t.Fatal("FindLatestPipelineRunByChange returned nil error, want not found error")
 	}
 }
+
+func TestListTaskRunsByPipelineRun(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/apis/tekton.dev/v1/namespaces/devops-ci-demo/taskruns" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("labelSelector"); got != "tekton.dev/pipelineRun=pr-1" {
+			t.Fatalf("labelSelector=%q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"items": []map[string]any{
+				{
+					"metadata": map[string]any{
+						"name":      "pr-1-clone-repository",
+						"namespace": "devops-ci-demo",
+						"labels": map[string]any{
+							"tekton.dev/pipelineTask": "clone-repository",
+							"tekton.dev/task":         "git-clone",
+						},
+					},
+					"status": map[string]any{
+						"startTime":      "2026-06-30T08:27:09Z",
+						"completionTime": "2026-06-30T08:27:26Z",
+						"conditions": []map[string]any{
+							{"type": "Succeeded", "status": "False", "reason": "Failed", "message": "step exited with code 1"},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer s.Close()
+
+	c, err := New(Config{APIURL: s.URL, Token: "token"}, WithHTTPClient(s.Client()))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	taskRuns, err := c.ListTaskRunsByPipelineRun(context.Background(), "devops-ci-demo", "pr-1")
+	if err != nil {
+		t.Fatalf("ListTaskRunsByPipelineRun() error = %v", err)
+	}
+	if len(taskRuns) != 1 {
+		t.Fatalf("taskRuns len=%d, want 1", len(taskRuns))
+	}
+	if taskRuns[0].PipelineTaskName != "clone-repository" || taskRuns[0].Status != "False" || taskRuns[0].Reason != "Failed" {
+		t.Fatalf("taskRun=%#v", taskRuns[0])
+	}
+}

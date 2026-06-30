@@ -26,6 +26,9 @@ func TestCheckValidationCreatesValidationEvidenceOnTerminalStatus(t *testing.T) 
 				GitURL:          "https://github.com/vincmarz/demo-app-gitops.git",
 				GitRevision:     "change/CHG-2026-0001",
 				ValidationPath:  "apps/demo-go-color-app",
+				TaskRuns: []TektonTaskRunResult{
+					{Name: "pr-1-clone-repository", Namespace: "devops-ci-demo", PipelineTaskName: "clone-repository", TaskName: "git-clone", Status: "True", Reason: "Succeeded", Message: "clone completed"},
+				},
 			}, nil
 		}),
 	)
@@ -62,6 +65,17 @@ func TestCheckValidationCreatesValidationEvidenceOnTerminalStatus(t *testing.T) 
 	}
 	if gitops["pipelineName"] != "validate-gitops" || gitops["revision"] != "change/CHG-2026-0001" {
 		t.Fatalf("gitops payload=%#v", gitops)
+	}
+	taskRuns, ok := evidenceStore.created.Payload["taskRuns"].([]map[string]any)
+	if !ok || len(taskRuns) != 1 {
+		t.Fatalf("taskRuns payload missing or invalid: %#v", evidenceStore.created.Payload["taskRuns"])
+	}
+	diagnostics, ok := evidenceStore.created.Payload["diagnostics"].(map[string]any)
+	if !ok {
+		t.Fatalf("diagnostics payload missing or invalid: %#v", evidenceStore.created.Payload["diagnostics"])
+	}
+	if diagnostics["failedTaskCount"] != 0 {
+		t.Fatalf("diagnostics payload=%#v", diagnostics)
 	}
 	if result["evidence"] == nil {
 		t.Fatalf("result evidence summary missing: %#v", result)

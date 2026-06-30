@@ -39,6 +39,19 @@ type TektonValidationResult struct {
 	GitURL          string
 	GitRevision     string
 	ValidationPath  string
+	TaskRuns        []TektonTaskRunResult
+}
+
+type TektonTaskRunResult struct {
+	Name             string
+	Namespace        string
+	PipelineTaskName string
+	TaskName         string
+	Status           string
+	Reason           string
+	Message          string
+	StartTime        string
+	CompletionTime   string
 }
 
 // TektonCheckValidationFunc rappresenta la porta applicativa minima per leggere lo stato di una PipelineRun Tekton.
@@ -287,7 +300,10 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 		return nil, err
 	}
 	tektonPayload := map[string]any{"pipelineRunName": validation.PipelineRunName, "namespace": validation.Namespace, "uid": validation.UID, "status": validation.Status, "reason": validation.Reason, "message": validation.Message}
+	taskRunsPayload, diagnosticsPayload := tektonTaskRunDiagnostics(validation.TaskRuns)
 	result["tekton"] = tektonPayload
+	result["taskRuns"] = taskRunsPayload
+	result["diagnostics"] = diagnosticsPayload
 
 	if s.evidenceStore != nil && (runtimeStatus == "ValidationSucceeded" || runtimeStatus == "ValidationFailed") {
 		evidence := domain.Evidence{
@@ -304,7 +320,9 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 					"targetEnvironment": change.TargetEnvironment,
 					"lifecycleStatus":   change.Status,
 				},
-				"tekton": tektonPayload,
+				"tekton":      tektonPayload,
+				"taskRuns":    taskRunsPayload,
+				"diagnostics": diagnosticsPayload,
 				"gitops": map[string]any{
 					"pipelineName":    validation.PipelineName,
 					"tektonNamespace": validation.Namespace,
@@ -328,6 +346,47 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 		}
 	}
 	return result, nil
+}
+
+func tektonTaskRunDiagnostics(taskRuns []TektonTaskRunResult) ([]map[string]any, map[string]any) {
+	taskRunsPayload := make([]map[string]any, 0, len(taskRuns))
+	failedTasks := make([]string, 0)
+	for _, taskRun := range taskRuns {
+		pipelineTaskName := strings.TrimSpace(taskRun.PipelineTaskName)
+		if pipelineTaskName == "" {
+			pipelineTaskName = strings.TrimSpace(taskRun.TaskName)
+		}
+		if pipelineTaskName == "" {
+			pipelineTaskName = strings.TrimSpace(taskRun.Name)
+		}
+		taskRunsPayload = append(taskRunsPayload, map[string]any{
+			"name":             taskRun.Name,
+			"namespace":        taskRun.Namespace,
+			"pipelineTaskName": pipelineTaskName,
+			"taskName":         taskRun.TaskName,
+			"status":           taskRun.Status,
+			"reason":           taskRun.Reason,
+			"message":          taskRun.Message,
+			"startTime":        taskRun.StartTime,
+			"completionTime":   taskRun.CompletionTime,
+		})
+		if taskRun.Status == "False" {
+			failedTasks = append(failedTasks, pipelineTaskName)
+		}
+	}
+
+	summary := "Tekton validation completed without failed TaskRuns"
+	if len(failedTasks) == 1 {
+		summary = fmt.Sprintf("Tekton validation failed in task %s", failedTasks[0])
+	} else if len(failedTasks) > 1 {
+		summary = fmt.Sprintf("Tekton validation failed in %d tasks: %s", len(failedTasks), strings.Join(failedTasks, ", "))
+	}
+
+	return taskRunsPayload, map[string]any{
+		"failedTaskCount": len(failedTasks),
+		"failedTasks":     failedTasks,
+		"summary":         summary,
+	}
 }
 
 // CheckDeployment legge lo stato reale della application Argo CD e aggiorna il runtime_status.

@@ -136,7 +136,17 @@ func main() {
 			if cfg.TektonGitRevisionTemplate != "" {
 				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
 			}
-			return app.TektonValidationResult{PipelineRunName: status.Name, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: cfg.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: cfg.TektonValidationPath}, err
+			result := app.TektonValidationResult{PipelineRunName: status.Name, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: cfg.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: cfg.TektonValidationPath}
+			if err != nil {
+				return result, err
+			}
+			taskRuns, taskRunErr := tektonClient.ListTaskRunsByPipelineRun(ctx, cfg.TektonNamespace, status.Name)
+			if taskRunErr == nil {
+				for _, taskRun := range taskRuns {
+					result.TaskRuns = append(result.TaskRuns, app.TektonTaskRunResult{Name: taskRun.Name, Namespace: taskRun.Namespace, PipelineTaskName: taskRun.PipelineTaskName, TaskName: taskRun.TaskName, Status: taskRun.Status, Reason: taskRun.Reason, Message: taskRun.Message, StartTime: taskRun.StartTime, CompletionTime: taskRun.CompletionTime})
+				}
+			}
+			return result, nil
 		}))
 		logger.Info("tekton integration enabled", "namespace", cfg.TektonNamespace, "pipeline", cfg.TektonPipelineName, "serviceAccount", cfg.TektonServiceAccount, "apiURL", cfg.KubernetesAPIURL, "insecureTLS", cfg.KubernetesInsecureTLS)
 	} else {
