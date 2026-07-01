@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-control-plane
+  namespace: devops-control-plane
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: devops-control-plane-oauth-proxy-tls
+spec:
+  ports:
+    - $patch: replace
+    - name: https
+      port: 8443
+      protocol: TCP
+      targetPort: oauth-proxy

@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../namespace.yaml
+  - ../../serviceaccount.yaml
+  - ../../role.yaml
+  - ../../rolebinding.yaml
+  - ../../configmap.yaml
+  - ../../secret-template.yaml
+  - ../../dcp-app-trust-bundle-template.yaml
+  - ../../deployment.yaml
+  - ../../service.yaml
+  - ../../route.yaml
+  - ../../postgresql-secret-template.yaml
+  - ../../postgresql-pvc.yaml
+  - ../../postgresql-deployment.yaml
+  - ../../postgresql-service.yaml
+  - oauth-proxy-serviceaccount.yaml
+  - oauth-proxy-cookie-secret-template.yaml
+  - oauth-proxy-tekton-rolebinding.yaml
+
+patches:
+  - path: patch-deployment-oauth-proxy.yaml
+  - path: patch-service-oauth-proxy.yaml
+  - path: patch-route-oauth-proxy.yaml
