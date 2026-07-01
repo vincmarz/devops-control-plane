@@ -1,4 +1,4 @@
-# ADR-0003: OpenShift OAuth Proxy Deployment Design
+# ADR-0010: OpenShift OAuth Proxy Deployment Design
 
 ## Status
 

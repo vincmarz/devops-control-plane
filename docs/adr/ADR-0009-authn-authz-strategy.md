@@ -1,4 +1,4 @@
-# ADR-0002: AuthN/AuthZ Strategy for DevOps Control Plane
+# ADR-0009: AuthN/AuthZ Strategy for DevOps Control Plane
 
 ## Status
 

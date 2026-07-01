@@ -6,7 +6,7 @@ It does not modify the existing runtime manifests directly.
 
 ## Files included
 
-- docs/adr/ADR-0003-oauth-proxy-deployment-design.md
+- docs/adr/ADR-0010-oauth-proxy-deployment-design.md
 - docs/runbooks/oauth-proxy.md
 - manifests/oauth-proxy/README.md
 - manifests/oauth-proxy/serviceaccount.yaml
