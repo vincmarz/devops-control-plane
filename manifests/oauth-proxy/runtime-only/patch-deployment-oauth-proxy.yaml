@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-control-plane
+  namespace: devops-control-plane
+spec:
+  template:
+    metadata:
+      annotations:
+        devops-control-plane/oauth-proxy: "enabled"
+    spec:
+      serviceAccountName: devops-control-plane-oauth-proxy
+      containers:
+        - name: oauth-proxy
+          image: registry.redhat.io/openshift4/ose-oauth-proxy:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: oauth-proxy
+              containerPort: 8443
+              protocol: TCP
+          env:
+            - name: OAUTH_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: devops-control-plane-oauth-proxy-cookie
+                  key: cookie-secret
+          args:
+            - --provider=openshift
+            - --openshift-service-account=devops-control-plane-oauth-proxy
+            - --https-address=:8443
+            - --upstream=http://localhost:8080
+            - --tls-cert=/etc/tls/private/tls.crt
+            - --tls-key=/etc/tls/private/tls.key
+            - --cookie-secret=$(OAUTH_PROXY_COOKIE_SECRET)
+            - --set-xauthrequest=true
+            - --pass-user-bearer-token=false
+            - --pass-access-token=false
+            - --pass-basic-auth=false
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /oauth/healthz
+              port: oauth-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /oauth/healthz
+              port: oauth-proxy
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+            - name: oauth-proxy-tls
+              mountPath: /etc/tls/private
+              readOnly: true
+      volumes:
+        - name: oauth-proxy-tls
+          secret:
+            secretName: devops-control-plane-oauth-proxy-tls
