@@ -45,7 +45,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/v1/changes/", h.changeSubrouter)
 	mux.HandleFunc("POST /api/v1/changes/", h.changeSubrouter)
 
-	return requestIDMiddleware(loggingMiddleware(deps.Logger, mux))
+	return requestIDMiddleware(loggingMiddleware(deps.Logger, withAuthMiddleware(mux)))
 }
 
 func (h *Handler) applicationSubrouter(w http.ResponseWriter, r *http.Request) {
