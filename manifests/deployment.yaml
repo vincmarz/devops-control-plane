@@ -62,7 +62,7 @@ spec:
       volumes:
         - name: dcp-trust-bundle
           configMap:
-            name: config-trusted-cabundle
+            name: dcp-app-trust-bundle
             items:
               - key: ca-bundle.crt
                 path: ca-bundle.crt

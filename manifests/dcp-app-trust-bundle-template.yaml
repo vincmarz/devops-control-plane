@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dcp-app-trust-bundle
+  namespace: devops-control-plane
+data:
+  ca-bundle.crt: |
+    # Replace this placeholder with the PEM-encoded CA certificate used to validate
+    # the OpenShift ingress route certificate.
+    #
+    # This file is a template only. Do not add this file to kustomization.yaml with
+    # placeholder content.
+    #
+    # Example validated CA in lab:
+    # subject=CN = ingress-operator@1772025286
+    # issuer=CN = ingress-operator@1772025286
+    # sha256=4D:1B:4E:01:CF:F5:CA:3E:24:E6:11:9A:DA:5F:81:2B:1D:9B:47:5A:D3:03:18:07:4A:91:57:E5:FA:4B:E0:43
+    #
+    # -----BEGIN CERTIFICATE-----
+    # ...
+    # -----END CERTIFICATE-----

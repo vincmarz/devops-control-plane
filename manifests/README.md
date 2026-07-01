@@ -94,3 +94,83 @@ KUBERNETES_CA_FILE=
 
 The current lab behavior remains unchanged while `ARGOCD_INSECURE_TLS=true`, `GITLAB_INSECURE_TLS=true`, and `KUBERNETES_INSECURE_TLS=true` are enabled. The `*_CA_FILE` values prepare the runtime for a future controlled test with insecure TLS disabled for selected integrations.
 
+## App-dedicated trust bundle for Argo CD TLS verification
+
+The deployment expects an application-owned ConfigMap named `dcp-app-trust-bundle` in the `devops-control-plane` namespace. The ConfigMap must contain the key `ca-bundle.crt` and is mounted read-only at:
+
+```text
+/etc/dcp-trust/ca-bundle.crt
+```
+
+The application ConfigMap uses:
+
+```text
+ARGOCD_INSECURE_TLS=false
+ARGOCD_CA_FILE=/etc/dcp-trust/ca-bundle.crt
+```
+
+GitLab and Kubernetes integrations intentionally remain in the current lab-safe mode for now:
+
+```text
+GITLAB_INSECURE_TLS=true
+KUBERNETES_INSECURE_TLS=true
+```
+
+### Creating the app-owned trust bundle ConfigMap
+
+Extract the CA certificate from the Argo CD Route chain in read-only mode and create the namespace-local ConfigMap. Do not modify OpenShift cluster-wide objects.
+
+```bash
+mkdir -p /tmp/dcp-ingress-ca
+
+ARGOCD_HOST="$(oc get route openshift-gitops-server -n openshift-gitops -o jsonpath='{.spec.host}')"
+
+echo | openssl s_client \
+  -connect "${ARGOCD_HOST}:443" \
+  -servername "${ARGOCD_HOST}" \
+  -showcerts \
+  2>/dev/null > /tmp/dcp-ingress-ca/argocd-route-chain.pem
+```
+
+The CA selected during the lab validation was the self-signed ingress CA with:
+
+```text
+subject=CN = ingress-operator@1772025286
+issuer=CN = ingress-operator@1772025286
+SHA256 Fingerprint=4D:1B:4E:01:CF:F5:CA:3E:24:E6:11:9A:DA:5F:81:2B:1D:9B:47:5A:D3:03:18:07:4A:91:57:E5:FA:4B:E0:43
+```
+
+After writing the selected PEM certificate to `/tmp/dcp-ingress-ca/ingress-ca.pem`, create or update the ConfigMap:
+
+```bash
+oc create configmap dcp-app-trust-bundle \
+  -n devops-control-plane \
+  --from-file=ca-bundle.crt=/tmp/dcp-ingress-ca/ingress-ca.pem \
+  --dry-run=client \
+  -o yaml > /tmp/dcp-ingress-ca/dcp-app-trust-bundle.yaml
+
+oc apply -f /tmp/dcp-ingress-ca/dcp-app-trust-bundle.yaml
+```
+
+Validate the mounted file after rollout:
+
+```bash
+POD="$(oc get pod -n devops-control-plane -l app=devops-control-plane -o jsonpath='{.items[0].metadata.name}')"
+
+oc exec -n devops-control-plane "$POD" -- sh -c '
+echo "CA bundle path: /etc/dcp-trust/ca-bundle.crt"
+wc -c /etc/dcp-trust/ca-bundle.crt
+'
+```
+
+### Important boundary
+
+This is an application-only trust strategy. It must not modify:
+
+```text
+proxy/cluster
+ingress/router certificates
+cluster-wide CA configuration
+OpenShift-managed ConfigMaps
+```
+
