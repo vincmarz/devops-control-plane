@@ -26,6 +26,10 @@ spec:
                 name: devops-control-plane-config
             - secretRef:
                 name: devops-control-plane-secrets
+          volumeMounts:
+            - name: dcp-trust-bundle
+              mountPath: /etc/dcp-trust
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /healthz
@@ -55,3 +59,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: dcp-trust-bundle
+          configMap:
+            name: config-trusted-cabundle
+            items:
+              - key: ca-bundle.crt
+                path: ca-bundle.crt

@@ -13,12 +13,12 @@ data:
   GITLAB_DEFAULT_BRANCH: "main"
   GITLAB_TIMEOUT_SECONDS: "30"
   GITLAB_INSECURE_TLS: "true"
-  GITLAB_CA_FILE: ""
+  GITLAB_CA_FILE: "/etc/dcp-trust/ca-bundle.crt"
 
   # Argo CD / OpenShift GitOps lab integration. Token is stored in Secret.
   ARGOCD_BASE_URL: "https://openshift-gitops-server-openshift-gitops.apps.ocp4.mim.lan"
   ARGOCD_INSECURE_TLS: "true"
-  ARGOCD_CA_FILE: ""
+  ARGOCD_CA_FILE: "/etc/dcp-trust/ca-bundle.crt"
   ARGOCD_TIMEOUT_SECONDS: "30"
   ARGOCD_POLL_INTERVAL_SECONDS: "5"
 

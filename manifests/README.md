@@ -73,3 +73,24 @@ Expected probes:
 - `GITLAB_INSECURE_TLS=true`, `ARGOCD_INSECURE_TLS=true` and `KUBERNETES_INSECURE_TLS=true` are acceptable for the current lab, but must be revisited during security hardening.
 - AuthN/AuthZ is intentionally deferred to Phase 9.3.
 - The UI environment selector is static until multi-environment support is implemented.
+
+## App-only trust bundle mount
+
+The DevOps Control Plane deployment can mount the namespace-local `config-trusted-cabundle` ConfigMap as a read-only trust bundle at:
+
+```text
+/etc/dcp-trust/ca-bundle.crt
+```
+
+This is an application-only setting. It does not modify OpenShift cluster-wide objects such as `proxy/cluster`, ingress/router certificates, or managed cluster CA ConfigMaps.
+
+The manifest sets:
+
+```text
+ARGOCD_CA_FILE=/etc/dcp-trust/ca-bundle.crt
+GITLAB_CA_FILE=/etc/dcp-trust/ca-bundle.crt
+KUBERNETES_CA_FILE=
+```
+
+The current lab behavior remains unchanged while `ARGOCD_INSECURE_TLS=true`, `GITLAB_INSECURE_TLS=true`, and `KUBERNETES_INSECURE_TLS=true` are enabled. The `*_CA_FILE` values prepare the runtime for a future controlled test with insecure TLS disabled for selected integrations.
+
