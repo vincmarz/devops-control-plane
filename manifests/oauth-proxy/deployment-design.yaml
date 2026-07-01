@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-control-plane
+  namespace: devops-control-plane
+  labels:
+    app.kubernetes.io/name: devops-control-plane
+  annotations:
+    devops-control-plane.phase: "9.3.8-design-only"
+    devops-control-plane.note: "Template showing target OAuth Proxy sidecar wiring; do not apply directly without review."
+spec:
+  template:
+    spec:
+      serviceAccountName: devops-control-plane-oauth-proxy
+      containers:
+        - name: devops-control-plane
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+        - name: oauth-proxy
+          image: registry.redhat.io/openshift4/ose-oauth-proxy:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: oauth-proxy
+              containerPort: 8443
+              protocol: TCP
+          args:
+            - --provider=openshift
+            - --https-address=:8443
+            - --upstream=http://localhost:8080
+            - --set-xauthrequest=true
+            - --pass-user-bearer-token=false
+            - --pass-access-token=false
+            - --pass-basic-auth=false
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /oauth/healthz
+              port: oauth-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /oauth/healthz
+              port: oauth-proxy
+            initialDelaySeconds: 10
+            periodSeconds: 30
