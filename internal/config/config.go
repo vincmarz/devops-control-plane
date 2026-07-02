@@ -2,7 +2,14 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+)
+
+const (
+	defaultServiceAccountTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultServiceAccountCAFile    = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 )
 
 type Config struct {
@@ -48,6 +55,10 @@ type Config struct {
 }
 
 func Load() Config {
+	kubernetesAPIURL := kubernetesAPIURLFromEnv()
+	kubernetesToken := kubernetesTokenFromEnvOrServiceAccount()
+	kubernetesCAFile := kubernetesCAFileFromEnvOrServiceAccount()
+
 	return Config{
 		HTTPAddr: getEnv("HTTP_ADDR", ":8080"),
 		LogLevel: getEnv("LOG_LEVEL", "info"),
@@ -82,13 +93,77 @@ func Load() Config {
 		TektonWorkspacePVC:        getEnv("TEKTON_WORKSPACE_PVC", "pipeline-workspace"),
 		TektonDockerConfigSecret:  getEnv("TEKTON_DOCKERCONFIG_SECRET", "pipeline-registry-dockerconfig"),
 
-		KubernetesAPIURL:      getEnv("KUBERNETES_API_URL", ""),
-		KubernetesToken:       getEnv("KUBERNETES_TOKEN", ""),
+		KubernetesAPIURL:      kubernetesAPIURL,
+		KubernetesToken:       kubernetesToken,
 		KubernetesInsecureTLS: getBoolEnv("KUBERNETES_INSECURE_TLS", false),
-		KubernetesCAFile:      getEnv("KUBERNETES_CA_FILE", ""),
+		KubernetesCAFile:      kubernetesCAFile,
 		KubernetesNamespace:   getEnv("KUBERNETES_NAMESPACE", "devops-ci-demo"),
 		EvidenceBasePath:      getEnv("EVIDENCE_BASE_PATH", ""),
 	}
+}
+
+func kubernetesAPIURLFromEnv() string {
+	if value := strings.TrimSpace(os.Getenv("KUBERNETES_API_URL")); value != "" {
+		return value
+	}
+
+	host := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST"))
+	if host == "" {
+		return ""
+	}
+
+	port := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_PORT"))
+	if port == "" {
+		port = "443"
+	}
+
+	return "https://" + host + ":" + port
+}
+
+func kubernetesTokenFromEnvOrServiceAccount() string {
+	if value := strings.TrimSpace(os.Getenv("KUBERNETES_TOKEN")); value != "" {
+		return value
+	}
+
+	tokenFile := getEnv("KUBERNETES_TOKEN_FILE", defaultServiceAccountTokenFile)
+	return readTrimmedFileIfPresent(tokenFile)
+}
+
+func kubernetesCAFileFromEnvOrServiceAccount() string {
+	if value := strings.TrimSpace(os.Getenv("KUBERNETES_CA_FILE")); value != "" {
+		return value
+	}
+
+	caFile := getEnv("KUBERNETES_SERVICEACCOUNT_CA_FILE", defaultServiceAccountCAFile)
+	if fileExists(caFile) {
+		return caFile
+	}
+
+	return ""
+}
+
+func readTrimmedFileIfPresent(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+
+	content, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(content))
+}
+
+func fileExists(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+
+	info, err := os.Stat(filepath.Clean(path))
+	return err == nil && !info.IsDir()
 }
 
 func getEnv(key, fallback string) string {
