@@ -5,7 +5,7 @@ metadata:
   namespace: devops-ci-demo
 subjects:
   - kind: ServiceAccount
-    name: devops-control-plane
+    name: devops-control-plane-oauth-proxy
     namespace: devops-control-plane
 roleRef:
   apiGroup: rbac.authorization.k8s.io
