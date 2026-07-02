@@ -675,3 +675,36 @@ KUBERNETES_TOKEN: HTTP 200
 ```
 
 No secret values were printed during the checks.
+
+## Phase 9.6 update — Kubernetes token is optional
+
+Starting from phase 9.6, `KUBERNETES_TOKEN` is not required for the standard OpenShift runtime deployment of the DevOps Control Plane.
+The preferred runtime model is the pod ServiceAccount token mounted by OpenShift.
+
+Runtime fallback order:
+
+1. If `KUBERNETES_TOKEN` is configured, the application uses it as an explicit legacy override.
+2. If `KUBERNETES_TOKEN` is missing or empty, the application reads the token from `KUBERNETES_TOKEN_FILE`.
+3. `KUBERNETES_TOKEN_FILE` defaults to `/var/run/secrets/kubernetes.io/serviceaccount/token`.
+4. If `KUBERNETES_API_URL` is empty, the application builds it from `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`.
+5. If `KUBERNETES_CA_FILE` is empty, the application uses the ServiceAccount CA file when present.
+
+Validated runtime evidence:
+
+```text
+KUBERNETES_TOKEN removed from devops-control-plane-secrets
+KUBERNETES_TOKEN not set in the application container
+ServiceAccount token file present
+ServiceAccount CA file present
+/readyz HTTP 200
+/livez HTTP 200
+/api/v1/changes anonymous HTTP 403
+collect-evidence on CHG-2026-0001 HTTP 202
+```
+
+Operational guidance:
+
+- Do not print Kubernetes tokens.
+- Do not recreate `KUBERNETES_TOKEN` unless a documented break-glass scenario requires it.
+- Keep the ServiceAccount RBAC least-privilege baseline from phase 9.4 aligned with the runtime needs of Tekton and Kubernetes/OpenShift evidence collection.
+- Keep a backup of the Secret before removing legacy token keys during migration.

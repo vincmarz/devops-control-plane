@@ -174,3 +174,21 @@ cluster-wide CA configuration
 OpenShift-managed ConfigMaps
 ```
 
+### Kubernetes/OpenShift authentication after phase 9.6
+
+`KUBERNETES_TOKEN` is no longer required as a static application Secret value.
+The preferred runtime model is to use the ServiceAccount token automatically mounted in the pod:
+
+```text
+/var/run/secrets/kubernetes.io/serviceaccount/token
+```
+
+The application configuration now follows this order:
+
+1. If `KUBERNETES_TOKEN` is set, it is used as an explicit legacy override.
+2. If `KUBERNETES_TOKEN` is empty or missing, the application reads the ServiceAccount token file.
+3. If `KUBERNETES_API_URL` is empty, the application builds it from `KUBERNETES_SERVICE_HOST` and `KUBERNETES_SERVICE_PORT`.
+4. If `KUBERNETES_CA_FILE` is empty, the ServiceAccount CA file is used when present.
+
+For production-like deployments, do not create or rotate a static Kubernetes token unless a specific break-glass use case requires it.
+
