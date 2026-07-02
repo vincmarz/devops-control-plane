@@ -12,7 +12,7 @@ data:
   GITLAB_PROJECT_ID: "1"
   GITLAB_DEFAULT_BRANCH: "main"
   GITLAB_TIMEOUT_SECONDS: "30"
-  GITLAB_INSECURE_TLS: "true"
+  GITLAB_INSECURE_TLS: "false"
   GITLAB_CA_FILE: "/etc/dcp-trust/ca-bundle.crt"
 
   # Argo CD / OpenShift GitOps lab integration. Token is stored in Secret.
@@ -37,18 +37,19 @@ data:
   TEKTON_DOCKERCONFIG_SECRET: "pipeline-registry-dockerconfig"
 
   # Kubernetes API access for Tekton and runtime evidence collection.
-  # MVP uses explicit API URL/token. Future hardening can switch to an in-cluster SA token file.
+  # Uses ServiceAccount token fallback by default. Static KUBERNETES_TOKEN is no longer required.
   KUBERNETES_API_URL: "https://api.ocp4.mim.lan:6443"
-  KUBERNETES_INSECURE_TLS: "true"
+  KUBERNETES_INSECURE_TLS: "false"
   KUBERNETES_CA_FILE: ""
   KUBERNETES_NAMESPACE: "devops-ci-demo"
   EVIDENCE_BASE_PATH: ""
-  # AuthN/AuthZ. Disabled until OpenShift OAuth Proxy is introduced.
-  AUTH_ENABLED: "false"
+  # AuthN/AuthZ. Enabled behind OpenShift OAuth Proxy.
+  AUTH_ENABLED: "true"
   AUTH_HEADER_USER: "X-Forwarded-User"
   AUTH_HEADER_GROUPS: "X-Forwarded-Groups"
   AUTH_HEADER_ALT_USER: "X-Auth-Request-User"
-  AUTH_GROUP_VIEWER: "devops-cp-viewers"
-  AUTH_GROUP_OPERATOR: "devops-cp-operators"
-  AUTH_GROUP_APPROVER: "devops-cp-approvers"
-  AUTH_GROUP_ADMIN: "devops-cp-admins"
+  AUTH_OPENSHIFT_GROUP_LOOKUP_ENABLED: "true"
+  AUTH_GROUP_VIEWER: "devops-control-plane-viewers"
+  AUTH_GROUP_OPERATOR: "devops-control-plane-operators"
+  AUTH_GROUP_APPROVER: "devops-control-plane-approvers"
+  AUTH_GROUP_ADMIN: "devops-control-plane-admins"
