@@ -2,9 +2,15 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type authContextKey string
@@ -72,9 +78,119 @@ func identityFromHeaders(r *http.Request) (authIdentity, bool) {
 	}
 
 	groups := splitCSV(r.Header.Get(groupsHeader))
+	source := "header"
+
+	if len(groups) == 0 && getBoolEnv("AUTH_OPENSHIFT_GROUP_LOOKUP_ENABLED", false) {
+		resolvedGroups, err := openShiftGroupsForUser(r.Context(), username)
+		if err == nil && len(resolvedGroups) > 0 {
+			groups = resolvedGroups
+			source = "openshift-groups"
+		}
+	}
+
 	roles := rolesFromGroups(groups)
 
-	return authIdentity{Username: username, Groups: groups, Roles: roles, Source: "header"}, true
+	return authIdentity{Username: username, Groups: groups, Roles: roles, Source: source}, true
+}
+
+type openShiftGroupList struct {
+	Items []struct {
+		Metadata struct {
+			Name string `json:"name"`
+		} `json:"metadata"`
+		Users []string `json:"users"`
+	} `json:"items"`
+}
+
+func openShiftGroupsForUser(ctx context.Context, username string) ([]string, error) {
+	apiURL := strings.TrimRight(getEnv("AUTH_OPENSHIFT_API_URL", ""), "/")
+	if apiURL == "" {
+		host := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_HOST"))
+		port := strings.TrimSpace(os.Getenv("KUBERNETES_SERVICE_PORT"))
+		if host == "" {
+			return nil, fmt.Errorf("openshift api host is not configured")
+		}
+		if port == "" {
+			port = "443"
+		}
+		apiURL = "https://" + host + ":" + port
+	}
+
+	tokenPath := getEnv("AUTH_OPENSHIFT_TOKEN_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/token")
+	tokenBytes, err := os.ReadFile(tokenPath)
+	if err != nil {
+		return nil, fmt.Errorf("read service account token: %w", err)
+	}
+	token := strings.TrimSpace(string(tokenBytes))
+	if token == "" {
+		return nil, fmt.Errorf("service account token is empty")
+	}
+
+	httpClient, err := openShiftHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+
+	requestURL := apiURL + "/apis/user.openshift.io/v1/groups"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("openshift groups lookup failed: status=%d body=%q", resp.StatusCode, string(body))
+	}
+
+	var groupList openShiftGroupList
+	if err := json.NewDecoder(resp.Body).Decode(&groupList); err != nil {
+		return nil, err
+	}
+
+	var groups []string
+	for _, item := range groupList.Items {
+		for _, user := range item.Users {
+			if user == username {
+				groups = append(groups, item.Metadata.Name)
+				break
+			}
+		}
+	}
+
+	return groups, nil
+}
+
+func openShiftHTTPClient() (*http.Client, error) {
+	caFile := getEnv("AUTH_OPENSHIFT_CA_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+	caBytes, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("read openshift ca file: %w", err)
+	}
+
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(caBytes) {
+		return nil, fmt.Errorf("openshift ca file does not contain valid PEM certificates")
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:    roots,
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+
+	return &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: transport,
+	}, nil
 }
 
 func rolesFromGroups(groups []string) map[string]bool {

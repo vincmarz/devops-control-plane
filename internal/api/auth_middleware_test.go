@@ -1,8 +1,10 @@
 package api
 
 import (
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -134,4 +136,69 @@ func TestAuthMiddlewareAllowsPublicHealthHeadEndpointsWhenEnabled(t *testing.T) 
 			t.Fatalf("expected status %d for HEAD %s, got %d", http.StatusNoContent, path, rr.Code)
 		}
 	}
+}
+
+func TestAuthMiddlewareResolvesGroupsFromOpenShiftWhenHeadersAreMissing(t *testing.T) {
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_OPENSHIFT_GROUP_LOOKUP_ENABLED", "true")
+	t.Setenv("AUTH_GROUP_ADMIN", "devops-control-plane-admins")
+
+	tokenFile := createTempFile(t, "token")
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/apis/user.openshift.io/v1/groups" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token" {
+			t.Fatalf("unexpected authorization header: %q", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"items": [
+				{
+					"metadata": {"name": "devops-control-plane-admins"},
+					"users": ["vmarzario"]
+				}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	caFile := createTempFile(t, string(caPEM))
+
+	t.Setenv("AUTH_OPENSHIFT_API_URL", server.URL)
+	t.Setenv("AUTH_OPENSHIFT_TOKEN_FILE", tokenFile)
+	t.Setenv("AUTH_OPENSHIFT_CA_FILE", caFile)
+
+	h := withAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/ui/dashboard", nil)
+	req.Header.Set("X-Forwarded-User", "vmarzario")
+
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rr.Code)
+	}
+}
+
+func createTempFile(t *testing.T, content string) string {
+	t.Helper()
+
+	file, err := os.CreateTemp(t.TempDir(), "dcp-auth-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+
+	return file.Name()
 }
