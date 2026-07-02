@@ -52,7 +52,7 @@ func withAuthMiddleware(next http.Handler) http.Handler {
 }
 
 func isPublicEndpoint(r *http.Request) bool {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
 	}
 	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/livez"
