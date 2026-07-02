@@ -55,7 +55,7 @@ func isPublicEndpoint(r *http.Request) bool {
 	if r.Method != http.MethodGet {
 		return false
 	}
-	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz"
+	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/livez"
 }
 
 func identityFromHeaders(r *http.Request) (authIdentity, bool) {
