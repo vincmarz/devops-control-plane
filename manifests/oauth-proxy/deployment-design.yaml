@@ -25,6 +25,13 @@ spec:
             - name: oauth-proxy
               containerPort: 8443
               protocol: TCP
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
           args:
             - --provider=openshift
             - --https-address=:8443

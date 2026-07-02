@@ -18,6 +18,13 @@ spec:
             - name: oauth-proxy
               containerPort: 8443
               protocol: TCP
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
           env:
             - name: OAUTH_PROXY_COOKIE_SECRET
               valueFrom:
