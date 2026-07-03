@@ -1,834 +1,958 @@
-# DevOps Control Plane - Personas e Use Cases
+# DevOps Control Plane — Personas and Use Cases
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documento precedente:** `docs/01-scope-mvp.md`  
-**Stato:** Draft iniziale / Personas e Use Cases
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento descrive le **personas** e gli **use cases** principali del progetto **DevOps Control Plane**.
-
-Lo scopo è chiarire:
-
-- chi userà il sistema;
-- quali problemi operativi deve risolvere;
-- quali workflow devono essere supportati nel primo MVP;
-- quali informazioni devono essere visibili a ogni tipologia di utente;
-- quali output devono essere generati per rendere il processo GitOps tracciabile, ripetibile e comprensibile anche per colleghi meno esperti.
-
-Il documento è propedeutico alla definizione dei requisiti funzionali dettagliati in `docs/03-functional-requirements.md`.
+- **Project:** DevOps Control Plane
+- **Document:** 02 — Personas and Use Cases
+- **Version:** 0.2
+- **Date:** 2026-07-03
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous document:** `docs/01-scope-mvp.md`
+- **Status:** Rewritten in English and refreshed to align with the current advanced MVP, security, operability and multi-environment baseline
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Principi di progettazione orientati agli utenti
+## 1. Purpose
 
-DevOps Control Plane deve essere progettato considerando tre esigenze principali:
+This document describes the primary personas and use cases for the DevOps Control Plane.
 
-1. **guidare l’operatore** nei change GitOps standard;
-2. **evitare errori manuali** su Git, YAML, Argo CD e Tekton;
-3. **creare uno storico funzionale** più leggibile della sola somma di Git history, Argo CD history e Tekton logs.
+The original version focused on the first MVP. The current version updates the personas and use cases to reflect the current advanced MVP baseline, including:
 
-Il sistema deve quindi essere:
+- ChangeRequest lifecycle and audit;
+- GitLab technical workflow;
+- Tekton validation and diagnostics;
+- Argo CD deployment checks;
+- Kubernetes/OpenShift runtime evidence;
+- Web UI;
+- OAuth Proxy and AuthN/AuthZ;
+- requester visibility and multi-developer scenarios;
+- operational runbooks and production-readiness baseline;
+- future multi-environment direction across `dev`, `staging` and `production`.
 
-- didattico per i newbie;
-- affidabile per gli operatori DevOps;
-- utile per reviewer e platform engineer;
-- compatibile con il modello GitOps;
-- orientato alla raccolta evidenze.
+This document provides input for:
 
----
-
-## 3. Personas principali
-
-## 3.1 Persona P1 - DevOps Operator
-
-### Descrizione
-
-Il **DevOps Operator** è l’utente operativo principale del sistema.
-
-Esegue change GitOps ricorrenti su applicazioni OpenShift già gestite da Argo CD.
-
-### Obiettivi
-
-Il DevOps Operator vuole:
-
-- vedere velocemente lo stato delle applicazioni;
-- eseguire change standard senza ricordare tutti i comandi;
-- ridurre il rischio di errori YAML;
-- generare branch, commit o merge request in modo guidato;
-- lanciare validazioni automatiche;
-- sincronizzare Argo CD;
-- raccogliere evidenze finali.
-
-### Esempi di bisogni
-
-- “Voglio aumentare le repliche dell’applicazione da 2 a 3.”
-- “Voglio cambiare `APP_VERSION` da `v2-green` a `v3-green`.”
-- “Voglio cambiare `PAGE_COLOR` senza modificare manualmente YAML.”
-- “Voglio sapere se Argo CD è Synced e Healthy dopo il change.”
-
-### Informazioni richieste
-
-- lista Application Argo CD;
-- stato sync/health;
-- current revision;
-- repository e path GitOps;
-- ultimo commit;
-- stato validazione Tekton;
-- stato runtime del Deployment;
-- evidenze post-change.
+- `docs/03-functional-requirements.md`;
+- `docs/05-architecture.md`;
+- `docs/13-api-design.md`;
+- the final technical documentation.
 
 ---
 
-## 3.2 Persona P2 - Platform Engineer
+## 2. User-centered design principles
 
-### Descrizione
+The DevOps Control Plane must be designed around real operational workflows.
 
-Il **Platform Engineer** gestisce la piattaforma OpenShift, Argo CD, Tekton e le regole di governance.
+The system should:
 
-Non è interessato solo al change applicativo, ma anche alla coerenza tra applicazioni, AppProject, policy e runtime.
+1. guide users through standard GitOps changes;
+2. reduce manual mistakes across GitLab, YAML, Tekton, Argo CD and OpenShift;
+3. provide clear audit and evidence records;
+4. keep Git as the source of desired state;
+5. expose enough detail for experts without overwhelming onboarding users;
+6. make requester, actor, status and evidence visible;
+7. enforce AuthN/AuthZ and environment-specific guardrails;
+8. support operational troubleshooting and production readiness.
 
-### Obiettivi
-
-Il Platform Engineer vuole:
-
-- verificare che le Application siano coerenti con gli AppProject;
-- identificare problemi di governance prima della sync;
-- vedere risorse non consentite o orphaned;
-- evitare drift GitOps;
-- validare che i workflow rispettino le regole della piattaforma.
-
-### Esempi di bisogni
-
-- “L’applicazione introduce una ConfigMap: l’AppProject la consente?”
-- “La Application ha orphaned resources: sono attese o sono drift?”
-- “Il change sta tentando di modificare una risorsa non ammessa?”
-- “Il workflow ha usato Git o ha modificato direttamente il cluster?”
-
-### Informazioni richieste
-
-- AppProject associato;
-- namespaceResourceWhitelist;
-- risorse gestite dalla Application;
-- orphaned resources;
-- errori di sync Argo CD;
-- evidenze di validazione;
-- eventi ChangeRequest.
+The UI and API should not hide risk. Instead, the Control Plane should make the workflow understandable, repeatable and auditable.
 
 ---
 
-## 3.3 Persona P3 - Newbie / Junior DevOps
+## 3. Primary personas
 
-### Descrizione
+## 3.1 P1 — Requester / Developer
 
-Il **Newbie** è un collega con conoscenze iniziali di GitOps, OpenShift, Argo CD e Tekton.
+### Description
 
-Ha bisogno di un sistema che non nasconda completamente i dettagli, ma li presenti in modo guidato e comprensibile.
+The Requester or Developer initiates a change for an application managed through GitOps.
 
-### Obiettivi
+The requester may not execute every technical action directly, but the requester needs visibility into the status of the requested change.
 
-Il Newbie vuole:
+### Goals
 
-- capire cosa succede durante un change;
-- vedere quali file vengono modificati;
-- comprendere perché si usa Git e non `oc edit`;
-- capire la differenza tra Git, Argo CD, Tekton e OpenShift;
-- imparare dai workflow standardizzati.
+The Requester wants to:
 
-### Esempi di bisogni
+- request a change through a clear form or API;
+- specify application, environment, title, type, risk and description;
+- understand the current status of the ChangeRequest;
+- see whether validation, deployment and evidence collection succeeded;
+- know who executed or approved follow-up actions;
+- avoid losing visibility when multiple developers create changes at the same time.
 
-- “Perché devo modificare Git invece del Deployment direttamente?”
-- “Cosa significa `OutOfSync`?”
-- “Cosa significa `Healthy`?”
-- “Perché una ConfigMap deve essere autorizzata nell’AppProject?”
-- “Quale commit ha prodotto questo stato?”
+### Example needs
 
-### Informazioni richieste
+- “I want to request an update to the demo application.”
+- “I want to see whether my ChangeRequest is still in draft or has been executed.”
+- “I want to know whether the change reached `Synced` and `Healthy` state.”
+- “I want to find my ChangeRequest in the full change list.”
 
-- spiegazioni passo-passo;
-- diff Git leggibile;
-- stato workflow;
-- messaggi di errore interpretati;
-- comandi equivalenti, quando utile;
-- link a evidenze.
+### Required information
 
----
-
-## 3.4 Persona P4 - Reviewer / Approver
-
-### Descrizione
-
-Il **Reviewer** verifica che un change sia corretto prima del merge o della promozione.
-
-Può essere un senior DevOps, un technical lead o un platform owner.
-
-### Obiettivi
-
-Il Reviewer vuole:
-
-- capire cosa cambia;
-- verificare il diff;
-- vedere il risultato della validazione Tekton;
-- approvare o respingere una merge request;
-- valutare il rischio operativo;
-- sapere come fare rollback.
-
-### Esempi di bisogni
-
-- “Quali file sono stati modificati?”
-- “Il change è coerente con il modello GitOps?”
-- “La validazione YAML è passata?”
-- “La sync Argo CD è completata?”
-- “Qual è il rollback consigliato?”
-
-### Informazioni richieste
-
-- change summary;
-- diff;
-- validazione Tekton;
-- policy check;
-- link GitLab MR;
-- stato Argo CD;
-- rollback hint.
+- ChangeRequest number;
+- application name;
+- target environment;
+- requester;
+- lifecycle status;
+- runtime status;
+- validation result;
+- deployment state;
+- collected evidence.
 
 ---
 
-## 3.5 Persona P5 - Auditor / Change Manager
+## 3.2 P2 — DevOps Operator
 
-### Descrizione
+### Description
 
-L’**Auditor** o **Change Manager** non lavora necessariamente sui manifest, ma ha bisogno di ricostruire lo storico dei change.
+The DevOps Operator is the primary operational user of the system.
 
-### Obiettivi
+The operator executes standard GitOps workflows on applications already managed through Argo CD and OpenShift.
 
-L’Auditor vuole:
+### Goals
 
-- sapere chi ha richiesto un change;
-- sapere quando è stato eseguito;
-- vedere commit e merge request;
-- vedere esito della validazione;
-- vedere esito della sincronizzazione;
-- consultare evidenze prodotte automaticamente.
+The DevOps Operator wants to:
 
-### Esempi di bisogni
+- quickly understand application status;
+- execute standard technical actions without manually running long command chains;
+- reduce YAML and Git workflow mistakes;
+- create branches and merge requests through guided actions;
+- run Tekton validation;
+- check Argo CD deployment state;
+- collect runtime evidence;
+- troubleshoot failed validations or deployments.
 
-- “Chi ha cambiato le repliche?”
-- “Quando è stato introdotto `APP_VERSION=v3-green`?”
-- “Quale PipelineRun ha validato il change?”
-- “Il change è stato completato con successo?”
-- “Quali evidenze sono state raccolte?”
+### Example needs
 
-### Informazioni richieste
+- “I want to validate a ChangeRequest through Tekton.”
+- “I want to open a merge request for a generated GitOps change.”
+- “I want to check whether Argo CD reports the application as `Synced` and `Healthy`.”
+- “I want to collect evidence after deployment.”
 
-- Change ID;
-- richiedente;
-- timestamp;
-- stato finale;
-- commit/MR;
-- PipelineRun;
-- revisione Argo CD;
-- evidenze runtime.
+### Required information
+
+- Argo CD application status;
+- GitLab branch, commit and merge request references;
+- Tekton PipelineRun and TaskRun diagnostics;
+- Kubernetes/OpenShift runtime state;
+- runtime status;
+- evidence records;
+- recommended next actions.
 
 ---
 
-## 4. Use Cases MVP
+## 3.3 P3 — Approver / Reviewer
 
-## 4.1 UC-001 - Visualizzare lista applicazioni Argo CD
+### Description
 
-### Persona primaria
+The Approver or Reviewer validates whether a change is acceptable before approval, merge, execution or promotion.
+
+This persona may be a senior DevOps engineer, platform owner, technical lead or environment-specific approver.
+
+### Goals
+
+The Approver wants to:
+
+- understand what is changing;
+- inspect validation results;
+- assess risk level;
+- review GitLab merge request links and evidence;
+- approve or reject lifecycle transitions;
+- enforce stricter rules for staging and production environments;
+- understand rollback or recovery options.
+
+### Example needs
+
+- “Which files were changed?”
+- “Did Tekton validation succeed?”
+- “Is the application healthy after deployment?”
+- “Is this change allowed for production?”
+- “Which evidence supports this approval?”
+
+### Required information
+
+- ChangeRequest summary;
+- title, type and risk level;
+- requester;
+- target environment;
+- validation evidence;
+- deployment evidence;
+- GitLab merge request;
+- audit events;
+- approval policy.
+
+---
+
+## 3.4 P4 — Platform Engineer
+
+### Description
+
+The Platform Engineer manages OpenShift, Argo CD, Tekton integrations, RBAC and platform guardrails.
+
+The Platform Engineer cares about application changes and also about whether the workflow respects platform rules.
+
+### Goals
+
+The Platform Engineer wants to:
+
+- verify that application resources are consistent with GitOps governance;
+- detect policy issues before runtime impact;
+- validate RBAC and NetworkPolicy behavior;
+- ensure the Control Plane uses least-privilege access;
+- verify that runtime evidence collection is safe;
+- keep production guardrails explicit and fail-closed.
+
+### Example needs
+
+- “Does the runtime ServiceAccount have only the expected permissions?”
+- “Does this workflow require access to resources outside the expected namespace?”
+- “Is the PostgreSQL NetworkPolicy still present?”
+- “Are health endpoints publicly accessible while API and UI are protected?”
+- “Is the target environment configured correctly?”
+
+### Required information
+
+- environment configuration;
+- Kubernetes namespace mapping;
+- Argo CD Application mapping;
+- Tekton namespace and pipeline mapping;
+- RBAC checks;
+- NetworkPolicy status;
+- OpenShift group bindings;
+- runtime evidence payloads;
+- operational smoke-test output.
+
+---
+
+## 3.5 P5 — Auditor / Change Manager
+
+### Description
+
+The Auditor or Change Manager needs to reconstruct what happened across the lifecycle of a change.
+
+This persona may not modify manifests or operate the platform directly.
+
+### Goals
+
+The Auditor wants to:
+
+- know who requested a change;
+- know who executed actions;
+- know when each action happened;
+- review GitLab, Tekton, Argo CD and Kubernetes references;
+- confirm that evidence was collected;
+- inspect final state;
+- understand whether production-readiness requirements were respected.
+
+### Example needs
+
+- “Who requested `CHG-2026-0006`?”
+- “Which PipelineRun validated the change?”
+- “Which evidence was collected after deployment?”
+- “Was the anonymous UI/API access blocked?”
+- “Which user or group was allowed to perform the action?”
+
+### Required information
+
+- ChangeRequest number;
+- requester;
+- actor information in audit events;
+- timestamps;
+- lifecycle status;
+- runtime status;
+- GitLab external references;
+- Tekton external references;
+- Argo CD state;
+- Kubernetes/OpenShift evidence;
+- production readiness notes where applicable.
+
+---
+
+## 3.6 P6 — Security Reviewer
+
+### Description
+
+The Security Reviewer verifies that the Control Plane enforces authentication, authorization, secret handling and secure integration practices.
+
+### Goals
+
+The Security Reviewer wants to:
+
+- confirm that OAuth Proxy protects the UI and APIs;
+- confirm that backend AuthZ is fail-closed;
+- verify that OpenShift group lookup works;
+- confirm that tokens are not printed or committed;
+- review TLS strict settings;
+- validate least-privilege RBAC;
+- verify that production actions require stricter permissions.
+
+### Example needs
+
+- “Can an anonymous user access `/ui/dashboard`?”
+- “Can an operator approve a production change?”
+- “Are GitLab and Argo CD tokens stored only in Secrets?”
+- “Is `KUBERNETES_TOKEN` removed from the application Secret?”
+- “Does the runtime ServiceAccount have access to Secrets?”
+
+### Required information
+
+- AuthN/AuthZ runbook;
+- OAuth Proxy configuration;
+- backend role mapping;
+- OpenShift group mapping;
+- Secret inventory without values;
+- RBAC `can-i` results;
+- TLS and trust configuration;
+- security audit events.
+
+---
+
+## 3.7 P7 — Operations Engineer
+
+### Description
+
+The Operations Engineer runs health-checks, maintenance, backup/restore validation and disaster recovery procedures.
+
+### Goals
+
+The Operations Engineer wants to:
+
+- validate runtime health;
+- run the automated smoke-test script;
+- collect an evidence package;
+- validate PostgreSQL backup and restore;
+- execute maintenance or rollback procedures;
+- understand whether a failure is runtime-impacting or historical/transient.
+
+### Example needs
+
+- “Is the current runtime healthy?”
+- “Did the smoke test fail because of a current problem or an old rollout event?”
+- “Can PostgreSQL be restored in an isolated namespace?”
+- “Which runbook should be used for maintenance?”
+
+### Required information
+
+- health-check runbook;
+- smoke-test output;
+- event and log evidence;
+- PostgreSQL counts;
+- backup artifact checksums;
+- DR runbook;
+- maintenance runbook;
+- production readiness checklist.
+
+---
+
+## 3.8 P8 — Newbie / Onboarding Reader
+
+### Description
+
+The Newbie or onboarding reader has basic or early knowledge of GitOps, OpenShift, Argo CD, Tekton and Kubernetes.
+
+This persona needs guided documentation and UI visibility, not a black-box automation system.
+
+### Goals
+
+The onboarding reader wants to:
+
+- understand why Git is the source of desired state;
+- understand the difference between GitLab, Tekton, Argo CD and OpenShift;
+- follow the lifecycle of a ChangeRequest;
+- understand validation and evidence;
+- learn from standardized workflows;
+- map UI concepts to backend/API/runtime concepts.
+
+### Example needs
+
+- “Why should the change go through Git instead of `oc edit`?”
+- “What does `OutOfSync` mean?”
+- “What does `EvidenceCollected` mean?”
+- “Why is Tekton validation required?”
+- “What does the Control Plane add on top of Argo CD?”
+
+### Required information
+
+- clear UI labels;
+- clear workflow steps;
+- evidence summaries;
+- readable operational messages;
+- final technical documentation;
+- links to relevant runbooks and ADRs.
+
+---
+
+## 4. Main use cases
+
+## 4.1 UC-001 — View application list
+
+### Primary persona
 
 DevOps Operator
 
-### Obiettivo
+### Secondary personas
 
-Visualizzare le Application Argo CD disponibili e il loro stato principale.
+Platform Engineer, Newbie / Onboarding Reader
 
-### Precondizioni
+### Goal
 
-- DevOps Control Plane è configurato con endpoint Argo CD API.
-- Il token Argo CD è valido.
-- Argo CD contiene almeno una Application visibile.
+Display applications managed by Argo CD and their main status.
 
-### Flusso principale
+### Preconditions
 
-1. L’utente apre la lista applicazioni o chiama l’API `GET /api/applications`.
-2. Il backend interroga Argo CD API.
-3. Il backend normalizza le informazioni principali.
-4. Il sistema mostra nome, progetto, namespace, sync status, health status e revision.
+- Argo CD API is configured.
+- A valid Argo CD token is available through Secret.
+- At least one visible Application exists.
 
-### Output atteso
+### Main flow
+
+1. The user opens the Applications page or calls the application API.
+2. The backend queries Argo CD API.
+3. The backend normalizes application data.
+4. The UI/API displays application name, project, namespace, sync status, health status and revision.
+
+### Expected output
 
 ```text
 Application          Project          Sync      Health    Revision
-demo-go-color-app    devops-ci-demo   Synced    Healthy   b8e1d6b
+demo-go-color-app    default          Synced    Healthy   <revision>
 ```
 
-### Errori gestiti
-
-- token Argo CD non valido;
-- Argo CD API non raggiungibile;
-- nessuna Application disponibile;
-- errore autorizzativo.
-
 ### Acceptance criteria
 
-- La lista mostra almeno nome, progetto, sync, health e revision.
-- Gli errori sono leggibili e registrati.
-- La richiesta è tracciata nei log applicativi senza esporre token.
+- Applications are listed through API and UI.
+- Main sync and health state are visible.
+- Argo CD errors are returned clearly.
+- Tokens are not exposed in logs or output.
 
 ---
 
-## 4.2 UC-002 - Visualizzare dettaglio applicazione
+## 4.2 UC-002 — View application detail
 
-### Persona primaria
+### Primary persona
 
 DevOps Operator
 
-### Persona secondaria
+### Secondary personas
 
-Platform Engineer
+Platform Engineer, Approver
 
-### Obiettivo
+### Goal
 
-Visualizzare stato dettagliato di una Application Argo CD.
+Display detailed operational state for an Argo CD Application.
 
-### Precondizioni
+### Main flow
 
-- L’Application esiste.
-- Argo CD API è raggiungibile.
-
-### Flusso principale
-
-1. L’utente seleziona `demo-go-color-app`.
-2. Il backend legge dettaglio Application da Argo CD.
-3. Il backend legge resources gestite.
-4. Il backend legge orphaned resources.
-5. Il backend legge history Argo CD.
-6. Il backend arricchisce il dato con ultimo commit Git, se disponibile.
-
-### Output atteso
-
-- sync status;
-- health status;
-- current revision;
-- resources gestite;
-- orphaned resources;
-- history;
-- repo/path.
+1. The user selects an application.
+2. The backend reads application detail from Argo CD.
+3. The backend reads resources, health, sync, revision and available conditions.
+4. The UI displays the result.
 
 ### Acceptance criteria
 
-- Il dettaglio mostra chiaramente se l’app è `Synced`, `OutOfSync`, `Healthy` o `Degraded`.
-- Le orphaned resources sono distinte dalle risorse gestite.
-- Il sistema non interpreta `OrphanedResourceWarning` come errore applicativo se l’app è `Healthy`.
+- The UI clearly shows `Synced`, `OutOfSync`, `Healthy` and `Degraded` states.
+- Known warnings such as orphaned resources are visible.
+- Healthy applications with warnings are not automatically treated as failed.
 
 ---
 
-## 4.3 UC-003 - Creare ChangeRequest per modifica repliche
+## 4.3 UC-003 — Create a ChangeRequest
 
-### Persona primaria
+### Primary persona
 
-DevOps Operator
+Requester / Developer
 
-### Obiettivo
+### Secondary personas
 
-Creare un change GitOps per modificare `spec.replicas` di un Deployment.
+DevOps Operator, Newbie / Onboarding Reader
 
-### Precondizioni
+### Goal
 
-- L’applicazione è nota al sistema.
-- Il repository GitLab è configurato.
-- Il path GitOps contiene un Deployment supportato.
+Create a ChangeRequest with enough metadata to support workflow execution and audit.
 
-### Input
+### Minimum input
 
 ```yaml
-application: demo-go-color-app
-changeType: update-replicas
-replicas: 3
-description: "Scale applicazione per test capacità"
+title: Update demo application
+applicationName: demo-go-color-app
+targetEnvironment: dev
+changeType: standard
+riskLevel: medium
+requestedBy: developer-a
+description: Multi-developer dashboard validation test
 ```
 
-### Flusso principale
+### Main flow
 
-1. L’utente crea una ChangeRequest.
-2. Il sistema salva la ChangeRequest in stato `Created`.
-3. Il sistema legge metadata Application.
-4. Il sistema legge file GitOps da GitLab.
-5. Il sistema crea un branch GitLab.
-6. Il sistema modifica `replicas`.
-7. Il sistema produce diff.
-8. Il sistema crea commit o merge request.
-9. Il sistema avvia validazione Tekton.
-10. Dopo merge o approvazione, il sistema avvia sync Argo CD.
-11. Il sistema raccoglie evidenze.
-12. La ChangeRequest passa a `Completed`.
+1. The user creates a ChangeRequest through API or UI.
+2. The backend validates required fields.
+3. The backend stores the ChangeRequest in PostgreSQL.
+4. The backend creates a change event.
+5. The UI/API returns the ChangeRequest number.
 
 ### Acceptance criteria
 
-- Il Deployment runtime non viene modificato direttamente.
-- Il change è rappresentato da commit o MR.
-- Lo storico interno contiene branch, commit, eventuale MR e stato finale.
-- Il Deployment raggiunge il numero desiderato dopo sync.
+- Required fields are validated.
+- Unknown or disabled target environments must be rejected when environment validation is implemented.
+- The ChangeRequest is visible in `/ui/changes`.
+- The requester is visible in the UI.
 
 ---
 
-## 4.4 UC-004 - Creare ChangeRequest per APP_VERSION
+## 4.4 UC-004 — Execute GitLab branch and file update workflow
 
-### Persona primaria
+### Primary persona
 
 DevOps Operator
 
-### Persona secondaria
+### Goal
 
-Newbie
+Represent a GitOps change through GitLab branch and file updates.
 
-### Obiettivo
+### Main flow
 
-Aggiornare `APP_VERSION` tramite un change GitOps guidato.
-
-### Precondizioni
-
-- Il sistema conosce dove è definita `APP_VERSION`.
-- `APP_VERSION` può essere definita nel Deployment o in una ConfigMap.
-
-### Input
-
-```yaml
-application: demo-go-color-app
-changeType: update-app-version
-APP_VERSION: v3-green
-description: "Aggiornamento versione demo"
-```
-
-### Flusso principale
-
-1. Il sistema determina se `APP_VERSION` è inline o in ConfigMap.
-2. Il sistema legge il file corretto da GitLab.
-3. Il sistema crea branch.
-4. Il sistema aggiorna il valore.
-5. Il sistema crea diff.
-6. Il sistema valida con Tekton.
-7. Il sistema crea MR o commit.
-8. Dopo merge, il sistema sincronizza Argo CD.
-9. Il sistema verifica che il runtime esponga il valore aggiornato.
+1. The operator triggers branch creation.
+2. The Control Plane creates a GitLab branch.
+3. The operator triggers file update.
+4. The Control Plane updates a GitOps manifest.
+5. The Control Plane records technical events.
+6. The ChangeRequest runtime status is updated.
 
 ### Acceptance criteria
 
-- Il valore viene aggiornato solo in Git.
-- Il sistema mostra chiaramente il file modificato.
-- Il sistema salva evidenza del valore runtime finale.
+- The runtime cluster is not modified directly as desired state.
+- GitLab external references are recorded.
+- A technical event is created for each step.
 
 ---
 
-## 4.5 UC-005 - Creare ChangeRequest per PAGE_COLOR
+## 4.5 UC-005 — Open and merge a GitLab merge request
 
-### Persona primaria
+### Primary persona
 
 DevOps Operator
 
-### Obiettivo
+### Secondary persona
 
-Aggiornare `PAGE_COLOR` tramite GitOps.
+Approver / Reviewer
 
-### Input
+### Goal
 
-```yaml
-application: demo-go-color-app
-changeType: update-page-color
-PAGE_COLOR: "#1E90FF"
-description: "Cambio colore pagina demo"
-```
+Open and optionally merge a GitLab merge request as part of a controlled workflow.
 
-### Validazioni
+### Main flow
 
-- Il colore deve rispettare formato esadecimale.
-- Il valore non deve essere vuoto.
-- Il file target deve essere supportato.
+1. The Control Plane opens a merge request from the change branch to the target branch.
+2. Reviewers inspect the merge request.
+3. The authorized user merges the merge request where policy allows.
+4. The Control Plane records merge request references and status.
 
 ### Acceptance criteria
 
-- Valori non validi vengono rifiutati.
-- Il change produce diff Git.
-- La validazione Tekton passa.
-- Argo CD sincronizza correttamente.
+- Merge request URL and ID are stored.
+- Merge state is visible.
+- Merge action is authorized.
+- Merge result is recorded as a technical event.
 
 ---
 
-## 4.6 UC-006 - Modificare valori ConfigMap
+## 4.6 UC-006 — Validate a change with Tekton
 
-### Persona primaria
+### Primary persona
 
 DevOps Operator
 
-### Persona secondaria
+### Secondary personas
 
-Platform Engineer
+Approver / Reviewer, Platform Engineer
 
-### Obiettivo
+### Goal
 
-Modificare una ConfigMap GitOps gestita dall’applicazione.
+Validate a GitOps branch before considering the change technically safe.
 
-### Precondizioni
+### Main flow
 
-- La ConfigMap esiste nel repository.
-- La ConfigMap è inclusa in `kustomization.yaml`, se applicabile.
-- L’AppProject consente `ConfigMap`.
-
-### Flusso principale
-
-1. L’utente seleziona una ConfigMap.
-2. Il sistema mostra chiavi e valori correnti.
-3. L’utente modifica uno o più valori.
-4. Il sistema aggiorna il manifest GitOps.
-5. Il sistema valida il change.
-6. Il sistema crea commit/MR.
-7. Dopo merge, Argo CD sincronizza.
-8. Il sistema raccoglie evidenza.
-
-### Errori gestiti
-
-- ConfigMap non inclusa in Kustomize.
-- ConfigMap non consentita da AppProject.
-- Deployment referenzia chiavi non esistenti.
-- YAML non valido.
+1. The Control Plane creates a Tekton `PipelineRun`.
+2. Tekton clones the selected branch/revision.
+3. Tekton validates manifests and GitOps policy checks.
+4. Tekton runs anti-secret checks.
+5. The Control Plane checks `PipelineRun` and `TaskRun` status.
+6. The Control Plane records validation evidence.
 
 ### Acceptance criteria
 
-- Il sistema impedisce o segnala prerequisiti mancanti.
-- Il sistema produce messaggi chiari, per esempio:
-
-```text
-ConfigMap is not permitted in AppProject devops-ci-demo.
-```
+- `ValidationSucceeded` is assigned only after successful Tekton completion.
+- Failed TaskRuns are visible through diagnostics.
+- Validation evidence is stored and available through API/UI.
 
 ---
 
-## 4.7 UC-007 - Validare change con Tekton
+## 4.7 UC-007 — Check Argo CD deployment status
 
-### Persona primaria
+### Primary persona
 
 DevOps Operator
 
-### Persona secondaria
+### Secondary persona
 
-Reviewer
+Approver / Reviewer
 
-### Obiettivo
+### Goal
 
-Validare automaticamente un branch GitOps prima della promozione.
+Check whether the application is deployed, synced and healthy through Argo CD.
 
-### Precondizioni
+### Main flow
 
-- Il branch GitLab esiste.
-- Il template PipelineRun è disponibile.
-- DevOps Control Plane ha permessi Kubernetes per creare PipelineRun.
-
-### Flusso principale
-
-1. Il sistema crea una PipelineRun di validazione.
-2. Tekton clona il branch.
-3. Tekton valida YAML/Kustomize.
-4. Tekton esegue dry-run server-side.
-5. Tekton esegue anti-secret check.
-6. Il sistema osserva lo stato della PipelineRun.
-7. Il sistema raccoglie TaskRun e log principali.
-8. La ChangeRequest viene aggiornata.
+1. The operator triggers deployment check.
+2. The Control Plane calls Argo CD API.
+3. The Control Plane maps Argo CD status to runtime status.
+4. The result is stored and visible in UI/API.
 
 ### Acceptance criteria
 
-- Lo stato `ValidationSucceeded` viene assegnato solo se Tekton termina con successo.
-- In caso di errore, la ChangeRequest passa a `ValidationFailed`.
-- I log principali sono associati alla ChangeRequest.
+- `Synced` and `Healthy` map to `DeploymentSyncedHealthy`.
+- `OutOfSync`, `Progressing`, `Degraded` and unknown states are handled explicitly.
+- Argo CD API errors are readable.
 
 ---
 
-## 4.8 UC-008 - Sincronizzare Argo CD dopo merge
+## 4.8 UC-008 — Collect deployment evidence
 
-### Persona primaria
-
-DevOps Operator
-
-### Obiettivo
-
-Sincronizzare la Application dopo che il change è stato integrato nel branch target.
-
-### Precondizioni
-
-- Il commit è presente nel branch target.
-- Argo CD vede il repository.
-- La Application è configurata correttamente.
-
-### Flusso principale
-
-1. Il sistema richiede sync tramite Argo CD API.
-2. Il sistema attende completamento operazione.
-3. Il sistema controlla sync status.
-4. Il sistema controlla health status.
-5. Il sistema salva revision applicata.
-6. Il sistema raccoglie evidenze runtime.
-
-### Errori gestiti
-
-- sync failed;
-- operation already in progress;
-- AppProject non consente una risorsa;
-- manifest Kubernetes non valido;
-- Application resta OutOfSync;
-- Application diventa Degraded.
-
-### Acceptance criteria
-
-- Il sistema distingue errore di sync, errore di health e timeout.
-- Il sistema salva il messaggio errore Argo CD.
-- Il sistema propone azione suggerita o troubleshooting.
-
----
-
-## 4.9 UC-009 - Raccogliere evidenze change
-
-### Persona primaria
+### Primary persona
 
 Auditor / Change Manager
 
-### Persona secondaria
+### Secondary personas
+
+DevOps Operator, Operations Engineer
+
+### Goal
+
+Collect and store post-deployment evidence for a ChangeRequest.
+
+### Evidence scope
+
+- ChangeRequest summary;
+- Argo CD status;
+- Git revision;
+- Kubernetes/OpenShift Deployment state;
+- Pod readiness and restart counts;
+- Service availability;
+- Route availability;
+- diagnostics summary;
+- warnings and conditions.
+
+### Acceptance criteria
+
+- Evidence is associated with the ChangeRequest.
+- Evidence is sanitized.
+- Evidence is visible through API and UI.
+- Evidence does not contain tokens or Secret values.
+
+---
+
+## 4.9 UC-009 — Review ChangeRequest history
+
+### Primary persona
+
+Auditor / Change Manager
+
+### Secondary personas
+
+Requester / Developer, Approver / Reviewer
+
+### Goal
+
+Review functional and technical history for a ChangeRequest.
+
+### Main flow
+
+1. The user opens the ChangeRequest list.
+2. The system displays ChangeRequest number, application, requester, environment, lifecycle and runtime status.
+3. The user opens a ChangeRequest detail page.
+4. The system displays events, evidence and technical actions.
+
+### Acceptance criteria
+
+- It is possible to reconstruct the lifecycle of a change.
+- Events are ordered and readable.
+- Evidence is linked to the ChangeRequest.
+- Requester visibility is available.
+
+---
+
+## 4.10 UC-010 — Use dashboard in a multi-developer scenario
+
+### Primary persona
 
 DevOps Operator
 
-### Obiettivo
+### Secondary personas
 
-Raccogliere e conservare evidenze tecniche di un change.
+Requester / Developer, Auditor / Change Manager
 
-### Evidenze minime
+### Goal
 
-- ChangeRequest summary;
-- branch/MR/commit;
-- Tekton PipelineRun;
-- Argo CD sync status;
-- Argo CD health status;
-- Deployment status;
-- Pod status;
-- ConfigMap, se coinvolta;
-- Route/healthz, se applicabile;
-- errore finale, se il change fallisce.
+Keep the dashboard readable while multiple users create ChangeRequests.
 
-### Acceptance criteria
+### Main flow
 
-- Ogni ChangeRequest completata ha almeno un record evidence.
-- Le evidenze sono accessibili via API.
-- Le evidenze non contengono token o secret.
-
----
-
-## 4.10 UC-010 - Consultare storico change
-
-### Persona primaria
-
-Reviewer / Auditor
-
-### Obiettivo
-
-Consultare lo storico funzionale dei change.
-
-### Flusso principale
-
-1. L’utente apre lista change.
-2. Il sistema mostra Change ID, Application, tipo, stato, timestamp.
-3. L’utente apre dettaglio change.
-4. Il sistema mostra eventi, commit, MR, PipelineRun, sync e evidenze.
+1. Multiple developers create ChangeRequests.
+2. The dashboard KPI counters aggregate over all loaded changes.
+3. The dashboard recent changes section shows only the latest five changes.
+4. The `/ui/changes` page shows the full list.
+5. The requester is visible in both the dashboard and the full ChangeRequest list.
 
 ### Acceptance criteria
 
-- È possibile ricostruire il ciclo di vita di un change.
-- Gli eventi sono ordinati temporalmente.
-- Lo stato finale è chiaro.
-- È presente un suggerimento di rollback quando applicabile.
+- Recent changes is limited to five items.
+- The full list remains available through `View all`.
+- Requester is visible.
+- Change ordering is newest first.
 
 ---
 
-## 5. Use Cases fuori scope per l’MVP
+## 4.11 UC-011 — Operability health-check
 
-Questi use cases sono esplicitamente fuori scope iniziale:
+### Primary persona
 
-- gestione completa utenti e gruppi enterprise;
-- approval multi-step;
-- integrazione ServiceNow/Jira;
-- gestione Secret applicativi;
-- promozione multi-ambiente dev/test/prod;
-- gestione Helm chart avanzata;
-- editor YAML visuale;
-- rollback automatico multi-step;
-- policy engine completo;
-- generazione automatica di AppProject;
-- full developer portal stile Backstage.
+Operations Engineer
+
+### Goal
+
+Validate current runtime health and collect an evidence directory.
+
+### Main flow
+
+1. The operator runs the smoke-test script.
+2. The script checks namespace, deployments, pods, services, routes and PVC.
+3. The script checks Route and backend health endpoints.
+4. The script checks PostgreSQL connectivity and counts.
+5. The script checks NetworkPolicy and RBAC.
+6. The script writes an evidence package.
+
+### Acceptance criteria
+
+- Runtime readiness is validated.
+- Evidence directory is generated.
+- Port-forward conflicts are identifiable.
+- Historical rollout events are distinguishable from current runtime impact.
 
 ---
 
-## 6. Mappa Persona -> Use Cases
+## 4.12 UC-012 — Prepare environment-aware promotion
 
-| Persona | Use cases principali |
+### Primary persona
+
+Approver / Reviewer
+
+### Secondary personas
+
+Platform Engineer, Security Reviewer
+
+### Goal
+
+Prepare a future promotion workflow across `dev`, `staging` and `production`.
+
+### Main flow
+
+1. A change is validated in `dev`.
+2. A related ChangeRequest is created for `staging`.
+3. A later related ChangeRequest is created for `production`.
+4. Promotion metadata links the related ChangeRequests.
+5. Environment-aware AuthZ enforces stricter policies for production.
+
+### Acceptance criteria
+
+- Promotion model is documented.
+- Environment configuration model is documented.
+- Unknown or disabled environments are rejected fail-closed when implemented.
+- Production remains disabled until guardrails are ready.
+
+---
+
+## 5. Out-of-scope use cases for the current baseline
+
+The following use cases are outside the current advanced MVP baseline:
+
+- full enterprise user/group management UI;
+- full ITSM integration;
+- ServiceNow or Jira integration;
+- full application Secret management;
+- full production dual approval;
+- automatic multi-step rollback;
+- complete policy engine UI;
+- automatic AppProject generation;
+- advanced visual YAML editor;
+- full Backstage-style developer portal;
+- full multi-cluster orchestration;
+- full environment management UI;
+- complete Git provider abstraction beyond GitLab;
+- CLI `devopsctl`, currently optional and deferred.
+
+---
+
+## 6. Persona to use case matrix
+
+| Persona | Primary use cases |
 |---|---|
-| DevOps Operator | UC-001, UC-002, UC-003, UC-004, UC-005, UC-006, UC-007, UC-008 |
-| Platform Engineer | UC-002, UC-006, UC-008 |
-| Newbie / Junior DevOps | UC-001, UC-002, UC-003, UC-004, UC-005 |
-| Reviewer / Approver | UC-007, UC-010 |
-| Auditor / Change Manager | UC-009, UC-010 |
+| Requester / Developer | UC-003, UC-009, UC-010 |
+| DevOps Operator | UC-001, UC-002, UC-004, UC-005, UC-006, UC-007, UC-008, UC-010 |
+| Approver / Reviewer | UC-005, UC-006, UC-007, UC-009, UC-012 |
+| Platform Engineer | UC-001, UC-002, UC-006, UC-011, UC-012 |
+| Auditor / Change Manager | UC-008, UC-009, UC-010 |
+| Security Reviewer | UC-003, UC-005, UC-011, UC-012 |
+| Operations Engineer | UC-008, UC-011 |
+| Newbie / Onboarding Reader | UC-001, UC-002, UC-003, UC-009 |
 
 ---
 
-## 7. Informazioni da mostrare in modo didattico
+## 7. Information visibility matrix
 
-Per ogni workflow, il sistema dovrebbe mostrare:
+| Information | Requester | Operator | Approver | Platform | Auditor | Security | Operations | Newbie |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Application status | yes | yes | yes | yes | read | read | read | yes |
+| ChangeRequest requester | yes | yes | yes | yes | yes | yes | read | yes |
+| Lifecycle status | yes | yes | yes | yes | yes | yes | read | yes |
+| Runtime status | yes | yes | yes | yes | yes | yes | yes | yes |
+| GitLab references | read | yes | yes | read | yes | read | read | read |
+| Tekton diagnostics | read | yes | yes | yes | yes | read | read | guided |
+| Deployment evidence | read | yes | yes | yes | yes | read | yes | guided |
+| RBAC/AuthZ details | no | limited | limited | yes | read | yes | read | no |
+| Operational runbooks | no | read | read | yes | read | read | yes | guided |
+| Environment promotion metadata | read | yes | yes | yes | yes | yes | read | guided |
 
-- cosa sta facendo;
-- perché lo sta facendo;
-- quale strumento sta usando;
-- quale file viene modificato;
-- quale commit o branch viene creato;
-- cosa sta validando Tekton;
-- cosa sta sincronizzando Argo CD;
-- quale evidenza viene raccolta.
+---
 
-Esempio di messaggio didattico:
+## 8. Educational information requirements
+
+The Control Plane should help users understand the workflow.
+
+For each major workflow, the system should make clear:
+
+- what is being done;
+- why the action is needed;
+- which external tool is involved;
+- which file or resource is affected;
+- which branch, commit or merge request was created;
+- what Tekton validated;
+- what Argo CD checked;
+- what Kubernetes/OpenShift evidence was collected.
+
+Example educational message:
 
 ```text
-Il valore APP_VERSION è gestito da una ConfigMap.
-Il sistema aggiornerà configmap.yaml nel repository GitLab.
-Dopo il merge, Argo CD applicherà la modifica al cluster.
+The requested change is represented in Git. Tekton validates the GitOps manifests before the change is considered technically safe. Argo CD then reconciles the target application from Git to the OpenShift runtime.
 ```
 
 ---
 
-## 8. Errori da rendere comprensibili
+## 9. Error explanation requirements
 
-DevOps Control Plane deve tradurre errori tecnici complessi in messaggi operativi chiari.
+The Control Plane should translate complex technical failures into actionable operational messages.
 
-### Esempio 1 - ConfigMap non permessa
+### Example 1 — Resource not permitted by Argo CD AppProject
 
-Errore tecnico:
+Technical error:
 
 ```text
 resource :ConfigMap is not permitted in project devops-ci-demo
 ```
 
-Messaggio suggerito:
+Suggested message:
 
 ```text
-La ConfigMap è presente nel repository, ma l’AppProject Argo CD non consente la gestione delle ConfigMap.
-Aggiungere group: "" kind: ConfigMap alla namespaceResourceWhitelist dell’AppProject.
+The ConfigMap is present in the GitOps repository, but the Argo CD AppProject does not allow ConfigMap resources for this application. Review the namespaceResourceWhitelist before syncing.
 ```
 
----
+### Example 2 — Invalid Kubernetes manifest
 
-### Esempio 2 - valueFrom non valido
-
-Errore tecnico:
+Technical error:
 
 ```text
 valueFrom: Invalid value: must specify configMapKeyRef, secretKeyRef, fieldRef or resourceFieldRef
 ```
 
-Messaggio suggerito:
+Suggested message:
 
 ```text
-Il Deployment contiene un blocco valueFrom incompleto o indentato male.
-Verificare che configMapKeyRef sia indentato sotto valueFrom.
+The Deployment contains an incomplete valueFrom block. Verify that configMapKeyRef, secretKeyRef, fieldRef or resourceFieldRef is correctly specified under valueFrom.
 ```
 
----
+### Example 3 — Argo CD operation already in progress
 
-### Esempio 3 - Argo CD operation già in corso
-
-Errore tecnico:
+Technical error:
 
 ```text
 another operation is already in progress
 ```
 
-Messaggio suggerito:
+Suggested message:
 
 ```text
-Argo CD ha già una sync o rollback in corso sulla Application.
-Attendere la fine dell’operazione o terminarla se è bloccata.
+Argo CD already has an operation in progress for this Application. Wait for the current operation to finish or investigate whether the operation is stuck.
 ```
 
----
+### Example 4 — Local Git context error
 
-### Esempio 4 - Repository Git non trovato
-
-Errore tecnico:
+Technical error:
 
 ```text
 fatal: not a git repository
 ```
 
-Messaggio suggerito:
+Suggested message:
 
 ```text
-Il comando Git è stato eseguito fuori dalla directory del repository.
-Entrare nella directory corretta prima di eseguire operazioni Git.
+The Git command was executed outside the repository directory. Enter the correct repository directory before running Git operations.
 ```
 
 ---
 
-## 9. Journey end-to-end esempio: change repliche
+## 10. Example journey — ChangeRequest validation and evidence
 
 ```text
-1. DevOps Operator apre DevOps Control Plane.
-2. Seleziona demo-go-color-app.
-3. Visualizza Synced/Healthy e revision corrente.
-4. Seleziona change type: replicas.
-5. Inserisce nuovo valore: 3.
-6. Il sistema crea ChangeRequest CHG-2026-0001.
-7. Il sistema crea branch GitLab change/CHG-2026-0001.
-8. Il sistema modifica deployment.yaml.
-9. Il sistema mostra diff.
-10. Il sistema avvia validazione Tekton.
-11. Tekton termina Succeeded.
-12. Il sistema apre MR o crea commit.
-13. Dopo merge, il sistema avvia sync Argo CD.
-14. Argo CD raggiunge Synced/Healthy.
-15. Il sistema verifica Deployment e Pod.
-16. Il sistema raccoglie evidenze.
-17. Il change passa a Completed.
+1. A requester creates a ChangeRequest for demo-go-color-app.
+2. The Control Plane stores the ChangeRequest in PostgreSQL.
+3. A DevOps Operator creates a GitLab branch.
+4. The Control Plane updates the GitOps file.
+5. The Control Plane opens a GitLab merge request.
+6. Tekton validation is triggered.
+7. The Control Plane checks PipelineRun and TaskRun status.
+8. Validation evidence is stored.
+9. An authorized user merges the merge request.
+10. Argo CD deployment status is checked.
+11. Kubernetes/OpenShift runtime evidence is collected.
+12. The ChangeRequest runtime status becomes EvidenceCollected.
+13. The full history remains visible in the UI.
 ```
 
 ---
 
-## 10. Journey end-to-end esempio: change ConfigMap
+## 11. Example journey — Multi-developer dashboard
 
 ```text
-1. DevOps Operator seleziona demo-go-color-app.
-2. Il sistema rileva che PAGE_COLOR e APP_VERSION sono gestiti da ConfigMap.
-3. L’utente modifica APP_VERSION.
-4. Il sistema verifica che configmap.yaml esista.
-5. Il sistema verifica che configmap.yaml sia incluso in kustomization.yaml.
-6. Il sistema verifica che AppProject consenta ConfigMap.
-7. Il sistema crea branch GitLab.
-8. Il sistema aggiorna configmap.yaml.
-9. Il sistema valida con Tekton.
-10. Il sistema produce commit o MR.
-11. Dopo merge, il sistema sincronizza Argo CD.
-12. Il sistema verifica ConfigMap runtime.
-13. Il sistema verifica Deployment/Pod.
-14. Il sistema raccoglie evidenze.
+1. Developer A creates CHG-2026-0002.
+2. Developer B creates CHG-2026-0003.
+3. Developer C creates CHG-2026-0004.
+4. Developer D creates CHG-2026-0005.
+5. Developer E creates CHG-2026-0006.
+6. The dashboard shows only the latest five recent changes.
+7. The full /ui/changes page shows all changes.
+8. The REQUESTED BY column identifies each requester.
 ```
 
 ---
 
-## 11. Dati minimi richiesti per configurare una Application
+## 12. Minimum application configuration data
 
-Per gestire una Application, il sistema deve conoscere o ricavare:
+To manage an application, the system must know or resolve:
 
 ```yaml
 applicationName: demo-go-color-app
 argocdNamespace: openshift-gitops
-argocdProject: devops-ci-demo
+argocdProject: default
 targetNamespace: devops-ci-demo
 repoProvider: gitlab
 repoProjectId: "<gitlab-project-id>"
@@ -836,36 +960,49 @@ repoUrl: "https://gitlab.example.local/group/demo-app-gitops.git"
 targetRevision: main
 path: apps/demo-go-color-app
 defaultBranch: main
+targetEnvironment: dev
 ```
 
----
-
-## 12. Relazione con i documenti successivi
-
-Questo documento alimenta:
-
-- `docs/03-functional-requirements.md`, per dettagliare i requisiti funzionali;
-- `docs/05-architecture.md`, per disegnare componenti e adapter;
-- `docs/10-data-model.md`, per derivare entità e relazioni;
-- `docs/11-change-workflows.md`, per formalizzare i workflow operativi;
-- `docs/13-api-design.md`, per definire gli endpoint.
+In the future environment-aware model, this mapping must be resolved through the environment catalog.
 
 ---
 
-## 13. Messaggio chiave
+## 13. Relationship with other documents
 
-DevOps Control Plane deve essere progettato partendo dai workflow reali degli utenti.
+This document informs:
 
-Le personas aiutano a evitare due errori:
+- `docs/03-functional-requirements.md`;
+- `docs/04-non-functional-requirements.md`;
+- `docs/05-architecture.md`;
+- `docs/13-api-design.md`;
+- `docs/multi-environment-model.md`;
+- `docs/environment-configuration-model.md`;
+- `docs/change-promotion-model.md`;
+- Phase 12 final technical documentation.
 
-1. costruire un tool troppo tecnico che non aiuta i newbie;
-2. costruire un’interfaccia troppo semplificata che nasconde informazioni necessarie a DevOps e Platform Engineer.
+---
 
-Il sistema deve quindi essere guidato, ma trasparente:
+## 14. Key message
+
+The DevOps Control Plane must be designed around real operational users and their workflows.
+
+The system should be guided but transparent:
 
 ```text
-Mostra cosa fa.
-Mostra perché lo fa.
-Mostra quale strumento usa.
-Mostra quale evidenza produce.
+Show what the system is doing.
+Show why the system is doing it.
+Show which external tool is involved.
+Show which evidence is produced.
+Show who requested and executed the change.
 ```
+
+This balance helps onboarding users without hiding the technical details required by DevOps, platform, security and operations teams.
+
+---
+
+## 15. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial personas and use cases document in Italian. |
+| 2026-07-03 | 0.2 | Rewritten in English and refreshed to align with the current advanced MVP, security, operability, multi-developer and multi-environment baseline. |
