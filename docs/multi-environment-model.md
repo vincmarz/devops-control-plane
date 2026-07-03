@@ -8,8 +8,8 @@ The goal is to prepare the application for scenarios where the same Control Plan
 
 ```text
 dev
-collaudo
-produzione
+staging
+production
 ```
 
 This document is a design baseline. It does not implement the full model yet.
@@ -63,8 +63,8 @@ Initial environments:
 
 ```text
 dev
-collaudo
-produzione
+staging
+production
 ```
 
 Each environment should eventually include:
@@ -123,23 +123,23 @@ environments:
     gitlabTargetBranch: main
     approvalPolicy: relaxed
 
-  collaudo:
-    displayName: Collaudo
-    kubernetesNamespace: devops-ci-collaudo
-    tektonNamespace: devops-ci-collaudo
+  staging:
+    displayName: Staging
+    kubernetesNamespace: devops-ci-staging
+    tektonNamespace: devops-ci-staging
     tektonPipelineName: validate-gitops
-    gitOpsPath: apps/demo-go-color-app/overlays/collaudo
-    argoCdApplicationName: demo-go-color-app-collaudo
+    gitOpsPath: apps/demo-go-color-app/overlays/staging
+    argoCdApplicationName: demo-go-color-app-staging
     gitlabTargetBranch: main
     approvalPolicy: required
 
-  produzione:
-    displayName: Produzione
-    kubernetesNamespace: devops-ci-prod
-    tektonNamespace: devops-ci-prod
+  production:
+    displayName: Production
+    kubernetesNamespace: devops-ci-production
+    tektonNamespace: devops-ci-production
     tektonPipelineName: validate-gitops
-    gitOpsPath: apps/demo-go-color-app/overlays/prod
-    argoCdApplicationName: demo-go-color-app-prod
+    gitOpsPath: apps/demo-go-color-app/overlays/production
+    argoCdApplicationName: demo-go-color-app-production
     gitlabTargetBranch: main
     approvalPolicy: strict
 ```
@@ -185,12 +185,12 @@ CHG-2026-0101
   promotionGroupID: PROMO-2026-0001
 
 CHG-2026-0102
-  targetEnvironment: collaudo
+  targetEnvironment: staging
   promotedFromChangeNumber: CHG-2026-0101
   promotionGroupID: PROMO-2026-0001
 
 CHG-2026-0103
-  targetEnvironment: produzione
+  targetEnvironment: production
   promotedFromChangeNumber: CHG-2026-0102
   promotionGroupID: PROMO-2026-0001
 ```
@@ -229,13 +229,13 @@ dev:
   approver: approve when needed
   admin: all controlled actions
 
-collaudo:
+staging:
   viewer: read
   operator: create and validate
   approver: approve and promote
   admin: all controlled actions
 
-produzione:
+production:
   viewer: read
   operator: propose only
   approver: approve production change
@@ -257,8 +257,8 @@ devops-control-plane-admins
 Additional production-specific groups may be added:
 
 ```text
-devops-control-plane-prod-approvers
-devops-control-plane-prod-operators
+devops-control-plane-production-approvers
+devops-control-plane-production-operators
 ```
 
 The exact names should be decided in Phase 13.8.
@@ -276,8 +276,8 @@ Possible values:
 ```text
 all
 dev
-collaudo
-produzione
+staging
+production
 ```
 
 Expected behavior:
@@ -289,11 +289,11 @@ all:
 dev:
   show only dev ChangeRequests and dev runtime context
 
-collaudo:
-  show only collaudo ChangeRequests and collaudo runtime context
+staging:
+  show only staging ChangeRequests and staging runtime context
 
-produzione:
-  show only produzione ChangeRequests and produzione runtime context
+production:
+  show only production ChangeRequests and production runtime context
 ```
 
 ### 8.2 Dashboard cards
@@ -347,8 +347,8 @@ Example:
 ```text
 apps/demo-go-color-app/base
 apps/demo-go-color-app/overlays/dev
-apps/demo-go-color-app/overlays/collaudo
-apps/demo-go-color-app/overlays/prod
+apps/demo-go-color-app/overlays/staging
+apps/demo-go-color-app/overlays/production
 ```
 
 Benefits:
@@ -368,8 +368,8 @@ Example:
 
 ```text
 demo-go-color-app + dev        -> demo-go-color-app-dev
-demo-go-color-app + collaudo   -> demo-go-color-app-collaudo
-demo-go-color-app + produzione -> demo-go-color-app-prod
+demo-go-color-app + staging   -> demo-go-color-app-staging
+demo-go-color-app + production -> demo-go-color-app-production
 ```
 
 The DevOps Control Plane should resolve the Argo CD Application based on:
@@ -410,8 +410,8 @@ Example:
 
 ```text
 devops-ci-demo
-devops-ci-collaudo
-devops-ci-prod
+devops-ci-staging
+devops-ci-production
 ```
 
 Recommendation for the first implementation:
@@ -488,7 +488,7 @@ RBAC remains least-privilege.
 13.7 — Tekton validation parameterization
 13.8 — Environment-aware RBAC/AuthZ policy
 13.9 — Evidence and audit enrichment
-13.10 — MVP implementation for dev and collaudo
+13.10 — MVP implementation for dev and staging
 13.11 — Production environment hardening
 ```
 

@@ -29,8 +29,8 @@ The next architectural question is how the DevOps Control Plane should support m
 
 ```text
 dev
-collaudo
-produzione
+staging
+production
 ```
 
 Multi-environment support impacts:
@@ -88,8 +88,8 @@ Expected pattern:
 
 ```text
 CHG-2026-0101 targets dev
-CHG-2026-0102 targets collaudo and is promotedFrom CHG-2026-0101
-CHG-2026-0103 targets produzione and is promotedFrom CHG-2026-0102
+CHG-2026-0102 targets staging and is promotedFrom CHG-2026-0101
+CHG-2026-0103 targets production and is promotedFrom CHG-2026-0102
 ```
 
 Rationale:
@@ -110,11 +110,11 @@ Expected policy direction:
 dev:
   operators can create and execute standard technical workflows within guardrails
 
-collaudo:
+staging:
   operators can propose and validate
   approvers are required for controlled promotion and execution
 
-produzione:
+production:
   operators can propose
   production approvers or admins are required for approval and execution
   stricter evidence and audit requirements apply
@@ -170,13 +170,13 @@ Recommended sub-phases:
 13.2 — Environment configuration model
 13.3 — Environment-aware ChangeRequest and promotion metadata design
 13.4 — UI environment selector and filtering design
-13.5 — GitOps layout for dev/collaudo/produzione
+13.5 — GitOps layout for dev/staging/production
 13.6 — Argo CD application mapping
 13.7 — Tekton validation parameterization
 13.8 — Environment-aware RBAC/AuthZ policy
 13.9 — Evidence and audit environment enrichment
-13.10 — MVP implementation for dev and collaudo
-13.11 — Production-readiness extension for produzione
+13.10 — MVP implementation for dev and staging
+13.11 — Production-readiness extension for production
 ```
 
 ## Initial target environment model
@@ -185,8 +185,8 @@ Initial environment names:
 
 ```text
 dev
-collaudo
-produzione
+staging
+production
 ```
 
 Initial high-level mapping:
@@ -197,12 +197,12 @@ dev:
   riskProfile: low-to-medium
   approvalPolicy: relaxed
 
-collaudo:
+staging:
   displayName: Test / pre-production validation
   riskProfile: medium
   approvalPolicy: required
 
-produzione:
+production:
   displayName: Production
   riskProfile: high
   approvalPolicy: strict

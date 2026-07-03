@@ -50,7 +50,7 @@ Explicitly define supported environments.
 Reject unknown target environments fail-closed.
 Keep the first implementation simple and repository-aligned.
 Avoid database migration in the first configuration increment if possible.
-Support dev, collaudo and produzione as first target environments.
+Support dev, staging and production as first target environments.
 Allow environment-specific Tekton, Argo CD, Kubernetes and GitOps mappings.
 Allow environment-specific RBAC/AuthZ policy.
 Keep production guardrails explicit.
@@ -69,7 +69,7 @@ Dynamic runtime editing of environment definitions
 Database-backed environment catalog
 Full production dual-approval workflow
 Full GitOps repository restructuring
-Full collaudo/prod OpenShift namespace provisioning
+Full staging/production OpenShift namespace provisioning
 Full Argo CD multi-application rollout
 Full Tekton namespace-per-environment migration
 ```
@@ -112,8 +112,8 @@ The initial supported environments are:
 
 ```text
 dev
-collaudo
-produzione
+staging
+production
 ```
 
 The environment name must be:
@@ -129,8 +129,8 @@ Display labels can be configured separately:
 
 ```text
 dev        -> Development
-collaudo   -> Collaudo
-produzione -> Production
+staging   -> Staging
+production -> Production
 ```
 
 ---
@@ -197,25 +197,25 @@ data:
           collectDeploymentEvidence: true
           requireEvidenceBeforeClose: false
 
-      collaudo:
-        displayName: Collaudo
+      staging:
+        displayName: Staging
         description: Controlled test/pre-production validation environment.
         enabled: true
         riskProfile: medium
         approvalPolicy: required
         kubernetes:
-          namespace: devops-ci-collaudo
+          namespace: devops-ci-staging
         tekton:
-          namespace: devops-ci-collaudo
+          namespace: devops-ci-staging
           pipelineName: validate-gitops
           serviceAccount: pipeline
           workspacePVC: pipeline-workspace
-          validationPath: apps/demo-go-color-app/overlays/collaudo
+          validationPath: apps/demo-go-color-app/overlays/staging
         argocd:
-          applicationName: demo-go-color-app-collaudo
+          applicationName: demo-go-color-app-staging
         gitlab:
           targetBranch: main
-          gitOpsPath: apps/demo-go-color-app/overlays/collaudo
+          gitOpsPath: apps/demo-go-color-app/overlays/staging
         authz:
           viewerGroups:
             - devops-control-plane-viewers
@@ -229,32 +229,32 @@ data:
           collectDeploymentEvidence: true
           requireEvidenceBeforeClose: true
 
-      produzione:
-        displayName: Produzione
+      production:
+        displayName: Production
         description: Production environment. Strict approval and evidence requirements apply.
         enabled: false
         riskProfile: high
         approvalPolicy: strict
         kubernetes:
-          namespace: devops-ci-prod
+          namespace: devops-ci-production
         tekton:
-          namespace: devops-ci-prod
+          namespace: devops-ci-production
           pipelineName: validate-gitops
           serviceAccount: pipeline
           workspacePVC: pipeline-workspace
-          validationPath: apps/demo-go-color-app/overlays/prod
+          validationPath: apps/demo-go-color-app/overlays/production
         argocd:
-          applicationName: demo-go-color-app-prod
+          applicationName: demo-go-color-app-production
         gitlab:
           targetBranch: main
-          gitOpsPath: apps/demo-go-color-app/overlays/prod
+          gitOpsPath: apps/demo-go-color-app/overlays/production
         authz:
           viewerGroups:
             - devops-control-plane-viewers
           operatorGroups:
-            - devops-control-plane-prod-operators
+            - devops-control-plane-production-operators
           approverGroups:
-            - devops-control-plane-prod-approvers
+            - devops-control-plane-production-approvers
           adminGroups:
             - devops-control-plane-admins
         evidence:
@@ -262,7 +262,7 @@ data:
           requireEvidenceBeforeClose: true
 ```
 
-### 6.3 Why `produzione.enabled=false` initially
+### 6.3 Why `production.enabled=false` initially
 
 Production should be represented in the model from the beginning, but it should remain disabled until:
 
@@ -390,7 +390,7 @@ if actor does not have required environment permission:
 
 ### 8.3 Production guardrail
 
-For `produzione`, the default should be:
+For `production`, the default should be:
 
 ```text
 fail closed until production policy is explicitly enabled and validated
@@ -430,10 +430,10 @@ The application should resolve environment-specific settings from `targetEnviron
 Example flow:
 
 ```text
-ChangeRequest targetEnvironment = collaudo
+ChangeRequest targetEnvironment = staging
 
 Resolve environment config:
-  env = environments["collaudo"]
+  env = environments["staging"]
 
 Tekton validation:
   namespace = env.tekton.namespace
@@ -560,9 +560,9 @@ Example future rule:
 
 ```text
 operator can validate dev
-operator can validate collaudo
-operator cannot approve produzione
-prod-approver can approve produzione
+operator can validate staging
+operator cannot approve production
+production-approver can approve production
 admin can perform emergency actions with audit
 ```
 
@@ -651,7 +651,7 @@ Test cases:
 
 ```text
 valid dev-only configuration
-valid dev/collaudo/produzione configuration
+valid dev/staging/production configuration
 missing defaultEnvironment
 unknown defaultEnvironment
 defaultEnvironment disabled
@@ -718,13 +718,13 @@ Start with dev behavior unchanged.
 
 Initially read-only/filter-only.
 
-### Step 8 — Introduce collaudo
+### Step 8 — Introduce staging
 
-Add `collaudo` as enabled only after required namespaces and mappings exist.
+Add `staging` as enabled only after required namespaces and mappings exist.
 
-### Step 9 — Prepare produzione disabled
+### Step 9 — Prepare production disabled
 
-Keep `produzione` present but disabled until production guardrails are implemented.
+Keep `production` present but disabled until production guardrails are implemented.
 
 ---
 
@@ -753,10 +753,10 @@ The initial environment configuration model is:
 ```text
 ConfigMap-driven
 explicit environment catalog
-canonical environment keys: dev, collaudo, produzione
+canonical environment keys: dev, staging, production
 default environment: dev
 unknown environments rejected fail-closed
-produzione present but disabled until production guardrails are ready
+production present but disabled until production guardrails are ready
 environment-specific mappings for Kubernetes, Tekton, Argo CD, GitLab, AuthZ and evidence policy
 legacy single-environment compatibility retained during transition
 ```
