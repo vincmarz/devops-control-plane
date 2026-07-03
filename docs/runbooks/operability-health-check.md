@@ -595,7 +595,118 @@ get secrets in devops-control-plane: no
 
 ---
 
-## 19. OK/KO criteria
+## 19. Automated smoke-test script
+
+Starting from Phase 10.3.3, the manual checks described in this runbook are also available as an automated read-only smoke-test script:
+
+```text
+scripts/operability/health-check.sh
+```
+
+The script is intended to provide a fast and repeatable operational validation while preserving the same safety principles documented in this runbook:
+
+- no Secret values are printed;
+- Secret values are not decoded;
+- no resources are applied, patched, edited, deleted or restarted;
+- evidence files are written to an evidence directory;
+- the final result is summarized with `PASS`, `WARN` and `FAIL` counters;
+- the script returns a meaningful exit code.
+
+### 19.1. Default execution
+
+Use the default execution for a quick smoke test:
+
+```bash
+./scripts/operability/health-check.sh
+```
+
+By default, the script creates a timestamped evidence directory similar to:
+
+```text
+/tmp/dcp-operability-smoke-test-YYYYMMDD-HHMMSS
+```
+
+If `EVIDENCE_DIR` is already exported in the shell, the script reuses that value. To force a new timestamped evidence directory, unset it first:
+
+```bash
+unset EVIDENCE_DIR
+./scripts/operability/health-check.sh
+```
+
+### 19.2. Execution with optional RBAC `can-i` checks
+
+For a more complete operational validation, include the optional authorization checks:
+
+```bash
+unset EVIDENCE_DIR
+SKIP_CAN_I=false ./scripts/operability/health-check.sh
+```
+
+Expected high-level result for the current baseline:
+
+```text
+PASS=35
+WARN=0
+FAIL=0
+```
+
+Expected smoke-test highlights:
+
+```text
+route readyz HTTP 200
+route livez HTTP 200
+route api changes anonymous HTTP 403
+route ui dashboard anonymous HTTP 403
+backend readyz HTTP 200
+backend livez HTTP 200
+backend api changes anonymous HTTP 401
+backend api changes admin HTTP 200
+```
+
+### 19.3. Exit codes
+
+The script uses the following exit codes:
+
+```text
+0 = all mandatory checks passed
+1 = one or more mandatory checks failed
+2 = local prerequisite or OpenShift context problem
+```
+
+### 19.4. Evidence package
+
+The script stores evidence files under `EVIDENCE_DIR`. The main summary file is:
+
+```text
+$EVIDENCE_DIR/99-summary.txt
+```
+
+To print the final summary after execution:
+
+```bash
+cat "$EVIDENCE_DIR/99-summary.txt"
+```
+
+If `EVIDENCE_DIR` was not exported before execution, use the evidence directory printed by the script at the end of the run.
+
+### 19.5. Relationship with this runbook
+
+The script does not replace this runbook. Instead:
+
+- use the script for fast routine checks and post-change smoke tests;
+- use the runbook for detailed manual analysis, incident handling, onboarding and troubleshooting;
+- if the script reports `FAIL > 0`, use the troubleshooting sections of this runbook to inspect the related evidence files and collect additional context.
+
+Recommended operational usage:
+
+```text
+Routine health-check:              run scripts/operability/health-check.sh
+Post-change validation:            run SKIP_CAN_I=false scripts/operability/health-check.sh
+Incident initial evidence package: run the script, then attach the generated evidence directory
+Detailed troubleshooting:          follow the manual sections of this runbook
+```
+
+## 20. OK/KO criteria
 
 ### Health-check OK
 
@@ -631,7 +742,7 @@ The health-check must be considered failed if any of the following occur:
 
 ---
 
-## 20. Troubleshooting quick guide
+## 21. Troubleshooting quick guide
 
 ### DCP pod not Ready
 
@@ -740,7 +851,7 @@ If a token value is exposed while troubleshooting, rotate it immediately.
 
 ---
 
-## 21. Evidence package to attach to an incident or review
+## 22. Evidence package to attach to an incident or review
 
 At minimum, include:
 
@@ -783,7 +894,7 @@ Before sharing externally, review all files and remove any accidental sensitive 
 
 ---
 
-## 22. Current known gaps and production recommendations
+## 23. Current known gaps and production recommendations
 
 The following items are not blockers for the current lab/MVP baseline, but should be tracked for production maturity:
 
@@ -800,8 +911,9 @@ The following items are not blockers for the current lab/MVP baseline, but shoul
 
 ---
 
-## 23. Revision history
+## 24. Revision history
 
 | Date | Phase | Description |
 |---|---:|---|
 | 2026-07-03 | 10.3.2 | Initial operability health-check runbook based on Phase 10.3.1 observability baseline inventory. |
+| 2026-07-03 | 10.3.4 | Added reference to the automated operability smoke-test script introduced in Phase 10.3.3. |
