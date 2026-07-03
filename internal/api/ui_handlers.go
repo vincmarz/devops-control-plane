@@ -260,8 +260,7 @@ func (h *Handler) uiChangeDetailsData(r *http.Request, change map[string]any) ([
 }
 
 func (h *Handler) renderUI(w http.ResponseWriter, status int, data uiData) {
-	funcs := template.FuncMap{"get": get, "str": str, "short": short, "badgeClass": badgeClass, "latestEvidence": latestEvidence, "kubeSummary": kubeSummary, "diagnosticsSummary": diagnosticsSummary, "eventStep": eventStep, "jsonPretty": jsonPretty, "changeNumberOrID": changeNumberOrID, "recommendedActions": recommendedActions, "advancedActions": advancedActions, "applicationName": applicationName}
-		"recentChanges":      recentChanges,
+	funcs := template.FuncMap{"get": get, "str": str, "short": short, "badgeClass": badgeClass, "latestEvidence": latestEvidence, "kubeSummary": kubeSummary, "diagnosticsSummary": diagnosticsSummary, "eventStep": eventStep, "jsonPretty": jsonPretty, "changeNumberOrID": changeNumberOrID, "recommendedActions": recommendedActions, "advancedActions": advancedActions, "applicationName": applicationName, "recentChanges": recentChanges}
 	tpl := template.Must(template.New("ui").Funcs(funcs).Parse(uiTemplate))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
@@ -344,11 +343,11 @@ func preferredChange(changes []map[string]any, preferred string) map[string]any 
 }
 
 func recentChanges(items []map[string]any) []map[string]any {
-    const limit = 5
-    if len(items) <= limit {
-        return items
-    }
-    return items[:limit]
+	const limit = 5
+	if len(items) <= limit {
+		return items
+	}
+	return items[:limit]
 }
 
 func buildUIStats(changes []map[string]any, apps []map[string]any, evidence []map[string]any) map[string]any {
