@@ -1,54 +1,66 @@
-# DevOps Control Plane - MVP Scope
+# DevOps Control Plane — MVP and Advanced Baseline Scope
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documento precedente:** `docs/00-vision.md`  
-**Stato:** Draft iniziale / Scope MVP
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento definisce il perimetro del primo MVP del progetto **DevOps Control Plane**.
-
-L’obiettivo è stabilire in modo chiaro:
-
-- quali funzionalità implementare nella prima versione;
-- quali funzionalità lasciare fuori dal primo MVP;
-- quali integrazioni sono necessarie;
-- quali workflow devono essere supportati;
-- quali criteri useremo per dire che l’MVP è completato;
-- quale sequenza di milestone seguire per non perdere informazioni e non costruire componenti premature.
-
-Il documento deve essere usato come riferimento operativo durante la progettazione e l’implementazione del backend, delle API, degli adapter e dei primi workflow GitOps.
+- **Project:** DevOps Control Plane
+- **Document:** 01 — Scope
+- **Version:** 0.2
+- **Date:** 2026-07-03
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous document:** `docs/00-vision.md`
+- **Status:** Rewritten in English and refreshed to align with the current advanced MVP, security and operational baseline
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Definizione sintetica dell’MVP
+## 1. Purpose
 
-Il primo MVP di **DevOps Control Plane** deve permettere a un operatore DevOps di:
+This document defines the functional and technical scope of the DevOps Control Plane.
 
-1. visualizzare le applicazioni Argo CD gestite;
-2. consultare stato GitOps e runtime essenziale;
-3. creare un change GitOps semplice;
-4. generare branch GitLab;
-5. modificare manifest GitOps in modo controllato;
-6. validare il change tramite Tekton;
-7. produrre commit o merge request;
-8. sincronizzare Argo CD dopo merge o commit approvato;
-9. attendere `Synced` e `Healthy`;
-10. raccogliere evidenze;
-11. conservare uno storico interno del change in PostgreSQL.
+The original version described the first MVP scope. The project has since evolved into an advanced MVP with a production-oriented operational baseline. This refreshed version preserves the original intent but updates the scope to reflect the current implementation and near-term roadmap.
 
-L’MVP non deve essere un sostituto di Argo CD, GitLab o Tekton. Deve essere un livello di orchestrazione, governance e audit sopra questi strumenti.
+The document clarifies:
+
+- what the current baseline includes;
+- which capabilities are considered part of the advanced MVP;
+- which capabilities are outside the current scope;
+- which integrations are required;
+- which workflows are supported;
+- which operational and security expectations are in scope;
+- which items belong to future phases.
+
+This document should be used as a scope reference for backend, API, adapter, UI, security, operability and documentation work.
 
 ---
 
-## 3. Stack tecnologico vincolante per l’MVP
+## 2. Scope summary
 
-Le decisioni tecnologiche iniziali sono le seguenti.
+The DevOps Control Plane provides a guided orchestration and governance layer above GitLab, Tekton, Argo CD and OpenShift.
+
+The current baseline allows authorized users and operators to:
+
+1. view GitOps applications managed by Argo CD;
+2. inspect essential GitOps and runtime state;
+3. create and track ChangeRequests;
+4. execute GitLab branch, file update, merge request and merge workflows;
+5. validate changes through Tekton;
+6. check Argo CD deployment state;
+7. collect Kubernetes/OpenShift runtime evidence;
+8. store audit events and evidence in PostgreSQL;
+9. use a server-side Web UI for dashboard, changes, evidence and actions;
+10. authenticate through OpenShift OAuth Proxy;
+11. authorize actions through trusted headers, OpenShift group lookup and backend AuthZ;
+12. operate with backup/restore, disaster recovery, maintenance and readiness runbooks;
+13. support multi-developer visibility;
+14. evolve toward `dev`, `staging` and `production` environment support.
+
+The DevOps Control Plane is not a replacement for GitLab, Argo CD, Tekton or OpenShift. It coordinates and governs their usage.
+
+---
+
+## 3. Technology baseline
 
 ### 3.1 Backend
 
@@ -56,36 +68,44 @@ Le decisioni tecnologiche iniziali sono le seguenti.
 Go
 ```
 
-Il backend sarà responsabile di:
+The backend is responsible for:
 
-- esposizione API HTTP;
-- orchestrazione workflow;
-- integrazione con GitLab API;
-- integrazione con Argo CD API;
-- integrazione con Kubernetes API per Tekton;
-- persistenza su PostgreSQL;
-- raccolta evidenze;
-- predisposizione rendering HTML templates.
+- HTTP API exposure;
+- server-side Web UI rendering;
+- ChangeRequest orchestration;
+- lifecycle transitions;
+- audit event creation;
+- GitLab API integration;
+- Argo CD API integration;
+- Kubernetes API integration for Tekton;
+- OpenShift/Kubernetes runtime evidence collection;
+- PostgreSQL persistence;
+- AuthN/AuthZ enforcement;
+- configuration loading;
+- health and readiness endpoints.
 
----
-
-### 3.2 Frontend MVP
-
-```text
-Go HTML templates + Bootstrap
-```
-
-Il progetto predisporrà fin dall’inizio una struttura web server-side con template HTML e Bootstrap.
-
-Tuttavia, la Web UI completa arriverà dopo la stabilizzazione dei workflow.
-
-Nel primo MVP potranno essere presenti pagine minime di debug o consultazione, ma la priorità resta:
+### 3.2 Frontend / UI
 
 ```text
-API + workflow stabili prima della UI completa
+Go server-side HTML templates
 ```
 
----
+The current UI is no longer just a placeholder. It includes:
+
+- dashboard;
+- KPI counters;
+- recent changes limited to the latest five items;
+- applications view;
+- full ChangeRequest list;
+- requester visibility;
+- ChangeRequest detail;
+- server-side technical actions;
+- evidence pages;
+- audit event pages;
+- settings page;
+- UI wrapper for raw Changes API.
+
+The UI must remain English according to the repository language policy.
 
 ### 3.3 Database
 
@@ -93,817 +113,781 @@ API + workflow stabili prima della UI completa
 PostgreSQL
 ```
 
-PostgreSQL conserverà:
+PostgreSQL stores:
 
-- applicazioni note;
-- change request;
-- eventi di workflow;
-- riferimenti Git;
-- riferimenti Tekton;
-- riferimenti Argo CD;
-- evidenze;
-- stato finale del change.
+- ChangeRequests;
+- lifecycle and technical events;
+- evidence records;
+- runtime status;
+- functional audit history;
+- references to external systems.
 
----
+PostgreSQL is part of the operational baseline and is covered by backup/restore and disaster recovery runbooks.
 
-### 3.4 Integrazione Git
+### 3.4 Git integration
 
 ```text
 GitLab API
 ```
 
-L’MVP userà GitLab API per:
+The Control Plane integrates with GitLab API to:
 
-- leggere file dal repository;
-- leggere commit;
-- creare branch;
-- aggiornare file;
-- creare commit;
-- creare merge request;
-- leggere stato merge request.
+- create branches;
+- update GitOps files;
+- create commits;
+- open merge requests;
+- merge merge requests;
+- store external references in ChangeRequest events;
+- support GitOps traceability.
 
-Nota: il repository sorgente del DevOps Control Plane può essere ospitato su GitHub nell’account `vincmarz`, ma l’applicazione implementerà l’integrazione target tramite GitLab API.
+The DevOps Control Plane source code may be hosted on GitHub, while target application and GitOps repositories are integrated through GitLab API.
 
----
-
-### 3.5 Integrazione Argo CD
+### 3.5 Argo CD integration
 
 ```text
 Argo CD API
 ```
 
-L’MVP userà Argo CD API per:
+The Control Plane uses Argo CD API to:
 
-- listare applicazioni;
-- leggere dettaglio Application;
-- leggere sync status;
-- leggere health status;
-- leggere current revision;
-- leggere resources;
-- leggere orphaned resources;
-- leggere history;
-- lanciare sync;
-- monitorare stato fino a `Synced` e `Healthy`.
+- list applications;
+- get application details;
+- read sync and health status;
+- read revision and conditions;
+- check deployment state;
+- collect deployment evidence;
+- expose deployment diagnostics.
 
----
+TLS strict mode is part of the current security baseline.
 
-### 3.6 Integrazione Tekton
+### 3.6 Tekton integration
 
 ```text
-Kubernetes API diretta
+Kubernetes API
 ```
 
-L’MVP userà Kubernetes API diretta per operare sulle risorse Tekton:
+The Control Plane interacts with Tekton through Kubernetes API resources:
 
-- creazione `PipelineRun`;
-- osservazione stato `PipelineRun`;
-- osservazione stato `TaskRun`;
-- raccolta log;
-- raccolta esito validazione.
+- `PipelineRun` creation;
+- `PipelineRun` status polling;
+- `TaskRun` status collection;
+- validation evidence creation;
+- validation failure diagnostics.
+
+Tekton validation includes GitOps policy checks and anti-secret guardrails.
+
+### 3.7 OpenShift / Kubernetes integration
+
+The Control Plane uses OpenShift/Kubernetes APIs to:
+
+- collect runtime deployment evidence;
+- inspect Deployments, Pods, Services and Routes;
+- use ServiceAccount token fallback for Kubernetes authentication;
+- enforce runtime RBAC least privilege;
+- operate behind OpenShift OAuth Proxy.
 
 ---
 
-## 4. Funzionalità incluse nell’MVP
+## 4. In-scope capabilities
 
-## 4.1 F1 - Lista applicazioni Argo CD
+## 4.1 Application discovery
 
-### Descrizione
+### Description
 
-Il sistema deve visualizzare le applicazioni Argo CD disponibili per il progetto/ambiente configurato.
+The system must discover and display applications managed by Argo CD.
 
-### Dati minimi da mostrare
+### Minimum data
 
-- nome Application;
-- namespace Argo CD;
-- progetto Argo CD;
-- namespace target;
-- repository Git;
-- path GitOps;
+- Application name;
+- Argo CD namespace;
+- Argo CD project;
+- target namespace;
+- repository URL;
+- GitOps path;
 - target revision;
 - sync status;
 - health status;
-- current revision.
+- current revision;
+- conditions and warnings where available.
 
-### Output atteso
+### Current status
 
-Esempio logico:
-
-```text
-Application          Project          Sync      Health    Revision
--------------------  ---------------  --------  --------  --------
-demo-go-color-app    devops-ci-demo   Synced    Healthy   b8e1d6b
-demo-app             devops-ci-demo   Synced    Healthy   62d3b18
-```
-
-### Acceptance criteria
-
-La funzionalità è completa quando:
-
-- il backend recupera la lista da Argo CD API;
-- il backend normalizza i campi principali;
-- il backend espone `GET /api/applications`;
-- la risposta può essere salvata o sincronizzata in PostgreSQL;
-- eventuali errori Argo CD sono restituiti in modo leggibile.
+This capability is implemented as part of the Argo CD integration and UI baseline.
 
 ---
 
-## 4.2 F2 - Dettaglio applicazione
+## 4.2 Application details
 
-### Descrizione
+### Description
 
-Il sistema deve mostrare il dettaglio operativo di una Application Argo CD.
+The system must expose operational detail for an Argo CD Application.
 
-### Dati minimi
+### Minimum data
 
 - sync status;
 - health status;
 - current revision;
-- repo URL;
+- repository URL;
 - target revision;
 - Git path;
-- namespace target;
-- resources gestite;
-- orphaned resources;
-- history Argo CD;
-- ultimo commit Git rilevante.
+- target namespace;
+- managed resources;
+- orphaned resources or conditions;
+- history where available.
 
-### Acceptance criteria
+### Current status
 
-La funzionalità è completa quando:
-
-- il backend espone `GET /api/applications/{name}`;
-- il backend espone `GET /api/applications/{name}/resources`;
-- il backend distingue risorse gestite e orphaned;
-- il backend espone almeno l’ultima revisione Git conosciuta;
-- lo stato risulta coerente con quanto mostrato da Argo CD.
+Application detail is available through API and UI. The implementation is expected to evolve further with environment-aware Argo CD mapping.
 
 ---
 
-## 4.3 F3 - Change repliche
+## 4.3 ChangeRequest lifecycle
 
-### Descrizione
+### Description
 
-Il sistema deve consentire un change GitOps per modificare il numero di repliche di un Deployment.
+The system must provide a ChangeRequest model with functional lifecycle and technical runtime status.
 
-### Input utente
+### In-scope lifecycle capabilities
 
-- Application;
-- Deployment target;
-- numero repliche desiderato;
-- descrizione/motivazione del change.
+- create ChangeRequest;
+- submit ChangeRequest;
+- approve ChangeRequest;
+- start execution;
+- complete execution;
+- close ChangeRequest;
+- record lifecycle events;
+- record technical events;
+- keep runtime status separate from lifecycle status.
 
-### Azioni automatiche
+### Current status
 
-1. leggere metadata applicazione;
-2. leggere il file GitOps corretto tramite GitLab API;
-3. creare branch;
-4. modificare `spec.replicas`;
-5. produrre diff;
-6. creare commit o merge request;
-7. lanciare validazione Tekton;
-8. dopo merge, sincronizzare Argo CD;
-9. raccogliere evidenze.
-
-### Acceptance criteria
-
-La funzionalità è completa quando:
-
-- il sistema produce una modifica Git tracciata;
-- il sistema non modifica direttamente il Deployment runtime;
-- il deployment raggiunge il numero di repliche desiderato dopo sync Argo CD;
-- la ChangeRequest viene salvata in PostgreSQL con stato finale `Completed` o `Failed`.
+Implemented with PostgreSQL persistence and tests.
 
 ---
 
-## 4.4 F4 - Change APP_VERSION
+## 4.4 GitLab branch and file update workflow
 
-### Descrizione
+### Description
 
-Il sistema deve permettere di aggiornare il valore applicativo `APP_VERSION`.
+The system must support controlled GitOps file updates through GitLab API.
 
-### Modalità supportate
+### In-scope actions
 
-L’MVP deve supportare almeno una delle due modalità:
+- create branch;
+- update GitOps files;
+- create commit;
+- open merge request;
+- merge merge request where allowed;
+- record technical events and external references.
 
-1. `APP_VERSION` definita come env inline nel `Deployment`;
-2. `APP_VERSION` definita in una `ConfigMap` referenziata dal `Deployment`.
+### Current status
 
-La modalità preferita, dopo il refactoring del Lab GO, è:
+Implemented and runtime validated for the lab environment.
+
+---
+
+## 4.5 Tekton validation
+
+### Description
+
+The system must delegate validation to Tekton before considering a change technically validated.
+
+### In-scope validation
+
+- create `PipelineRun`;
+- check latest PipelineRun by ChangeRequest;
+- collect TaskRun diagnostics;
+- store validation evidence;
+- report validation failures clearly;
+- enforce GitOps anti-secret and manifest guardrails.
+
+### Current status
+
+Implemented with validation evidence, diagnostics and hardened policy checks.
+
+---
+
+## 4.6 Argo CD deployment check
+
+### Description
+
+The system must check the deployment state through Argo CD and map Argo CD status to Control Plane runtime status.
+
+### In-scope runtime statuses
+
+- `DeploymentSyncedHealthy`;
+- `DeploymentProgressing`;
+- `DeploymentOutOfSync`;
+- `DeploymentDegraded`;
+- `DeploymentUnknown`.
+
+### Current status
+
+Implemented and validated against the demo application.
+
+---
+
+## 4.7 Runtime evidence collection
+
+### Description
+
+The system must collect technical evidence after deployment.
+
+### Evidence scope
+
+- ChangeRequest metadata;
+- Argo CD sync and health state;
+- Git revision;
+- Kubernetes/OpenShift Deployment state;
+- Pods and readiness;
+- restart counts;
+- Service availability;
+- Route availability;
+- diagnostics summary;
+- warnings and conditions.
+
+### Current status
+
+Implemented with sanitized deployment evidence and UI rendering.
+
+---
+
+## 4.8 Functional audit history
+
+### Description
+
+The system must provide a functional history that allows operators to understand what happened without manually correlating GitLab, Tekton, Argo CD and Kubernetes data.
+
+### Minimum data
+
+- ChangeRequest number;
+- application;
+- target environment;
+- requester;
+- lifecycle status;
+- runtime status;
+- technical events;
+- evidence;
+- timestamps;
+- external references.
+
+### Current status
+
+Implemented through PostgreSQL-backed ChangeRequests, change events and evidence records.
+
+---
+
+## 4.9 Web UI
+
+### Description
+
+The Web UI must provide an operational interface for common workflows and status review.
+
+### Current UI scope
+
+- dashboard;
+- KPI counters;
+- recent changes;
+- applications list;
+- ChangeRequest list;
+- ChangeRequest detail;
+- requester visibility;
+- technical actions;
+- audit event view;
+- evidence view;
+- raw API wrapper page.
+
+### Current status
+
+Implemented and validated, including multi-developer display behavior.
+
+---
+
+## 4.10 AuthN/AuthZ and security baseline
+
+### Description
+
+The system must protect APIs and UI through authenticated and authorized access.
+
+### Current security scope
+
+- OpenShift OAuth Proxy;
+- trusted-header authentication;
+- backend AuthZ middleware;
+- OpenShift group lookup;
+- roles: `viewer`, `operator`, `approver`, `admin`;
+- anonymous API/UI blocked through Route;
+- public health endpoints;
+- TLS strict integration baseline;
+- app-dedicated trust bundle;
+- Secret rotation runbook;
+- Kubernetes ServiceAccount token fallback;
+- RBAC least privilege;
+- PostgreSQL NetworkPolicy.
+
+### Current status
+
+Implemented as an advanced security baseline.
+
+---
+
+## 4.11 Operability baseline
+
+### Description
+
+The system must be operable and support production-oriented maintenance procedures.
+
+### Current operability scope
+
+- PostgreSQL operability inventory;
+- backup and restore runbook;
+- isolated restore validation;
+- operability health-check runbook;
+- automated smoke-test script;
+- disaster recovery runbook;
+- maintenance operations runbook;
+- production readiness checklist.
+
+### Current status
+
+Implemented and formally closed as Phase 10 advanced operational baseline.
+
+---
+
+## 4.12 Multi-developer visibility
+
+### Description
+
+The system must remain understandable when multiple developers or operators create and execute ChangeRequests.
+
+### Current scope
+
+- `requestedBy` visible in ChangeRequest list;
+- requester visible in dashboard recent changes;
+- dashboard recent changes limited to the latest five entries;
+- full history available through `/ui/changes`;
+- audit events available per ChangeRequest.
+
+### Current status
+
+Validated through controlled multi-developer test data.
+
+---
+
+## 4.13 Multi-environment direction
+
+### Description
+
+The system must evolve toward environment-aware workflows.
+
+### Target environments
 
 ```text
-ConfigMap-managed APP_VERSION
+dev
+staging
+production
 ```
 
-### Acceptance criteria
+### In-scope design baseline
 
-La funzionalità è completa quando:
+- single multi-environment Control Plane instance;
+- correlated ChangeRequests for promotion;
+- environment-aware RBAC/AuthZ;
+- ConfigMap-driven environment catalog;
+- future promotion metadata such as `promotionGroupID` and `promotedFromChangeNumber`.
 
-- il sistema individua dove è definita `APP_VERSION`;
-- il sistema modifica il file corretto;
-- il sistema produce branch/commit/MR;
-- Tekton valida il manifest;
-- Argo CD sincronizza;
-- il Deployment risultante espone la nuova versione.
+### Current status
+
+Architecture decision and environment configuration model are documented. Runtime implementation is future scope.
 
 ---
 
-## 4.5 F5 - Change PAGE_COLOR
+## 5. Out-of-scope capabilities for the current baseline
 
-### Descrizione
+The following capabilities are outside the current advanced MVP baseline:
 
-Il sistema deve permettere di aggiornare il valore applicativo `PAGE_COLOR`.
+- full enterprise multi-tenant model;
+- full ITSM integration;
+- ServiceNow/Jira integration;
+- dynamic Secret management platform;
+- full production dual-approval workflow;
+- full environment management UI;
+- database-backed environment catalog;
+- advanced visual YAML editor;
+- AI assistant integration;
+- complete replacement of Argo CD UI;
+- complete replacement of Tekton Dashboard;
+- complete GitHub, Gitea or Bitbucket target provider support;
+- full OpenShift cluster disaster recovery;
+- DR of GitLab, Argo CD and Tekton external systems;
+- CLI `devopsctl`, currently optional and deferred.
 
-### Validazioni minime
+These items may be considered in later roadmap phases.
 
-Il valore deve essere validato come colore esadecimale, ad esempio:
+---
+
+## 6. Non-functional requirements
+
+### 6.1 Security
+
+The system must:
+
+- keep GitLab tokens in OpenShift Secrets;
+- keep Argo CD tokens in OpenShift Secrets;
+- keep PostgreSQL credentials in OpenShift Secrets;
+- avoid printing tokens or passwords in logs;
+- avoid committing secrets to Git;
+- enforce AuthN/AuthZ on APIs and UI;
+- use TLS strict mode where possible;
+- use least-privilege RBAC;
+- restrict PostgreSQL ingress through NetworkPolicy;
+- provide documented rotation procedures.
+
+### 6.2 Auditability
+
+Every ChangeRequest must provide enough audit data to answer:
+
+- who requested the change;
+- who executed actions;
+- when actions happened;
+- which workflow steps were executed;
+- which external systems were involved;
+- which evidence was collected;
+- what the final state was.
+
+### 6.3 Repeatability
+
+A workflow must be repeatable and evidence-driven.
+
+When a validation or deployment check fails, the system should record:
+
+- failed phase;
+- reason;
+- diagnostic payload;
+- related external references;
+- recommended troubleshooting direction where possible.
+
+### 6.4 Separation of responsibilities
+
+Responsibilities remain separated:
+
+- GitLab manages repositories, branches, commits and merge requests;
+- Argo CD manages GitOps reconciliation;
+- Tekton manages validation and automation;
+- OpenShift/Kubernetes provides runtime state;
+- PostgreSQL stores functional audit and evidence;
+- DevOps Control Plane orchestrates and correlates.
+
+### 6.5 Operability
+
+The system must be supported by:
+
+- health and readiness endpoints;
+- smoke-test automation;
+- backup/restore procedures;
+- disaster recovery procedures;
+- maintenance procedures;
+- production readiness checklist.
+
+---
+
+## 7. ChangeRequest state model
+
+The current model distinguishes between lifecycle status and runtime status.
+
+### 7.1 Lifecycle status
+
+Lifecycle status represents business/process state, such as:
 
 ```text
-#28A745
-#1E90FF
-#FF0000
+draft
+submitted
+approved
+executing
+executed
+closed
 ```
 
-### Acceptance criteria
+### 7.2 Runtime status
 
-La funzionalità è completa quando:
-
-- il sistema impedisce valori non validi;
-- il sistema aggiorna il file GitOps corretto;
-- il change passa la validazione Tekton;
-- Argo CD applica la modifica;
-- l’applicazione resta `Healthy`.
-
----
-
-## 4.6 F6 - Change ConfigMap values
-
-### Descrizione
-
-Il sistema deve permettere di modificare chiavi/valori in una ConfigMap GitOps.
-
-### Esempio
-
-```yaml
-data:
-  PAGE_COLOR: "#28A745"
-  APP_VERSION: "v2-green"
-```
-
-### Validazioni minime
-
-- la ConfigMap deve esistere nel repository;
-- la ConfigMap deve essere inclusa in `kustomization.yaml`, se il path usa Kustomize;
-- l’AppProject deve consentire `ConfigMap`;
-- il Deployment deve referenziare correttamente le chiavi, se applicabile.
-
-### Nota importante
-
-La modifica di una ConfigMap non sempre causa automaticamente rollout dei Pod.
-
-Se la ConfigMap è usata come variabile ambiente, i Pod devono essere ricreati per acquisire i nuovi valori. Nel futuro sarà necessario decidere una strategia, per esempio:
-
-- aggiornare annotation nel Pod template;
-- gestire checksum ConfigMap;
-- proporre rollout restart controllato;
-- rendere esplicita la necessità di un nuovo rollout.
-
-Questa decisione sarà formalizzata in un ADR dedicato.
-
----
-
-## 4.7 F7 - Validazione YAML con Tekton
-
-### Descrizione
-
-Il sistema deve delegare a Tekton la validazione automatica del change prima della promozione.
-
-### PipelineRun prevista
-
-Nome logico:
+Runtime status represents technical execution state, such as:
 
 ```text
-validate-gitops-change
-```
-
-### Task minime
-
-- clone repository/branch;
-- controllo presenza file modificati;
-- YAML lint, se disponibile;
-- `kustomize build`, se applicabile;
-- `oc apply --dry-run=server`;
-- anti-secret check;
-- verifica policy AppProject, se applicabile;
-- report finale.
-
-### Acceptance criteria
-
-La funzionalità è completa quando:
-
-- il backend crea una `PipelineRun` tramite Kubernetes API;
-- il backend segue lo stato della `PipelineRun`;
-- il backend raccoglie esito e log principali;
-- la ChangeRequest viene aggiornata con risultato Tekton.
-
----
-
-## 4.8 F8 - Sync Argo CD dopo merge o commit approvato
-
-### Descrizione
-
-Dopo il merge della MR o dopo il commit approvato, il sistema deve sincronizzare Argo CD.
-
-### Azioni
-
-- chiamare sync tramite Argo CD API;
-- attendere completamento operazione;
-- attendere stato `Synced`;
-- attendere stato `Healthy`;
-- raccogliere eventuali errori.
-
-### Acceptance criteria
-
-La funzionalità è completa quando:
-
-- il sistema sa distinguere `Synced`, `OutOfSync`, `Healthy`, `Degraded`;
-- il sistema salva l’esito della sync;
-- il sistema salva la revisione Argo CD applicata;
-- il sistema gestisce errori di sync in modo leggibile.
-
----
-
-## 4.9 F9 - Raccolta evidenze
-
-### Descrizione
-
-Il sistema deve raccogliere evidenze tecniche per ogni change.
-
-### Evidenze minime
-
-- stato Application Argo CD;
-- revisione Git;
-- link branch/MR/commit;
-- output validazione Tekton;
-- stato Deployment;
-- stato Pod;
-- stato Service/Route, se applicabile;
-- eventuale health check HTTP;
-- log sintetico del workflow.
-
-### Acceptance criteria
-
-La funzionalità è completa quando:
-
-- ogni ChangeRequest ha un set di evidenze associato;
-- le evidenze sono consultabili via API;
-- le evidenze restano disponibili anche dopo il completamento del change.
-
----
-
-## 4.10 F10 - Storico change interno
-
-### Descrizione
-
-Il sistema deve mantenere una history funzionale dei change.
-
-### Dati minimi
-
-- Change ID;
-- Application;
-- tipo change;
-- richiedente;
-- stato;
-- branch;
-- commit;
-- MR;
-- PipelineRun;
-- revisione Argo CD;
-- timestamp creazione/completamento;
-- esito finale;
-- rollback suggerito.
-
-### Acceptance criteria
-
-La funzionalità è completa quando:
-
-- il backend espone `GET /api/changes`;
-- il backend espone `GET /api/changes/{id}`;
-- ogni change registra eventi di avanzamento;
-- un operatore può ricostruire cosa è successo senza leggere manualmente Git, Argo CD e Tekton separatamente.
-
----
-
-## 5. Funzionalità escluse dal primo MVP
-
-Sono escluse dal primo MVP:
-
-- gestione multi-cluster avanzata;
-- gestione multi-tenant enterprise;
-- approval workflow complessi;
-- integrazione ITSM;
-- supporto ServiceNow/Jira;
-- gestione Secret applicativi;
-- rotazione credenziali;
-- Helm values management avanzato;
-- gestione completa AppProject;
-- editor YAML visuale avanzato;
-- AI assistant integrato;
-- RBAC fine-grained per organizzazione;
-- audit compliance completo;
-- sostituzione UI Argo CD;
-- sostituzione Tekton Dashboard;
-- supporto GitHub/Gitea/Bitbucket come provider target.
-
-Queste funzionalità potranno essere considerate in roadmap successive.
-
----
-
-## 6. Requisiti non funzionali MVP
-
-### 6.1 Sicurezza
-
-- I token GitLab devono essere gestiti come Secret.
-- I token Argo CD devono essere gestiti come Secret.
-- Le password PostgreSQL devono essere gestite come Secret.
-- Nessun token deve essere scritto nei log applicativi.
-- Nessun token deve essere salvato in Git.
-- Tutti i change devono essere tracciati.
-
----
-
-### 6.2 Auditabilità
-
-Ogni ChangeRequest deve avere:
-
-- utente/richiedente;
-- timestamp;
-- input iniziale;
-- eventi workflow;
-- risultato validazione;
-- risultato sync;
-- evidenze;
-- stato finale.
-
----
-
-### 6.3 Ripetibilità
-
-Un workflow deve essere ripetibile e documentabile.
-
-Se una validazione fallisce, il sistema deve registrare:
-
-- fase fallita;
-- errore;
-- suggerimento tecnico, se disponibile;
-- log o payload rilevante.
-
----
-
-### 6.4 Separazione responsabilità
-
-- GitLab gestisce repository, branch, commit e MR.
-- Argo CD gestisce riconciliazione GitOps.
-- Tekton gestisce validazione workflow.
-- PostgreSQL gestisce storico funzionale.
-- DevOps Control Plane orchestra e correla.
-
----
-
-## 7. Modello stati ChangeRequest
-
-Stati iniziali previsti:
-
-```text
-Draft
-Created
 BranchCreated
-FilesUpdated
-ValidationRequested
+CommitCreated
+MergeRequestOpened
+MergeRequestMerged
 ValidationRunning
 ValidationSucceeded
 ValidationFailed
-MergeRequestOpened
-Merged
-SyncRequested
-SyncRunning
-SyncSucceeded
-SyncFailed
+DeploymentSyncedHealthy
+DeploymentProgressing
+DeploymentOutOfSync
+DeploymentDegraded
 EvidenceCollected
-Completed
-Failed
-Cancelled
 ```
 
-### Regola generale
+### 7.3 Event rule
 
-Ogni transizione deve aggiungere un record in `change_events`.
+Every significant transition must create a `change_events` record.
 
 ---
 
-## 8. API MVP previste
+## 8. API scope
+
+The API currently follows a versioned `/api/v1` model and includes endpoints for:
 
 ### Applications
 
 ```text
-GET /api/applications
-GET /api/applications/{name}
-GET /api/applications/{name}/resources
-GET /api/applications/{name}/history
-GET /api/applications/{name}/git/commits
+GET /api/v1/applications
+GET /api/v1/applications/{name}
+GET /api/v1/applications/{name}/resources
+GET /api/v1/applications/{name}/history
+GET /api/v1/applications/{name}/runtime
 ```
 
-### Change Requests
+### ChangeRequests
 
 ```text
-POST /api/changes
-GET  /api/changes
-GET  /api/changes/{id}
-POST /api/changes/{id}/create-branch
-POST /api/changes/{id}/update-files
-POST /api/changes/{id}/validate
-POST /api/changes/{id}/open-merge-request
-POST /api/changes/{id}/sync
-POST /api/changes/{id}/collect-evidence
-POST /api/changes/{id}/cancel
+POST /api/v1/changes
+GET  /api/v1/changes
+GET  /api/v1/changes/{id}
+POST /api/v1/changes/{id}/submit
+POST /api/v1/changes/{id}/approve
+POST /api/v1/changes/{id}/start-execution
+POST /api/v1/changes/{id}/complete-execution
+POST /api/v1/changes/{id}/close
+POST /api/v1/changes/{id}/create-branch
+POST /api/v1/changes/{id}/update-files
+POST /api/v1/changes/{id}/open-merge-request
+POST /api/v1/changes/{id}/merge-request
+POST /api/v1/changes/{id}/validate
+POST /api/v1/changes/{id}/check-validation
+POST /api/v1/changes/{id}/check-deployment
+POST /api/v1/changes/{id}/collect-evidence
+GET  /api/v1/changes/{id}/evidence
+GET  /api/v1/changes/{id}/evidence/{type}
+GET  /api/v1/changes/{id}/events
 ```
 
 ### Health
 
 ```text
-GET /healthz
 GET /readyz
+GET /livez
 ```
+
+Legacy or early endpoint references should be updated to the current `/api/v1` model during documentation migration.
 
 ---
 
-## 9. Milestone MVP
+## 9. Implementation milestones — current status
 
-## 9.1 Milestone 0.1 - Project bootstrap
+The initial MVP milestone plan has been superseded by actual implementation progress.
 
-### Obiettivo
+### Completed foundation
 
-Preparare repository, struttura progetto e backend minimo.
+- Go project bootstrap;
+- PostgreSQL integration;
+- migrations;
+- ChangeRequest model;
+- lifecycle transitions;
+- audit events;
+- health endpoints.
 
-### Deliverable
+### Completed integrations
 
-- struttura directory;
-- `docs/00-vision.md`;
-- `docs/01-scope-mvp.md`;
-- Go module;
-- endpoint `/healthz`;
-- configurazione base;
-- Dockerfile iniziale;
-- connessione PostgreSQL;
-- migration iniziale.
+- GitLab create branch;
+- GitLab update files;
+- GitLab open merge request;
+- GitLab merge request merge;
+- Tekton validation;
+- Tekton diagnostics;
+- Argo CD application client;
+- Argo CD deployment check;
+- Kubernetes/OpenShift runtime evidence.
 
-### Criterio di completamento
+### Completed UI baseline
 
-Il servizio parte localmente ed espone:
+- dashboard;
+- applications pages;
+- ChangeRequest pages;
+- evidence pages;
+- audit pages;
+- technical action forms;
+- requester visibility;
+- dashboard recent changes limit.
+
+### Completed security and operations baseline
+
+- OAuth Proxy;
+- AuthN/AuthZ;
+- OpenShift group lookup;
+- TLS strict baseline;
+- RBAC least privilege;
+- NetworkPolicy;
+- PostgreSQL backup/restore;
+- DR;
+- maintenance;
+- production readiness.
+
+### Design in progress
+
+- multi-environment support;
+- promotion metadata;
+- final technical documentation;
+- documentation language migration.
+
+---
+
+## 10. Global acceptance criteria for the advanced MVP baseline
+
+The advanced MVP baseline is considered achieved when the following are true:
+
+1. the service runs on OpenShift;
+2. PostgreSQL persistence is operational;
+3. health and readiness endpoints work;
+4. Argo CD applications can be queried;
+5. ChangeRequests can be created and tracked;
+6. lifecycle and technical events are persisted;
+7. GitLab technical workflow is available;
+8. Tekton validation can be triggered and checked;
+9. validation evidence is stored;
+10. Argo CD deployment state can be checked;
+11. Kubernetes/OpenShift runtime evidence is collected;
+12. the UI exposes dashboard, changes, evidence and audit views;
+13. OAuth Proxy protects UI and API routes;
+14. backend AuthZ enforces role-based access;
+15. Secrets are not printed or committed;
+16. TLS strict baseline is implemented;
+17. RBAC least privilege is implemented;
+18. PostgreSQL NetworkPolicy is implemented;
+19. backup/restore is documented and validated;
+20. disaster recovery and maintenance runbooks exist;
+21. production readiness checklist exists;
+22. multi-developer visibility is validated.
+
+---
+
+## 11. Main risks and mitigations
+
+### 11.1 Workflow complexity
+
+Risk:
 
 ```text
-GET /healthz -> ok
+Building too many workflows before stabilizing the core path.
 ```
 
----
-
-## 9.2 Milestone 0.2 - PostgreSQL change store
-
-### Obiettivo
-
-Creare modello dati iniziale per ChangeRequest.
-
-### Deliverable
-
-- migration `applications`;
-- migration `change_requests`;
-- migration `change_events`;
-- migration `evidences`;
-- repository Go per persistenza;
-- API base per change.
-
-### Criterio di completamento
-
-È possibile creare e leggere una ChangeRequest via API.
-
----
-
-## 9.3 Milestone 0.3 - Argo CD API discovery
-
-### Obiettivo
-
-Integrare Argo CD API per listare applicazioni e stato.
-
-### Deliverable
-
-- Argo CD client;
-- lista Application;
-- dettaglio Application;
-- sync/health/revision;
-- resources;
-- orphaned resources.
-
-### Criterio di completamento
-
-`GET /api/applications` restituisce almeno una Application reale con stato coerente con Argo CD.
-
----
-
-## 9.4 Milestone 0.4 - GitLab read operations
-
-### Obiettivo
-
-Integrare GitLab API in sola lettura.
-
-### Deliverable
-
-- GitLab client;
-- lettura file;
-- lettura commit;
-- lettura branch;
-- mapping Application -> repository/path.
-
-### Criterio di completamento
-
-Il sistema mostra ultimo commit e file GitOps principali per una Application.
-
----
-
-## 9.5 Milestone 0.5 - Primo workflow change repliche
-
-### Obiettivo
-
-Implementare il primo change end-to-end.
-
-### Deliverable
-
-- creazione ChangeRequest;
-- creazione branch GitLab;
-- modifica `replicas`;
-- commit o MR;
-- stato change aggiornato;
-- sync Argo CD;
-- evidenza finale.
-
-### Criterio di completamento
-
-Un operatore può modificare le repliche di una applicazione tramite DevOps Control Plane senza usare manualmente `git`, `argocd` o `oc` come workflow principale.
-
----
-
-## 9.6 Milestone 0.6 - Tekton validation
-
-### Obiettivo
-
-Integrare validazione tramite Tekton.
-
-### Deliverable
-
-- template `PipelineRun`;
-- creazione via Kubernetes API;
-- polling stato;
-- raccolta log;
-- salvataggio esito.
-
-### Criterio di completamento
-
-Ogni change può essere validato da una PipelineRun Tekton prima di essere promosso.
-
----
-
-## 10. Acceptance criteria globali MVP
-
-L’MVP è considerato completato quando:
-
-1. il servizio Go parte e si connette a PostgreSQL;
-2. il servizio espone endpoint health;
-3. il servizio lista Application Argo CD;
-4. il servizio mostra dettaglio Application;
-5. il servizio legge dati GitLab almeno in modalità read;
-6. il servizio crea ChangeRequest;
-7. il servizio esegue almeno un workflow di change repliche;
-8. il servizio registra eventi change;
-9. il servizio invoca una validazione Tekton;
-10. il servizio sincronizza Argo CD;
-11. il servizio raccoglie evidenze;
-12. il servizio mantiene uno storico consultabile.
-
----
-
-## 11. Rischi principali
-
-### 11.1 Complessità workflow
-
-Rischio:
+Mitigation:
 
 ```text
-Costruire troppi workflow prima di stabilizzare il primo.
+Keep workflows incremental and evidence-driven. Validate each technical step before expanding the scope.
 ```
 
-Mitigazione:
+### 11.2 Integration drift
+
+Risk:
 
 ```text
-Partire dal change repliche, poi estendere a APP_VERSION, PAGE_COLOR e ConfigMap.
+GitLab, Tekton, Argo CD and OpenShift behavior may drift from repository assumptions.
+```
+
+Mitigation:
+
+```text
+Use adapters, runtime validation, smoke tests and runbooks.
+```
+
+### 11.3 GitOps drift
+
+Risk:
+
+```text
+Runtime changes may bypass Git.
+```
+
+Mitigation:
+
+```text
+Keep Git as the source of desired state. Treat imperative runtime commands as troubleshooting tools, not final workflow state.
+```
+
+### 11.4 Credential exposure
+
+Risk:
+
+```text
+GitLab, Argo CD, Kubernetes or database credentials may be exposed in logs or output.
+```
+
+Mitigation:
+
+```text
+Use OpenShift Secrets, avoid decoding values in shared logs, enforce anti-secret checks and rotate exposed credentials.
+```
+
+### 11.5 Production complexity
+
+Risk:
+
+```text
+Production environments require stricter approval, evidence and operational controls.
+```
+
+Mitigation:
+
+```text
+Introduce environment-aware RBAC/AuthZ, promotion chains and production-specific guardrails before enabling production workflows.
 ```
 
 ---
 
-### 11.2 Integrazioni premature
+## 12. Recommended execution direction
 
-Rischio:
-
-```text
-Implementare UI o funzioni enterprise prima che gli adapter siano affidabili.
-```
-
-Mitigazione:
+The recommended direction is:
 
 ```text
-API e workflow prima della UI completa.
-```
-
----
-
-### 11.3 Drift GitOps
-
-Rischio:
-
-```text
-Permettere modifiche runtime dirette che non passano da Git.
-```
-
-Mitigazione:
-
-```text
-Bloccare modifiche runtime come workflow permanente.
+1. Keep the current advanced MVP stable.
+2. Continue documentation language migration.
+3. Complete multi-environment design.
+4. Introduce promotion metadata incrementally.
+5. Add environment-aware UI filtering.
+6. Extend environment-aware AuthZ.
+7. Enable staging before production.
+8. Keep production disabled until guardrails are validated.
 ```
 
 ---
 
-### 11.4 Gestione credenziali
+## 13. Key message
 
-Rischio:
+The DevOps Control Plane scope is to provide a small but solid orchestration, governance and audit layer for GitOps workflows.
+
+The project started with a first MVP scope, but it has evolved into an advanced operational baseline with security, evidence, UI, backup/restore and production-readiness capabilities.
+
+The next scope evolution is controlled multi-environment support across:
 
 ```text
-Token GitLab o Argo CD esposti in log o repository.
+dev -> staging -> production
 ```
 
-Mitigazione:
+The priority remains the same:
 
 ```text
-Secret, masking log, anti-secret check e revisione sicurezza.
+safe GitOps workflows
+clear audit trail
+repeatable validation
+consistent evidence
+operational readiness
 ```
 
 ---
 
-## 12. Ordine consigliato di implementazione
+## 14. Revision history
 
-Ordine raccomandato:
-
-1. backend Go minimale;
-2. configurazione e logging;
-3. PostgreSQL connection;
-4. migrations;
-5. health endpoints;
-6. modello ChangeRequest;
-7. Argo CD API adapter;
-8. GitLab API adapter read-only;
-9. ChangeRequest API;
-10. workflow repliche senza Tekton;
-11. Tekton validation;
-12. evidence collector;
-13. workflow APP_VERSION;
-14. workflow PAGE_COLOR;
-15. workflow ConfigMap;
-16. pagine HTML minime;
-17. UI Bootstrap completa.
-
----
-
-## 13. Regola di avanzamento progetto
-
-Non si passa alla milestone successiva se:
-
-- la milestone corrente non ha documentazione aggiornata;
-- non esiste almeno un test manuale ripetibile;
-- non è chiaro come raccogliere evidenza;
-- non è chiaro come tornare indietro;
-- ci sono token o secret nel repository.
-
----
-
-## 14. Messaggio chiave
-
-Il primo MVP del DevOps Control Plane deve essere piccolo ma solido.
-
-La priorità non è costruire subito una UI ricca, ma stabilizzare i workflow end-to-end:
-
-```text
-GitLab branch/commit/MR
-        -> Tekton validation
-        -> Argo CD sync
-        -> OpenShift runtime validation
-        -> evidence
-        -> PostgreSQL history
-```
-
-Quando questi workflow saranno affidabili, la Web UI potrà essere costruita sopra una base stabile.
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial MVP scope in Italian. |
+| 2026-07-03 | 0.2 | Rewritten in English and refreshed to align with the current advanced MVP, security and operational baseline. |
