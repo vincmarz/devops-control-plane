@@ -1,1027 +1,1494 @@
-# DevOps Control Plane - Non-Functional Requirements
+# DevOps Control Plane — Non-Functional Requirements
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-**Stato:** Draft iniziale / Non-Functional Requirements
+## Document metadata
+
+- **Project:** DevOps Control Plane
+- **Document:** 04 — Non-Functional Requirements
+- **Version:** 0.2
+- **Date:** 2026-07-03
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+- **Status:** Rewritten in English and refreshed to align with the current advanced MVP, security, operability and production-readiness baseline
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 1. Scopo del documento
+## 1. Purpose
 
-Questo documento definisce i **requisiti non funzionali** del progetto **DevOps Control Plane**.
+This document defines the non-functional requirements of the DevOps Control Plane.
 
-I requisiti non funzionali descrivono le qualità attese del sistema, indipendentemente dalle singole funzionalità applicative. In particolare, questo documento copre:
+Non-functional requirements describe the expected qualities of the system independently from individual functional capabilities. This refreshed version aligns the original MVP-oriented document with the current advanced MVP and operational baseline.
 
-- sicurezza;
-- gestione credenziali;
-- auditabilità;
-- osservabilità;
-- affidabilità;
-- resilienza;
+This document covers:
+
+- security;
+- authentication and authorization;
+- credential and Secret handling;
+- auditability;
+- observability;
+- operability;
+- reliability;
+- resilience;
 - performance;
-- scalabilità;
-- manutenibilità;
-- configurabilità;
-- portabilità;
-- usabilità;
-- compliance GitOps;
-- gestione errori;
-- backup e recovery;
-- requisiti di deployment su OpenShift.
+- scalability;
+- maintainability;
+- configurability;
+- usability;
+- GitOps compliance;
+- error handling;
+- backup, restore and disaster recovery;
+- OpenShift deployment requirements;
+- testing;
+- documentation and repository language requirements;
+- multi-developer and multi-environment readiness.
 
-Il documento completa `docs/03-functional-requirements.md` e sarà usato come riferimento per architettura, data model, API design, deployment e implementazione.
+This document complements `docs/03-functional-requirements.md` and should be used as input for architecture, deployment, runbooks, production readiness and final technical documentation.
 
 ---
 
-## 2. Convenzioni
+## 2. Requirement conventions
 
-## 2.1 Classificazione requisiti
+### 2.1 Priority levels
 
-| Priorità | Significato |
+| Priority | Meaning |
 |---|---|
-| MUST | Obbligatorio per MVP o per sicurezza base |
-| SHOULD | Importante, ma non bloccante per primo rilascio |
-| COULD | Utile per evoluzioni successive |
-| WON'T | Fuori scope per MVP |
+| MUST | Required for the current baseline, security or safe operation |
+| SHOULD | Important and expected, but may be implemented incrementally |
+| COULD | Useful future enhancement |
+| WON'T | Explicitly outside the current baseline |
+
+### 2.2 General principle
+
+The DevOps Control Plane orchestrates GitOps workflows and integrates with systems that can affect application and platform runtime state:
+
+- GitLab;
+- Tekton;
+- Argo CD;
+- OpenShift/Kubernetes;
+- PostgreSQL.
+
+Therefore, even the MVP baseline must be designed with strong attention to:
+
+- credential protection;
+- traceability;
+- predictable failure behavior;
+- safe logging;
+- separation between Git desired state and cluster runtime state;
+- avoidance of permanent runtime changes outside Git;
+- production-oriented operability.
 
 ---
 
-## 2.2 Principio generale
+# 3. Security requirements
 
-DevOps Control Plane gestirà workflow GitOps e interagirà con sistemi critici come GitLab, Argo CD, Tekton e OpenShift.
+## NFR-SEC-001 — Secure token and credential handling
 
-Per questo motivo, anche nel primo MVP, il sistema deve essere progettato con attenzione a:
-
-- protezione delle credenziali;
-- tracciabilità dei change;
-- comportamento prevedibile in caso di errore;
-- logging utile ma non rischioso;
-- separazione tra stato desiderato Git e stato runtime cluster;
-- assenza di modifiche runtime permanenti fuori Git.
-
----
-
-# 3. Security Requirements
-
-## NFR-SEC-001 - Gestione sicura dei token
-
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il sistema deve gestire in modo sicuro i token e le credenziali usate per accedere a:
+The system must handle tokens and credentials safely for:
 
 - GitLab API;
 - Argo CD API;
 - Kubernetes/OpenShift API;
 - PostgreSQL.
 
-### Regole
+### Rules
 
-- Nessun token deve essere salvato nel repository Git.
-- Nessun token deve essere scritto nei log applicativi.
-- Nessun token deve essere restituito tramite API.
-- Nessun token deve essere incluso nelle evidenze.
-- I token devono essere forniti tramite Secret Kubernetes/OpenShift o variabili ambiente sicure.
-- Il file `.env` deve essere ammesso solo per sviluppo locale e deve restare ignorato da Git.
+- Tokens must not be stored in Git.
+- Tokens must not be printed in application logs.
+- Tokens must not be returned by APIs.
+- Tokens must not be included in evidence payloads.
+- Tokens and credentials must be provided through OpenShift Secrets or equivalent secure runtime mechanisms.
+- Local `.env` files are allowed only for local development and must remain ignored by Git.
 
 ### Acceptance criteria
 
-- `.gitignore` include `.env`, `*.env`, chiavi private e directory secret.
-- Gli errori di autenticazione non stampano token.
-- Le evidenze non contengono valori sensibili.
+- `.gitignore` excludes `.env`, `*.env`, private keys and local secret artifacts.
+- Authentication errors do not print token values.
+- Evidence payloads are sanitized.
+- Secret inventory procedures list keys only, never values.
+
+### Current status
+
+Implemented through OpenShift Secrets, runbooks and operational guardrails.
 
 ---
 
-## NFR-SEC-002 - Principio del minimo privilegio
+## NFR-SEC-002 — Least privilege
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Le credenziali usate dal DevOps Control Plane devono avere solo i privilegi necessari.
+Credentials and ServiceAccounts used by the DevOps Control Plane must have only the permissions required for the intended workflows.
 
-### Regole
+### Rules
 
-Per GitLab:
+For GitLab:
 
-- leggere repository configurati;
-- creare branch;
-- aggiornare file;
-- creare commit;
-- aprire merge request.
+- read configured repositories;
+- create branches;
+- update files;
+- create commits;
+- open and merge merge requests where allowed.
 
-Per Argo CD:
+For Argo CD:
 
-- leggere Application;
-- leggere resources/history;
-- lanciare sync sulle Application autorizzate.
+- read Applications;
+- read resources and history;
+- perform deployment checks;
+- use a dedicated account with minimum required permissions.
 
-Per Kubernetes/OpenShift:
+For Kubernetes/OpenShift:
 
-- creare/leggere PipelineRun nel namespace Tekton previsto;
-- leggere stato TaskRun e log rilevanti;
-- leggere risorse runtime necessarie alle evidenze;
-- non avere privilegi cluster-admin per default.
+- create and read Tekton `PipelineRun` resources in the configured namespace;
+- read `TaskRun` status and diagnostics;
+- read runtime resources required for evidence;
+- avoid cluster-admin privileges by default;
+- deny access to application Secrets unless explicitly required and approved.
 
 ### Acceptance criteria
 
-- I permessi sono documentati in `docs/09-security-rbac.md`.
-- Il deployment OpenShift usa ServiceAccount dedicata.
-- I token personali non sono usati come soluzione stabile di produzione.
+- Runtime RBAC is least-privilege.
+- `oc auth can-i` checks are documented in the operability smoke test.
+- The runtime ServiceAccount cannot read DevOps Control Plane Secrets.
+- Production-related permissions are not granted before production guardrails are implemented.
+
+### Current status
+
+Implemented as an advanced baseline for the current OpenShift lab.
 
 ---
 
-## NFR-SEC-003 - Separazione dati sensibili e non sensibili
+## NFR-SEC-003 — Separation of sensitive and non-sensitive configuration
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il sistema deve distinguere chiaramente tra configurazioni non sensibili e dati sensibili.
+The system must distinguish between non-sensitive configuration and sensitive values.
 
-### Regole
+### Rules
 
-- Configurazioni applicative non sensibili possono stare in ConfigMap.
-- Password, token, chiavi private e credenziali devono stare in Secret.
-- DevOps Control Plane non deve proporre workflow che salvino secret in ConfigMap o in Git.
+- Non-sensitive application configuration can be stored in ConfigMaps.
+- Passwords, tokens, private keys and credentials must be stored in Secrets.
+- The Control Plane must not create workflows that store Secrets in Git or ConfigMaps.
+- Environment configuration should not contain secret values.
 
 ### Acceptance criteria
 
-- I workflow ConfigMap includono warning didattico.
-- Il controllo anti-secret blocca o segnala pattern sospetti.
+- ConfigMap examples contain no real tokens.
+- Secret templates use placeholders only.
+- Documentation clearly distinguishes ConfigMaps and Secrets.
+
+### Current status
+
+Implemented through manifests, runbooks and repository conventions.
 
 ---
 
-## NFR-SEC-004 - Anti-secret scanning
+## NFR-SEC-004 — Anti-secret validation
 
-### Priorità
+### Priority
+
+MUST
+
+### Description
+
+The system must include anti-secret guardrails in GitOps validation.
+
+### Patterns and objects
+
+Validation should detect or block:
+
+- Kubernetes `Secret` manifests where not explicitly allowed;
+- inline password-like values;
+- token-like values;
+- client secrets;
+- private keys;
+- AWS access key patterns;
+- bearer tokens or authorization headers;
+- Docker auth configuration artifacts.
+
+### Acceptance criteria
+
+- Tekton validation blocks suspicious Secret-like content.
+- Policy failure messages are actionable.
+- Safe external Secret references can be allowed where policy permits.
+
+### Current status
+
+Implemented in the Tekton GitOps validation pipeline.
+
+---
+
+## NFR-SEC-005 — TLS and trust management
+
+### Priority
+
+MUST
+
+### Description
+
+The system must use strict TLS verification for supported integrations and must avoid relying on insecure TLS flags in the production-oriented baseline.
+
+### Rules
+
+- Argo CD integration must use TLS strict mode.
+- GitLab integration must use TLS strict mode.
+- Kubernetes/OpenShift integration must use ServiceAccount token and CA where possible.
+- App-dedicated trust bundles should be used when cluster-wide trust bundles are insufficient.
+
+### Acceptance criteria
+
+- `ARGOCD_INSECURE_TLS=false`.
+- `GITLAB_INSECURE_TLS=false`.
+- `KUBERNETES_INSECURE_TLS=false`.
+- The application can validate the relevant route certificates through a configured trust bundle.
+
+### Current status
+
+Implemented for the current baseline.
+
+---
+
+# 4. Authentication and authorization requirements
+
+## NFR-AUTH-001 — OpenShift OAuth Proxy protection
+
+### Priority
+
+MUST
+
+### Description
+
+The UI and API exposed through the OpenShift Route must be protected by OpenShift OAuth Proxy.
+
+### Acceptance criteria
+
+- Anonymous Route access to API endpoints returns HTTP 403.
+- Anonymous Route access to UI pages returns HTTP 403.
+- Public health endpoints remain accessible.
+- Browser login through OpenShift OAuth works.
+
+### Current status
+
+Implemented.
+
+---
+
+## NFR-AUTH-002 — Backend authorization
+
+### Priority
+
+MUST
+
+### Description
+
+The backend must enforce authorization based on trusted headers and resolved OpenShift groups.
+
+### Roles
+
+```text
+viewer
+operator
+approver
+admin
+```
+
+### Rules
+
+- Anonymous direct backend API access must be rejected.
+- Unknown or unclassified endpoints must fail closed.
+- Operators, approvers and admins must have differentiated permissions.
+- OpenShift group lookup must be supported.
+
+### Acceptance criteria
+
+- Viewer can read allowed resources.
+- Operator can execute allowed technical actions.
+- Approver can execute approval actions where authorized.
+- Admin can perform administrative actions.
+- Users without mapped groups are rejected.
+
+### Current status
+
+Implemented.
+
+---
+
+## NFR-AUTH-003 — Environment-aware authorization readiness
+
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Il sistema dovrebbe eseguire un controllo anti-secret sui file modificati prima di commit/MR.
+Authorization must evolve to include target environment context.
 
-### Pattern minimi da intercettare
+### Future dimensions
 
-- `token`;
-- `password`;
-- `secret`;
-- `auth`;
-- `PRIVATE KEY`;
-- `BEGIN RSA`;
-- `ghp_`;
-- `github_pat_`;
-- `AKIA`;
-- `ASIA`;
-- file `config.json` Docker auth;
-- file dockerconfig.
+```text
+actor
+role
+action
+targetEnvironment
+approvalPolicy
+```
 
 ### Acceptance criteria
 
-- Se il controllo trova pattern sospetti, il workflow passa in stato `ValidationFailed` o richiede review.
-- Il messaggio spiega quale file contiene il possibile secret.
+- `dev`, `staging` and `production` can have differentiated authorization policy.
+- Production actions require production-appropriate groups before being enabled.
+- Unknown or disabled environments are rejected fail-closed.
+
+### Current status
+
+Design documented. Runtime implementation is future scope.
 
 ---
 
-# 4. Auditability Requirements
+# 5. Auditability requirements
 
-## NFR-AUD-001 - Tracciabilità completa della ChangeRequest
+## NFR-AUD-001 — End-to-end ChangeRequest traceability
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Ogni ChangeRequest deve essere completamente tracciabile.
+Every ChangeRequest must be traceable from creation to final state.
 
-### Dati minimi
+### Minimum data
 
-- Change ID;
-- applicazione;
-- tipo change;
-- richiedente;
-- payload iniziale;
-- branch GitLab;
+- ChangeRequest number;
+- application;
+- target environment;
+- change type;
+- requester;
+- lifecycle status;
+- runtime status;
+- GitLab branch;
 - commit;
 - merge request;
-- PipelineRun Tekton;
-- sync Argo CD;
-- revisione applicata;
-- stato finale;
-- timestamp principali.
+- Tekton PipelineRun;
+- Argo CD deployment state;
+- evidence records;
+- main timestamps.
 
 ### Acceptance criteria
 
-- Ogni stato produce un evento in `change_events`.
-- Ogni ChangeRequest ha timeline consultabile.
-- Gli eventi sono ordinabili temporalmente.
+- Every significant state transition creates an event in `change_events`.
+- Every ChangeRequest has a readable timeline.
+- Events can be ordered by timestamp.
+- UI and API expose audit history.
+
+### Current status
+
+Implemented.
 
 ---
 
-## NFR-AUD-002 - Evidenze persistenti
+## NFR-AUD-002 — Persistent evidence
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Le evidenze principali devono essere persistite in PostgreSQL o in storage referenziato dal database.
+Key evidence must be persisted in PostgreSQL or in storage referenced by PostgreSQL.
 
-### Tipi evidenza
+### Evidence types
 
-- summary change;
-- diff Git;
-- esito Tekton;
-- stato Argo CD;
-- stato Deployment;
-- stato Pod;
-- stato ConfigMap, se coinvolta;
-- stato Route/health check, se disponibile.
+- validation evidence;
+- deployment evidence;
+- runtime evidence;
+- diagnostics summaries.
 
 ### Acceptance criteria
 
-- Ogni ChangeRequest completata o fallita ha evidenze associate.
-- Le evidenze non contengono token o secret.
-- Le evidenze restano disponibili dopo riavvio applicazione.
+- Evidence is associated with a ChangeRequest.
+- Evidence is available after application restart.
+- Evidence contains no tokens or Secret values.
+- Evidence can be reviewed through API and UI.
+
+### Current status
+
+Implemented.
 
 ---
 
-## NFR-AUD-003 - Differenza tra history Git, Argo CD e ChangeRequest
+## NFR-AUD-003 — Clear distinction between external histories
 
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Il sistema deve rendere chiara la differenza tra:
+The system must make clear the difference between:
 
 - Git history;
 - Argo CD history;
-- ChangeRequest history interna.
+- Tekton execution history;
+- DevOps Control Plane ChangeRequest history.
 
-### Regola didattica
+### Educational rule
 
-Git descrive cosa è cambiato nei file.  
-Argo CD descrive cosa è stato sincronizzato sul cluster.  
-DevOps Control Plane descrive perché il change è stato fatto, da chi, con quale workflow e con quali evidenze.
+```text
+Git describes what changed in files.
+Argo CD describes what was reconciled to the cluster.
+Tekton describes validation and automation execution.
+DevOps Control Plane describes why the change happened, who requested it, which workflow was executed and which evidence was collected.
+```
 
 ### Acceptance criteria
 
-- Il dettaglio ChangeRequest mostra riferimenti a commit Git, revision Argo CD e PipelineRun Tekton separatamente.
+- ChangeRequest detail separates GitLab, Tekton, Argo CD and evidence references.
+- The UI does not merge unrelated histories into a single ambiguous status.
+
+### Current status
+
+Implemented in the current UI/API baseline, with ongoing refinement expected.
 
 ---
 
-# 5. Observability Requirements
+# 6. Observability and operability requirements
 
-## NFR-OBS-001 - Logging strutturato
+## NFR-OBS-001 — Structured logging
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il backend deve produrre log strutturati.
+The backend must produce useful logs without exposing sensitive values.
 
-### Campi minimi consigliati
+### Recommended fields
 
 - timestamp;
 - level;
 - component;
-- requestId;
-- changeId, se applicabile;
-- applicationName, se applicabile;
+- request ID if available;
+- change number where applicable;
+- application name where applicable;
 - operation;
 - status;
-- errorCode, se applicabile.
+- error code where applicable.
 
-### Regole
+### Rules
 
-- Non loggare token.
-- Non loggare password.
-- Non loggare payload completi se contengono dati sensibili.
+- Do not log tokens.
+- Do not log passwords.
+- Do not log full payloads when they may contain sensitive values.
 
 ### Acceptance criteria
 
-- Ogni richiesta API genera log start/end o equivalente.
-- Ogni errore produce log con codice e messaggio.
+- Errors produce log entries with actionable context.
+- Sensitive values are not printed.
+
+### Current status
+
+Implemented as a baseline.
 
 ---
 
-## NFR-OBS-002 - Health e readiness endpoint
+## NFR-OBS-002 — Health and readiness endpoints
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il servizio deve esporre endpoint di health e readiness.
+The service must expose health endpoints.
 
-### Endpoint minimi
+### Endpoints
 
 ```text
-GET /healthz
+GET /livez
 GET /readyz
 ```
 
-### Regole
+### Rules
 
-`/healthz` verifica che il processo sia vivo.  
-`/readyz` verifica dipendenze minime, almeno PostgreSQL.
-
-### Acceptance criteria
-
-- `/healthz` restituisce `200 OK` quando il processo è attivo.
-- `/readyz` restituisce errore se PostgreSQL non è disponibile.
-
----
-
-## NFR-OBS-003 - Metriche base
-
-### Priorità
-
-SHOULD
-
-### Descrizione
-
-Il sistema dovrebbe esporre metriche base in formato compatibile con Prometheus.
-
-### Metriche candidate
-
-- numero ChangeRequest create;
-- numero ChangeRequest completed/failed;
-- durata workflow;
-- errori GitLab API;
-- errori Argo CD API;
-- errori Tekton;
-- durata sync Argo CD;
-- durata validazione Tekton.
+- `/livez` verifies that the process is alive.
+- `/readyz` verifies at least database readiness.
+- Health endpoints must be reachable through the Route without authentication.
+- UI and API business endpoints must remain protected.
 
 ### Acceptance criteria
 
-- Endpoint `/metrics` disponibile in roadmap MVP avanzata.
+- Route `/livez` returns HTTP 200 when healthy.
+- Route `/readyz` returns HTTP 200 when ready.
+- Backend direct endpoints return HTTP 200 when healthy.
+
+### Current status
+
+Implemented.
 
 ---
 
-# 6. Reliability Requirements
+## NFR-OBS-003 — Automated operability smoke test
 
-## NFR-REL-001 - Fallimento non ambiguo
-
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il sistema deve evitare stati ambigui in caso di errore.
+The repository must include an automated smoke-test script for runtime validation.
 
-### Regole
+### Requirements
 
-- Se fallisce GitLab branch creation, lo stato deve indicare il fallimento.
-- Se fallisce commit, lo stato deve indicare il fallimento.
-- Se fallisce Tekton, lo stato deve essere `ValidationFailed`.
-- Se fallisce Argo CD sync, lo stato deve essere `SyncFailed`.
-- Se fallisce evidence collection, il change può essere completato con warning solo se runtime e sync sono corretti.
+The smoke test should validate:
 
-### Acceptance criteria
-
-- Nessuna ChangeRequest resta indefinitamente in stato intermedio senza timeout.
-- Ogni errore produce evento e messaggio leggibile.
-
----
-
-## NFR-REL-002 - Idempotenza operazioni critiche
-
-### Priorità
-
-SHOULD
-
-### Descrizione
-
-Le operazioni critiche dovrebbero essere progettate per supportare retry controllati.
-
-### Esempi
-
-- recupero Application Argo CD;
-- polling PipelineRun;
-- polling sync Argo CD;
-- raccolta evidenze;
-- lettura file GitLab.
-
-### Regole
-
-Le operazioni che creano oggetti, come branch, commit o PipelineRun, devono gestire duplicati e retry con attenzione.
+- namespace state;
+- deployments;
+- pods;
+- services;
+- route;
+- PVC;
+- logs;
+- events;
+- sanitized configuration;
+- route endpoints;
+- backend endpoints through port-forward;
+- PostgreSQL connectivity and counts;
+- NetworkPolicy;
+- RBAC;
+- `can-i` checks.
 
 ### Acceptance criteria
 
-- Retry non crea branch duplicati senza controllo.
-- Retry non crea commit duplicati senza controllo.
-- Retry non crea PipelineRun duplicate senza riferimento alla ChangeRequest.
+- The script creates an evidence directory.
+- The script avoids printing Secret values.
+- A healthy baseline can reach `PASS=35 WARN=0 FAIL=0`.
+- Historical transient events are distinguishable from current runtime impact.
+
+### Current status
+
+Implemented in `scripts/operability/health-check.sh`.
 
 ---
 
-## NFR-REL-003 - Timeout espliciti
+## NFR-OBS-004 — Metrics readiness
 
-### Priorità
+### Priority
+
+COULD
+
+### Description
+
+The system may expose Prometheus-compatible metrics in a future phase.
+
+### Candidate metrics
+
+- number of ChangeRequests created;
+- number of completed and failed ChangeRequests;
+- workflow duration;
+- GitLab API errors;
+- Argo CD API errors;
+- Tekton validation failures;
+- evidence collection duration.
+
+### Current status
+
+Future enhancement.
+
+---
+
+# 7. Reliability and resilience requirements
+
+## NFR-REL-001 — Non-ambiguous failure states
+
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Ogni integrazione esterna deve avere timeout.
+The system must avoid ambiguous states after failures.
 
-### Dipendenze coinvolte
+### Rules
+
+- Failed Tekton validation maps to `ValidationFailed`.
+- Failed deployment checks map to explicit deployment runtime status where possible.
+- Failed authorization must not execute actions.
+- Failed evidence collection must return a readable error.
+- Failures must create events where associated with a ChangeRequest.
+
+### Acceptance criteria
+
+- No workflow remains indefinitely in an intermediate state without diagnostic information.
+- Every failure produces a readable error.
+- Every relevant failure is auditable.
+
+### Current status
+
+Implemented for the main workflows.
+
+---
+
+## NFR-REL-002 — Controlled retry and idempotency
+
+### Priority
+
+SHOULD
+
+### Description
+
+Critical operations should support controlled retry without creating duplicate or inconsistent external resources.
+
+### Examples
+
+- Argo CD application retrieval;
+- Tekton validation status polling;
+- Argo CD deployment status checks;
+- evidence collection;
+- GitLab branch creation;
+- GitLab merge request opening.
+
+### Acceptance criteria
+
+- Retry does not create uncontrolled duplicate branches.
+- Retry does not create uncontrolled duplicate PipelineRuns.
+- Retry behavior is documented where manual operation is required.
+
+### Current status
+
+Partially implemented through explicit technical actions and status checks.
+
+---
+
+## NFR-REL-003 — Explicit timeouts
+
+### Priority
+
+MUST
+
+### Description
+
+External integrations must use explicit timeouts where applicable.
+
+### Dependencies
 
 - GitLab API;
 - Argo CD API;
-- Kubernetes API;
+- Kubernetes/OpenShift API;
 - PostgreSQL;
-- health check HTTP verso applicazioni.
+- HTTP health checks.
 
 ### Acceptance criteria
 
-- Nessuna chiamata esterna resta appesa indefinitamente.
-- I timeout sono configurabili.
-- Il timeout produce stato e evento coerente.
+- External calls do not hang indefinitely.
+- Timeouts are configurable where needed.
+- Timeout failures produce readable errors.
+
+### Current status
+
+Baseline behavior implemented, with further tuning expected.
 
 ---
 
-# 7. Performance Requirements
+# 8. Performance and scalability requirements
 
-## NFR-PERF-001 - Performance API base
+## NFR-PERF-001 — Baseline API performance
 
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Le API principali devono rispondere in tempi accettabili per uso operativo.
+Main APIs should respond in acceptable time for operational use.
 
-### Target iniziali indicativi
+### Initial targets
 
-- `GET /healthz`: < 100 ms;
-- `GET /readyz`: < 500 ms;
-- `GET /api/applications`: < 5 secondi per ambiente piccolo/lab;
-- `GET /api/changes`: < 2 secondi per centinaia di change;
-- dettagli ChangeRequest: < 2 secondi.
+- `GET /livez`: below 100 ms in normal conditions;
+- `GET /readyz`: below 500 ms in normal conditions;
+- `GET /api/v1/applications`: below 5 seconds in small lab environments;
+- `GET /api/v1/changes`: below 2 seconds for hundreds of ChangeRequests;
+- ChangeRequest detail: below 2 seconds for normal evidence size.
 
-### Nota
+### Notes
 
-Questi target sono indicativi per MVP/lab e andranno rivisti in ambienti più grandi.
+These targets are indicative for MVP and lab usage. They must be revisited for larger environments.
 
 ---
 
-## NFR-PERF-002 - Operazioni asincrone per workflow lunghi
+## NFR-PERF-002 — Long-running workflows must be asynchronous
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Workflow lunghi come validazione Tekton e sync Argo CD non devono bloccare request HTTP per tempi eccessivi.
+Long-running workflows such as Tekton validation and deployment checks must not block HTTP requests for excessive time.
 
-### Regole
+### Rules
 
-- Una richiesta crea o avvia il workflow.
-- Il client legge stato tramite polling/API.
-- Lo stato è persistito in PostgreSQL.
+- A request starts or checks a workflow step.
+- Runtime status is persisted.
+- The client can poll or refresh the UI to observe progress.
 
 ### Acceptance criteria
 
-- La creazione ChangeRequest risponde rapidamente.
-- Lo stato del workflow è consultabile successivamente.
+- ChangeRequest creation returns quickly.
+- Technical workflow status can be checked later.
+- UI actions redirect after execution attempts.
+
+### Current status
+
+Implemented through explicit technical endpoints and UI actions.
 
 ---
 
-# 8. Scalability Requirements
+## NFR-SCL-001 — Incremental scalability
 
-## NFR-SCL-001 - Scalabilità MVP
-
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Il sistema deve essere progettato per supportare crescita graduale.
+The system must support gradual growth.
 
-### Target iniziali MVP
+### Initial targets
 
-- decine di Application;
-- centinaia di ChangeRequest;
-- pochi workflow concorrenti;
-- uno o pochi cluster/ambienti.
-
-### Acceptance criteria
-
-- Il data model non assume una sola applicazione.
-- Il codice non assume un solo namespace hardcoded, salvo default configurabile.
-- Le integrazioni hanno configurazione per ambiente.
-
----
-
-## NFR-SCL-002 - Concorrenza controllata
-
-### Priorità
-
-SHOULD
-
-### Descrizione
-
-Il sistema deve evitare di lanciare workflow concorrenti incoerenti sulla stessa Application.
-
-### Regola iniziale
-
-Per MVP, può essere accettabile impedire più ChangeRequest attive sulla stessa Application e stesso file target.
+- multiple applications;
+- hundreds of ChangeRequests;
+- multiple developers;
+- a small number of concurrent workflows;
+- future multiple target environments.
 
 ### Acceptance criteria
 
-- Il sistema rileva ChangeRequest attive potenzialmente conflittuali.
-- Il sistema segnala conflitto prima di creare branch o commit.
+- The data model does not assume a single application.
+- UI lists remain readable with multiple changes.
+- Environment mappings are configurable in future phases.
+
+### Current status
+
+Implemented for multiple ChangeRequests and multi-developer visibility. Multi-environment runtime support is future work.
 
 ---
 
-# 9. Maintainability Requirements
+# 9. Maintainability requirements
 
-## NFR-MNT-001 - Architettura modulare ad adapter
+## NFR-MNT-001 — Modular adapter-based architecture
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il codice deve essere organizzato per separare dominio e integrazioni esterne.
+The code must separate domain logic from external integrations.
 
-### Adapter previsti
+### Expected adapters
 
-- Argo CD adapter;
 - GitLab adapter;
+- Argo CD adapter;
 - Kubernetes adapter;
 - Tekton adapter;
 - PostgreSQL repository;
-- Evidence collector.
+- evidence collector;
+- AuthN/AuthZ middleware and resolver.
 
 ### Acceptance criteria
 
-- La logica workflow non dipende direttamente da dettagli HTTP GitLab o Argo CD.
-- Gli adapter sono testabili separatamente.
+- Workflow logic does not directly depend on low-level HTTP details.
+- Adapters can be tested separately.
+- The composition root wires concrete implementations.
+
+### Current status
+
+Implemented.
 
 ---
 
-## NFR-MNT-002 - Documentazione sempre aggiornata
+## NFR-MNT-002 — Documentation must stay aligned
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Ogni milestone deve aggiornare la documentazione relativa.
+Documentation must evolve with the project.
 
-### Regole
+### Rules
 
-- Nuove decisioni architetturali devono generare o aggiornare ADR.
-- Nuovi endpoint devono essere documentati in `docs/13-api-design.md`.
-- Nuovi workflow devono essere documentati in `docs/11-change-workflows.md`.
+- New architectural decisions must be documented through ADRs.
+- New runbooks must be added for operational procedures.
+- Numbered core documentation must be migrated to English.
+- The ADR index must remain updated.
+- Documentation must follow the repository language policy.
 
 ### Acceptance criteria
 
-- Non si chiude una milestone senza aggiornamento documentale.
+- Repository language policy exists.
+- Italian documentation inventory exists.
+- Numbered documentation migration plan exists.
+- Core numbered documents are migrated incrementally.
+
+### Current status
+
+In progress. Product foundation documents are being migrated.
 
 ---
 
-## NFR-MNT-003 - Naming coerente
+## NFR-MNT-003 — Consistent naming
 
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Il progetto deve usare naming coerente per:
+The project must use consistent naming across documentation, code, API and database.
+
+### Canonical terms
 
 - ChangeRequest;
 - ChangeEvent;
 - Evidence;
 - Application;
-- Workflow;
-- Adapter;
-- stati.
+- lifecycle status;
+- runtime status;
+- target environment;
+- requester;
+- promotion.
 
 ### Acceptance criteria
 
-- Gli stessi termini sono usati in documentazione, codice e database.
+- Documentation and UI use English terminology.
+- Environment names use `dev`, `staging`, `production`.
+
+### Current status
+
+In progress through documentation migration and terminology normalization.
 
 ---
 
-# 10. Configurability Requirements
+# 10. Configurability and portability requirements
 
-## NFR-CFG-001 - Configurazione esterna
+## NFR-CFG-001 — External configuration
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il sistema deve leggere configurazione da variabili ambiente o file configurazione non sensibili.
+The system must read configuration from environment variables, ConfigMaps or mounted files.
 
-### Parametri minimi
+### Non-sensitive configuration examples
 
 ```text
 HTTP_ADDR
-DATABASE_URL
+LOG_LEVEL
 ARGOCD_BASE_URL
 GITLAB_BASE_URL
 TEKTON_NAMESPACE
 KUBERNETES_NAMESPACE
-EVIDENCE_BASE_PATH
-LOG_LEVEL
+AUTH_ENABLED
+AUTH_HEADER_USER
+AUTH_HEADER_GROUPS
 ```
 
-### Parametri sensibili
+### Sensitive configuration examples
 
 ```text
+DATABASE_URL
 ARGOCD_AUTH_TOKEN
 GITLAB_TOKEN
-DATABASE_PASSWORD
 ```
 
-Questi devono arrivare da Secret.
-
 ### Acceptance criteria
 
-- Il servizio fallisce in modo leggibile se manca una configurazione obbligatoria.
-- I valori sensibili non vengono stampati.
+- Missing required configuration fails with readable errors.
+- Sensitive values are not printed.
+- Runtime ConfigMaps can be inspected safely.
+
+### Current status
+
+Implemented.
 
 ---
 
-## NFR-CFG-002 - Supporto ambienti multipli nel tempo
+## NFR-CFG-002 — Environment catalog readiness
 
-### Priorità
-
-COULD
-
-### Descrizione
-
-Il sistema dovrebbe essere predisposto per ambienti multipli, anche se l’MVP parte con uno scenario singolo.
-
-### Esempi futuri
-
-- dev;
-- test;
-- prod;
-- lab.
-
----
-
-# 11. Usability Requirements
-
-## NFR-UX-001 - Messaggi didattici per newbie
-
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Il sistema deve fornire messaggi chiari e didattici per operazioni e errori comuni.
+The system must evolve toward explicit multi-environment configuration.
 
-### Esempi
+### Canonical environments
 
-- spiegare perché Git è source of truth;
-- spiegare cosa significa `OutOfSync`;
-- spiegare cosa significa `Healthy`;
-- spiegare perché ConfigMap richiede autorizzazione AppProject;
-- spiegare cosa fa Tekton validation.
-
-### Acceptance criteria
-
-- Gli errori noti hanno messaggi operativi.
-- I workflow mostrano step comprensibili.
-
----
-
-## NFR-UX-002 - Nessuna UI complessa prima dei workflow stabili
-
-### Priorità
-
-MUST
-
-### Descrizione
-
-La UI completa non deve essere costruita prima della stabilizzazione dei workflow backend.
-
-### Regola
-
-Il primo obiettivo è stabilizzare API, workflow, adapter e data model.
+```text
+dev
+staging
+production
+```
 
 ### Acceptance criteria
 
-- Le pagine HTML iniziali, se presenti, sono semplici e non guidano decisioni architetturali premature.
+- The environment configuration model is documented.
+- Unknown environments will be rejected fail-closed when implemented.
+- `production` remains disabled until guardrails are ready.
+
+### Current status
+
+Documented design baseline.
 
 ---
 
-# 12. GitOps Compliance Requirements
+# 11. Usability requirements
 
-## NFR-GITOPS-001 - Nessun bypass GitOps
+## NFR-UX-001 — Guided but transparent user experience
 
-### Priorità
-
-MUST
-
-### Descrizione
-
-Il sistema non deve modificare direttamente risorse applicative runtime come stato finale permanente.
-
-### Regola
-
-Ogni change applicativo deve passare da GitLab e Argo CD.
-
-### Acceptance criteria
-
-- Workflow repliche modifica Git, non il Deployment runtime.
-- Workflow APP_VERSION modifica Git, non `oc set env`.
-- Workflow ConfigMap modifica Git, non `oc edit configmap`.
-
----
-
-## NFR-GITOPS-002 - Gestione drift
-
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Il sistema deve rilevare Application OutOfSync e spiegare il possibile drift.
+The system should provide clear operational messages without hiding technical details.
+
+### Requirements
+
+- Explain major status values.
+- Show evidence summaries.
+- Show requester information.
+- Show runtime status clearly.
+- Keep UI labels in English.
+- Provide links to detailed evidence and audit events.
 
 ### Acceptance criteria
 
-- Application OutOfSync viene mostrata chiaramente.
-- Il sistema non considera automaticamente OutOfSync come errore se deriva da rollback operativo temporaneo documentato, ma deve segnalarlo.
+- New users can follow the workflow through UI and documentation.
+- Operators can still access technical detail when troubleshooting.
+
+### Current status
+
+Implemented as a UI baseline and evolving.
 
 ---
 
-# 13. Backup and Recovery Requirements
+## NFR-UX-002 — Stable workflows before advanced UI expansion
 
-## NFR-BCK-001 - Backup PostgreSQL
-
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-PostgreSQL contiene storico change ed evidenze. Deve essere previsto un meccanismo di backup.
-
-### MVP
-
-Nel primo MVP è sufficiente documentare la necessità di backup.
-
-### Futuro
-
-- backup schedulato;
-- retention;
-- restore testato.
-
----
-
-## NFR-BCK-002 - Ricostruibilità da Git
-
-### Priorità
-
-MUST
-
-### Descrizione
-
-Il repository sorgente deve permettere di ricostruire applicazione e documentazione.
+Advanced UI expansion should follow stable workflows rather than drive premature architecture.
 
 ### Acceptance criteria
 
-- Manifest, codice e documentazione sono versionati.
-- Secret reali non sono versionati.
-- Template Secret possono essere versionati solo con placeholder.
+- New UI actions map to existing backend endpoints.
+- Backend AuthZ remains authoritative.
+- UI rendering does not bypass workflow validation.
+
+### Current status
+
+Implemented for current UI actions.
 
 ---
 
-# 14. Deployment Requirements on OpenShift
+# 12. GitOps compliance requirements
 
-## NFR-OCP-001 - Containerizzazione
+## NFR-GITOPS-001 — No permanent GitOps bypass
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Il servizio deve essere eseguibile come container.
+The system must not permanently modify application runtime resources outside Git.
+
+### Rules
+
+- Application changes must go through GitLab and Argo CD.
+- Imperative OpenShift commands are troubleshooting tools only.
+- Evidence collection must not mutate runtime resources.
 
 ### Acceptance criteria
 
-- È presente un Dockerfile/Containerfile.
-- Il container espone la porta HTTP configurata.
-- Il container non richiede privilegi elevati.
+- GitLab technical workflow is the desired-state path.
+- Runtime checks and evidence collection are read-only.
+- Documentation reinforces Git as source of desired state.
+
+### Current status
+
+Implemented in the current workflow design.
 
 ---
 
-## NFR-OCP-002 - Deployment OpenShift
+## NFR-GITOPS-002 — Drift visibility
 
-### Priorità
+### Priority
 
 SHOULD
 
-### Descrizione
+### Description
 
-Il progetto deve prevedere manifest OpenShift/Kubernetes per deploy.
+The system should make GitOps drift visible and understandable.
 
-### Risorse previste
+### Acceptance criteria
 
-- Namespace o Project dedicato;
+- `OutOfSync` is visible.
+- `Degraded` is visible.
+- Warnings are preserved.
+- Drift is not silently ignored.
+
+### Current status
+
+Partially implemented through Argo CD status and evidence diagnostics.
+
+---
+
+# 13. Backup, restore and disaster recovery requirements
+
+## NFR-BCK-001 — PostgreSQL backup and restore
+
+### Priority
+
+MUST
+
+### Description
+
+PostgreSQL stores ChangeRequests, events and evidence. Backup and restore must be documented and validated.
+
+### Acceptance criteria
+
+- PostgreSQL backup runbook exists.
+- Restore validation plan exists.
+- Isolated restore test has been executed.
+- Backup artifacts are checksummed.
+
+### Current status
+
+Implemented and validated.
+
+---
+
+## NFR-DR-001 — Disaster recovery runbook
+
+### Priority
+
+MUST
+
+### Description
+
+The repository must provide a disaster recovery runbook for the DevOps Control Plane baseline.
+
+### Acceptance criteria
+
+- Protected components are identified.
+- RPO/RTO assumptions are documented.
+- Restore target isolation is documented.
+- Evidence package expectations are documented.
+
+### Current status
+
+Implemented.
+
+---
+
+## NFR-MAINT-001 — Maintenance operations runbook
+
+### Priority
+
+MUST
+
+### Description
+
+The repository must provide a maintenance operations runbook.
+
+### Acceptance criteria
+
+- Application rollout and rollback procedures are documented.
+- ConfigMap maintenance is documented.
+- Secret/token rotation coordination is documented.
+- Post-maintenance validation is documented.
+
+### Current status
+
+Implemented.
+
+---
+
+# 14. OpenShift deployment requirements
+
+## NFR-OCP-001 — Containerized runtime
+
+### Priority
+
+MUST
+
+### Description
+
+The service must run as a container in OpenShift.
+
+### Acceptance criteria
+
+- Container image builds successfully.
+- Container exposes the configured HTTP port.
+- Container does not require elevated privileges.
+- Image can be pushed to the OpenShift registry.
+
+### Current status
+
+Implemented.
+
+---
+
+## NFR-OCP-002 — OpenShift deployment resources
+
+### Priority
+
+MUST
+
+### Description
+
+The repository must provide OpenShift/Kubernetes deployment resources.
+
+### Required resources
+
+- namespace/project assumptions;
 - Deployment;
 - Service;
 - Route;
 - ConfigMap;
 - Secret template;
 - ServiceAccount;
-- Role/RoleBinding minimi.
+- Role/RoleBinding;
+- NetworkPolicy where required.
 
 ### Acceptance criteria
 
-- I manifest non contengono secret reali.
-- I permessi sono minimi e documentati.
+- Manifests contain no real secrets.
+- Runtime deployment is validated.
+- OAuth Proxy sidecar is documented.
+- Resource requests and limits are defined for application and proxy containers.
+
+### Current status
+
+Implemented.
 
 ---
 
-# 15. Testing Requirements
+# 15. Testing requirements
 
-## NFR-TST-001 - Test unitari per logica dominio
+## NFR-TST-001 — Unit tests for domain and service logic
 
-### Priorità
-
-SHOULD
-
-### Descrizione
-
-La logica dominio deve essere testabile senza chiamate reali a GitLab, Argo CD o Kubernetes.
-
-### Acceptance criteria
-
-- Workflow state transitions testabili.
-- Validazione input testabile.
-- Generazione branch name testabile.
-
----
-
-## NFR-TST-002 - Test adapter con mock
-
-### Priorità
-
-SHOULD
-
-### Descrizione
-
-Gli adapter esterni devono poter essere testati con mock/fake client.
-
-### Acceptance criteria
-
-- GitLab adapter può essere testato senza GitLab reale.
-- Argo CD adapter può essere testato senza Argo CD reale.
-- Tekton adapter può essere testato senza cluster reale.
-
----
-
-## NFR-TST-003 - Test manuali evidence-aligned
-
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Per le milestone MVP devono esistere test manuali ripetibili con evidenze.
+Domain and service logic must be testable without real GitLab, Argo CD or Kubernetes dependencies.
 
 ### Acceptance criteria
 
-- Ogni milestone ha una checklist.
-- Ogni checklist produce output verificabile.
+- Lifecycle transitions are tested.
+- Input validation is tested.
+- Service behavior is tested with fake dependencies where applicable.
+
+### Current status
+
+Implemented for core service areas.
 
 ---
 
-# 16. Documentation Requirements
+## NFR-TST-002 — Adapter tests with fake clients
 
-## NFR-DOC-001 - Documentazione progressiva
+### Priority
 
-### Priorità
+SHOULD
+
+### Description
+
+External adapters should be testable with fake or HTTP test clients.
+
+### Acceptance criteria
+
+- GitLab adapter can be tested without a real GitLab server.
+- Argo CD adapter can be tested without a real Argo CD server.
+- TLS utility behavior is tested.
+
+### Current status
+
+Implemented for several adapters.
+
+---
+
+## NFR-TST-003 — Evidence-aligned manual and runtime tests
+
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-La documentazione deve crescere insieme al progetto.
+Important milestones must have repeatable validation steps and evidence.
 
-### Documenti previsti
+### Acceptance criteria
+
+- Runtime validations produce evidence directories or captured outputs.
+- Smoke test produces an evidence directory.
+- Restore tests produce backup/restore evidence.
+
+### Current status
+
+Implemented as part of Phase 10 operability baseline.
+
+---
+
+# 16. Documentation requirements
+
+## NFR-DOC-001 — Progressive documentation
+
+### Priority
+
+MUST
+
+### Description
+
+Documentation must grow with the project and remain aligned with the implemented baseline.
+
+### Required documentation areas
 
 - vision;
-- scope MVP;
-- personas/use cases;
+- scope;
+- personas and use cases;
 - functional requirements;
 - non-functional requirements;
 - architecture;
 - data model;
 - workflows;
 - API design;
-- security/RBAC;
-- ADR.
+- ADRs;
+- runbooks;
+- production readiness;
+- final technical documentation.
 
 ### Acceptance criteria
 
-- Ogni documento è versionato in Git.
-- Ogni documento ha scopo e stato.
+- Documents are versioned in Git.
+- Documents have purpose and status.
+- Documentation language policy is followed.
+
+### Current status
+
+In progress.
 
 ---
 
-## NFR-DOC-002 - ADR per decisioni importanti
+## NFR-DOC-002 — ADRs for important decisions
 
-### Priorità
+### Priority
 
 MUST
 
-### Descrizione
+### Description
 
-Ogni decisione architetturale significativa deve essere registrata in ADR.
+Every significant architectural decision must be documented through an ADR.
 
-### Esempi ADR
+### Examples
 
-- Git come source of truth;
-- Argo CD come motore GitOps;
-- Tekton come motore validazione;
-- PostgreSQL come change store;
-- API/workflow prima della UI completa.
+- Git as source of truth;
+- Argo CD as GitOps engine;
+- Tekton as validation engine;
+- PostgreSQL as change and evidence store;
+- AuthN/AuthZ strategy;
+- OAuth Proxy deployment design;
+- multi-environment model.
 
----
+### Acceptance criteria
 
-# 17. Compliance Matrix MVP
+- ADR files are written in English.
+- ADR index is updated.
+- ADR numbering remains consistent.
 
-| Area | Requisito chiave | Priorità |
-|---|---|---|
-| Security | Token non in Git/log/evidenze | MUST |
-| Audit | ChangeRequest tracciata end-to-end | MUST |
-| Observability | Health/readiness endpoint | MUST |
-| Reliability | Stati di errore non ambigui | MUST |
-| Performance | Workflow lunghi asincroni | MUST |
-| Maintainability | Architettura ad adapter | MUST |
-| Configurability | Config esterna | MUST |
-| GitOps | Nessun bypass GitOps | MUST |
-| OpenShift | Container non privilegiato | MUST |
-| Documentation | Documentazione versionata | MUST |
+### Current status
+
+Implemented and actively maintained.
 
 ---
 
-## 18. Criterio di completamento del documento
+## NFR-DOC-003 — Repository language policy
 
-Questo documento sarà considerato stabile quando:
+### Priority
 
-- ogni area non funzionale ha almeno un requisito MVP;
-- i requisiti MUST sono collegati ad architettura e deployment;
-- le implicazioni di sicurezza sono riportate in `docs/09-security-rbac.md`;
-- le decisioni principali sono riportate in ADR.
+MUST
+
+### Description
+
+Repository documentation must follow the official language policy.
+
+### Rules
+
+- Official repository language is English.
+- UI language is English.
+- ADR language is English.
+- Runbook language is English.
+- Existing Italian documentation is migrated incrementally.
+
+### Acceptance criteria
+
+- `docs/documentation-language-policy.md` exists.
+- `docs/italian-documentation-inventory.md` exists.
+- `docs/numbered-documentation-migration-plan.md` exists.
+- New documentation is written in English.
+
+### Current status
+
+Implemented and migration in progress.
 
 ---
 
-## 19. Messaggio chiave
+# 17. Multi-developer and multi-environment requirements
 
-DevOps Control Plane non deve essere solo funzionale: deve essere sicuro, tracciabile, osservabile e coerente con GitOps.
+## NFR-MDEV-001 — Multi-developer readability
 
-Il valore del progetto non sta solo nell’automatizzare comandi, ma nel rendere i change:
+### Priority
+
+MUST
+
+### Description
+
+The UI must remain readable when multiple users create ChangeRequests.
+
+### Acceptance criteria
+
+- Requester is visible.
+- Dashboard recent changes is limited.
+- Full history remains available.
+- Multi-developer test scenario is documented.
+
+### Current status
+
+Implemented and validated.
+
+---
+
+## NFR-ENV-001 — Multi-environment readiness
+
+### Priority
+
+SHOULD
+
+### Description
+
+The architecture must support future multi-environment workflows.
+
+### Canonical environments
 
 ```text
-guidati
-ripetibili
-validati
-tracciati
-auditable
-coerenti con GitOps
+dev
+staging
+production
 ```
+
+### Acceptance criteria
+
+- Multi-environment architecture decision is documented.
+- Environment configuration model is documented.
+- Production remains disabled until guardrails are validated.
+- Environment-aware RBAC/AuthZ is part of the design.
+
+### Current status
+
+Documented design baseline.
+
+---
+
+# 18. Compliance matrix
+
+| Area | Key requirement | Priority |
+|---|---|---|
+| Security | No tokens in Git, logs or evidence | MUST |
+| AuthN/AuthZ | OAuth Proxy and backend authorization | MUST |
+| Audit | ChangeRequest traceability | MUST |
+| Evidence | Persistent sanitized evidence | MUST |
+| Observability | Health/readiness endpoints and smoke test | MUST |
+| Reliability | Non-ambiguous failure states | MUST |
+| Performance | Long workflows are asynchronous | MUST |
+| Maintainability | Modular adapter-based architecture | MUST |
+| Configurability | External configuration and Secret separation | MUST |
+| GitOps | No permanent bypass of GitOps | MUST |
+| Backup/Restore | PostgreSQL backup and restore runbook | MUST |
+| OpenShift | Containerized non-privileged runtime | MUST |
+| Documentation | English documentation and ADR alignment | MUST |
+| Multi-developer | Requester and full history visibility | MUST |
+| Multi-environment | Configurable future environment model | SHOULD |
+
+---
+
+## 19. Document completion criteria
+
+This document is considered stable when:
+
+- all major non-functional areas have at least one requirement;
+- MUST requirements are aligned with architecture and deployment;
+- security, AuthN/AuthZ and operability baselines are represented;
+- backup, restore, DR and maintenance requirements are represented;
+- documentation language requirements are represented;
+- multi-developer and multi-environment readiness are represented.
+
+---
+
+## 20. Key message
+
+The DevOps Control Plane must not only be functional. It must be secure, traceable, observable, operable and consistent with GitOps.
+
+The value of the project is not only automating commands. The value is making changes:
+
+```text
+guided
+repeatable
+validated
+traceable
+auditable
+secure
+operable
+consistent with GitOps
+```
+
+---
+
+## 21. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial non-functional requirements document in Italian. |
+| 2026-07-03 | 0.2 | Rewritten in English and refreshed to align with the current security, operability, production-readiness, multi-developer and multi-environment baseline. |
