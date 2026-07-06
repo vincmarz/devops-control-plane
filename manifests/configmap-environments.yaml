@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devops-control-plane-environments
+data:
+  environments.yaml: |
+    environments:
+      - name: dev
+        displayName: Development
+        enabled: true
+        category: development
+        description: Current active development environment.
+        kubernetesNamespace: devops-ci-demo
+        tektonNamespace: devops-ci-demo
+        argocdApplicationName: demo-go-color-app
+        gitTargetBranch: main
+        allowTechnicalActions: true
+        allowPromotionSource: true
+        allowPromotionTarget: false
+      - name: staging
+        displayName: Staging
+        enabled: false
+        category: preproduction
+        description: Future controlled staging environment. Not enabled yet.
+        kubernetesNamespace: ""
+        tektonNamespace: ""
+        argocdApplicationName: ""
+        gitTargetBranch: ""
+        allowTechnicalActions: false
+        allowPromotionSource: false
+        allowPromotionTarget: true
+      - name: production
+        displayName: Production
+        enabled: false
+        category: production
+        description: Future production environment. Not enabled yet.
+        kubernetesNamespace: ""
+        tektonNamespace: ""
+        argocdApplicationName: ""
+        gitTargetBranch: ""
+        allowTechnicalActions: false
+        allowPromotionSource: false
+        allowPromotionTarget: true
