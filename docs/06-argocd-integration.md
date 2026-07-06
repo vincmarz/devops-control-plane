@@ -1,483 +1,254 @@
-# DevOps Control Plane - Argo CD Integration
+# DevOps Control Plane — Argo CD Integration
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-- `docs/05-architecture.md`  
-**Stato:** Draft iniziale / Argo CD Integration
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento descrive come **DevOps Control Plane** deve integrarsi con **Argo CD / OpenShift GitOps**.
-
-L’obiettivo è definire:
-
-- responsabilità dell’integrazione Argo CD;
-- funzionalità MVP da implementare;
-- modello di autenticazione;
-- modello dati normalizzato;
-- operazioni API richieste;
-- gestione degli stati `Synced`, `OutOfSync`, `Healthy`, `Degraded`;
-- gestione di resources e orphaned resources;
-- gestione delle sync operation;
-- gestione errori noti;
-- requisiti di sicurezza;
-- mapping verso i requisiti funzionali già definiti.
-
-DevOps Control Plane non sostituisce Argo CD. Argo CD resta il motore GitOps responsabile della riconciliazione tra stato desiderato Git e stato runtime nel cluster.
+- **Project:** DevOps Control Plane
+- **Document:** 06 — Argo CD Integration
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+  - `docs/05-architecture.md`
+- **Status:** Rewritten in English and refreshed to align with the current advanced MVP, TLS, evidence and multi-environment baseline
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Ruolo di Argo CD nell’architettura
+## 1. Purpose
 
-Nel progetto DevOps Control Plane, Argo CD ha il ruolo di **GitOps reconciliation engine**.
+This document describes how the DevOps Control Plane integrates with Argo CD / OpenShift GitOps.
 
-Responsabilità Argo CD:
+The original document described the initial MVP integration design. This refreshed version updates the design to match the current implementation baseline and the near-term architecture direction.
 
-- leggere manifest GitOps dal repository;
-- confrontare stato Git con stato runtime cluster;
-- segnalare `Synced` o `OutOfSync`;
-- valutare health delle risorse;
-- eseguire sync;
-- mantenere history delle revisioni sincronizzate;
-- mostrare conditions e warning, come `OrphanedResourceWarning`;
-- impedire azioni non consentite dagli AppProject.
+The document covers:
 
-Responsabilità DevOps Control Plane:
+- Argo CD responsibilities in the Control Plane architecture;
+- the responsibilities of the DevOps Control Plane Argo CD adapter;
+- current application discovery capabilities;
+- deployment check workflow;
+- runtime status mapping;
+- treatment of warnings such as `OrphanedResourceWarning`;
+- deployment evidence and diagnostics;
+- TLS strict and application trust bundle requirements;
+- token handling and security requirements;
+- current `/api/v1` endpoint model;
+- future environment-aware Argo CD mapping for `dev`, `staging` and `production`.
 
-- interrogare Argo CD;
-- normalizzare le informazioni;
-- mostrare stato e history;
-- lanciare sync quando il workflow lo richiede;
-- attendere stato finale;
-- interpretare errori comuni;
-- salvare evidenze in PostgreSQL;
-- correlare stato Argo CD con GitLab, Tekton e runtime OpenShift.
+The DevOps Control Plane does not replace Argo CD. Argo CD remains the GitOps reconciliation engine.
 
 ---
 
-## 3. Principi di integrazione
+## 2. Role of Argo CD in the architecture
 
-## 3.1 Argo CD resta il motore GitOps
+Argo CD is the GitOps reconciliation engine.
 
-DevOps Control Plane non applica direttamente manifest applicativi al cluster come workflow finale.
+Argo CD is responsible for:
 
-Il flusso corretto è:
+- reading desired state from Git;
+- comparing desired state with runtime cluster state;
+- reporting `Synced`, `OutOfSync` and `Unknown` sync states;
+- reporting `Healthy`, `Progressing`, `Degraded`, `Missing`, `Suspended` and `Unknown` health states;
+- exposing Application metadata, revision, conditions and resources;
+- exposing warnings such as `OrphanedResourceWarning`;
+- enforcing AppProject constraints;
+- maintaining Argo CD deployment history and operational state.
+
+The DevOps Control Plane is responsible for:
+
+- calling Argo CD API through a dedicated adapter;
+- normalizing Argo CD data into internal models;
+- correlating Argo CD state with ChangeRequests;
+- mapping Argo CD state to Control Plane runtime status;
+- preserving warnings and conditions;
+- storing deployment evidence in PostgreSQL;
+- exposing status and evidence through API and UI;
+- keeping Argo CD tokens and TLS configuration safe;
+- preparing environment-aware Argo CD Application mapping.
+
+---
+
+## 3. Integration principles
+
+### 3.1 Argo CD remains the deployment state authority
+
+The DevOps Control Plane does not implement its own deployment engine.
+
+The desired flow remains:
 
 ```text
 GitLab change
-  -> merge/commit sul branch target
-  -> Argo CD sync
+  -> Git branch / commit / merge request
+  -> Argo CD reconciliation status
   -> OpenShift runtime state
+  -> evidence and audit in PostgreSQL
 ```
+
+### 3.2 Integration uses Argo CD API
+
+The Go application integrates with Argo CD through Argo CD API calls encapsulated in the Argo CD adapter.
+
+The `argocd` CLI can be useful for manual troubleshooting, but application runtime logic must not depend on parsing CLI output.
+
+### 3.3 Argo CD history is distinct from Git and ChangeRequest history
+
+The Control Plane must keep a clear distinction between:
+
+```text
+GitLab history        = commits, branches and merge requests
+Argo CD history       = revisions and deployment/reconciliation history
+Tekton history        = validation PipelineRuns and TaskRuns
+Control Plane history = ChangeRequests, events and evidence
+```
+
+### 3.4 `OutOfSync` is context-dependent
+
+`OutOfSync` means that runtime state does not match the desired state observed by Argo CD.
+
+It may indicate:
+
+- drift;
+- a change not yet reconciled;
+- a sync failure;
+- temporary operational rollback;
+- a manual runtime mutation;
+- a new Git revision not yet applied.
+
+The Control Plane must show `OutOfSync` clearly, but it must not blindly treat every `OutOfSync` state as the same class of application failure.
+
+### 3.5 Warnings must be preserved
+
+Warnings such as `OrphanedResourceWarning` are important evidence.
+
+The Control Plane must preserve and expose those warnings without automatically overriding the health assessment when Argo CD reports the Application as `Healthy`.
 
 ---
 
-## 3.2 DevOps Control Plane usa Argo CD API
+## 4. Current implementation baseline
 
-L’integrazione target deve usare **Argo CD API**, non parsing fragile dell’output CLI.
+Current implemented Argo CD-related capabilities include:
 
-La CLI `argocd` resta utile per troubleshooting manuale e per verificare il comportamento atteso durante il lab, ma l’applicazione Go deve incapsulare l’accesso ad Argo CD in un adapter dedicato.
+- Argo CD application client;
+- `GET /api/v1/applications` where applicable;
+- `GET /api/v1/applications/{name}`;
+- deployment check workflow through `POST /api/v1/changes/{id}/check-deployment`;
+- runtime status mapping for deployment state;
+- deployment evidence collection through `POST /api/v1/changes/{id}/collect-evidence`;
+- deployment diagnostics enrichment;
+- UI rendering for deployment diagnostics and evidence;
+- TLS strict mode using an application-dedicated trust bundle;
+- dedicated Argo CD API token handling through OpenShift Secret;
+- token rotation procedure after exposure risk;
+- preservation of `OrphanedResourceWarning` as warning evidence.
 
----
-
-## 3.3 Argo CD history e Git history sono diverse
-
-Il sistema deve distinguere tra:
-
-- history GitLab, cioè commit e merge request;
-- history Argo CD, cioè revisioni sincronizzate;
-- history DevOps Control Plane, cioè ChangeRequest e workflow events.
-
-Regola didattica:
-
-```text
-GitLab dice cosa è cambiato nei file.
-Argo CD dice cosa è stato sincronizzato.
-DevOps Control Plane dice perché, da chi e con quali evidenze.
-```
+The original direct sync endpoint model is no longer the main implemented path. The current operational workflow focuses on checking deployment state and collecting evidence after GitLab/Tekton/GitOps workflow execution.
 
 ---
 
-## 3.4 OutOfSync non è sempre un errore applicativo
+## 5. Argo CD adapter
 
-`OutOfSync` significa che lo stato runtime non coincide con lo stato desiderato Git.
+## 5.1 Responsibilities
 
-Può indicare:
+The Argo CD adapter encapsulates all Argo CD API interactions.
 
-- drift non previsto;
-- sync non ancora eseguita;
-- sync fallita;
-- rollback operativo temporaneo;
-- risorsa runtime modificata manualmente;
-- nuova revision Git non ancora applicata.
+The rest of the application must not depend on raw Argo CD HTTP payload details, token handling or transport configuration.
 
-Il sistema deve mostrare `OutOfSync` in modo chiaro, ma deve evitare interpretazioni automatiche senza contesto.
+### Current responsibilities
 
----
+- create an authenticated Argo CD API client;
+- retrieve Application data;
+- map sync and health status;
+- extract revision and conditions;
+- preserve warnings;
+- return normalized application results to application services;
+- support deployment check workflows;
+- use TLS strict settings and configured CA bundle.
 
-## 4. Funzionalità MVP Argo CD
+### Future responsibilities
 
-## 4.1 Lista Application
-
-### Obiettivo
-
-Recuperare la lista delle Application Argo CD visibili.
-
-### Dati richiesti
-
-Per ogni Application:
-
-```yaml
-name: demo-go-color-app
-namespace: openshift-gitops
-project: devops-ci-demo
-destinationServer: https://kubernetes.default.svc
-destinationNamespace: devops-ci-demo
-repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
-targetRevision: main
-path: apps/demo-go-color-app
-syncStatus: Synced
-healthStatus: Healthy
-currentRevision: b8e1d6b
-```
-
-### Endpoint DevOps Control Plane
-
-```text
-GET /api/applications
-```
-
-### Requisiti collegati
-
-```text
-FR-APP-001
-FR-APP-002
-```
+- resolve Argo CD Application by `applicationName` and `targetEnvironment`;
+- support environment-specific Application mapping;
+- optionally expose more history/resource detail where needed.
 
 ---
 
-## 4.2 Dettaglio Application
+## 5.2 Conceptual interface
 
-### Obiettivo
-
-Mostrare il dettaglio operativo di una Application.
-
-### Dati richiesti
-
-- metadata;
-- project;
-- source repo;
-- source path;
-- target revision;
-- destination;
-- sync policy;
-- sync status;
-- health status;
-- current revision;
-- conditions;
-- operation state;
-- resources summary.
-
-### Endpoint DevOps Control Plane
-
-```text
-GET /api/applications/{name}
-```
-
-### Requisiti collegati
-
-```text
-FR-APP-010
-FR-APP-011
-FR-APP-012
-```
-
----
-
-## 4.3 Resources e orphaned resources
-
-### Obiettivo
-
-Recuperare le risorse collegate alla Application, distinguendo risorse gestite e risorse orphaned.
-
-### Dati normalizzati
-
-```yaml
-resources:
-  - group: ""
-    kind: Service
-    namespace: devops-ci-demo
-    name: demo-go-color-app
-    status: Synced
-    health: Healthy
-    orphaned: false
-  - group: apps
-    kind: Deployment
-    namespace: devops-ci-demo
-    name: demo-go-color-app
-    status: Synced
-    health: Healthy
-    orphaned: false
-  - group: image.openshift.io
-    kind: ImageStream
-    namespace: devops-ci-demo
-    name: demo-go-color-app
-    orphaned: true
-```
-
-### Nota core API group
-
-Risorse come `Service`, `ConfigMap`, `Secret` e `PersistentVolumeClaim` appartengono al core API group Kubernetes.
-
-Nel modello Kubernetes hanno:
-
-```yaml
-apiVersion: v1
-kind: Service
-```
-
-oppure:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-```
-
-Per questo motivo, nel campo `group`, il valore può essere vuoto.
-
-### Endpoint DevOps Control Plane
-
-```text
-GET /api/applications/{name}/resources
-```
-
----
-
-## 4.4 Argo CD history
-
-### Obiettivo
-
-Recuperare la history di sync della Application.
-
-### Dati normalizzati
-
-```yaml
-history:
-  - id: 1
-    revision: 4d6dfd4
-    deployedAt: "2026-06-24T18:00:00+02:00"
-    source: apps/demo-go-color-app
-  - id: 2
-    revision: 1cf3c91
-    deployedAt: "2026-06-24T18:20:00+02:00"
-    source: apps/demo-go-color-app
-```
-
-### Endpoint DevOps Control Plane
-
-```text
-GET /api/applications/{name}/history
-```
-
-### Nota importante
-
-La history Argo CD non modifica Git. Un rollback operativo Argo CD può riportare temporaneamente il cluster a una revision precedente, ma Git resta sulla branch configurata, ad esempio `main`.
-
----
-
-## 4.5 Sync Application
-
-### Obiettivo
-
-Avviare una sync Argo CD su una Application.
-
-### Endpoint DevOps Control Plane
-
-```text
-POST /api/applications/{name}/sync
-```
-
-### Regole
-
-- la sync deve essere invocata solo dopo commit/MR approvato o merge;
-- il sistema deve registrare evento `SyncRequested`;
-- il sistema deve gestire operation già in corso;
-- il sistema deve salvare revision sincronizzata;
-- il sistema deve produrre evidenza.
-
-### Requisiti collegati
-
-```text
-FR-ARGO-001
-FR-ARGO-002
-```
-
----
-
-## 4.6 Wait Synced/Healthy
-
-### Obiettivo
-
-Attendere che la Application raggiunga stato finale desiderato.
-
-### Condizioni di successo
-
-```text
-syncStatus = Synced
-healthStatus = Healthy
-```
-
-### Stati intermedi
-
-```text
-OutOfSync
-Progressing
-Unknown
-Missing
-Suspended
-```
-
-### Stati di errore
-
-```text
-Degraded
-SyncFailed
-OperationFailed
-Timeout
-```
-
-### Regole
-
-- timeout obbligatorio;
-- polling configurabile;
-- ogni cambio significativo crea evento;
-- timeout produce errore leggibile;
-- `Healthy` senza `Synced` non basta per considerare il workflow completato;
-- `Synced` senza `Healthy` non basta per considerare il workflow completato.
-
----
-
-## 5. Argo CD Adapter
-
-## 5.1 Responsabilità
-
-Il componente `ArgoCDAdapter` incapsula tutte le chiamate Argo CD API.
-
-Il resto dell’applicazione non deve conoscere dettagli HTTP, endpoint specifici, token o payload raw Argo CD.
-
----
-
-## 5.2 Interfaccia logica MVP
-
-Interfaccia concettuale:
+The current and future adapter can be represented conceptually as:
 
 ```go
 type ArgoCDAdapter interface {
     ListApplications(ctx context.Context) ([]ApplicationSummary, error)
     GetApplication(ctx context.Context, name string) (*ApplicationDetail, error)
-    GetApplicationResources(ctx context.Context, name string) ([]ApplicationResource, error)
-    GetApplicationHistory(ctx context.Context, name string) ([]ApplicationHistoryItem, error)
-    SyncApplication(ctx context.Context, name string, opts SyncOptions) (*SyncResult, error)
-    GetOperationState(ctx context.Context, name string) (*OperationState, error)
-    WaitForSyncedHealthy(ctx context.Context, name string, opts WaitOptions) (*ApplicationStatus, error)
+    CheckDeployment(ctx context.Context, applicationName string) (*DeploymentStatus, error)
 }
 ```
 
-Nota: l’interfaccia è indicativa. La forma finale sarà definita durante l’implementazione Go.
+The exact Go interface can evolve, but the design principle remains stable:
+
+```text
+application services depend on adapter ports, not raw HTTP implementation details
+```
 
 ---
 
-## 5.3 Posizione package proposta
+## 5.3 Package location
+
+Current package area:
 
 ```text
 internal/adapters/argocd/
-├── client.go
-├── models.go
-├── mapper.go
-├── errors.go
-└── wait.go
 ```
 
-### File `client.go`
+Expected responsibilities by file or component:
 
-Responsabilità:
+```text
+client.go    -> HTTP/API client and request handling
+models.go    -> DTOs and normalized models
+mapper.go    -> mapping from Argo CD payload to internal model
+errors.go    -> error normalization
+```
 
-- configurazione HTTP client;
-- autenticazione;
-- chiamate API;
-- timeout;
-- retry controllati, se previsti.
-
-### File `models.go`
-
-Responsabilità:
-
-- strutture DTO Argo CD raw o parziali;
-- strutture normalizzate interne.
-
-### File `mapper.go`
-
-Responsabilità:
-
-- convertire payload Argo CD in domain model DevOps Control Plane.
-
-### File `errors.go`
-
-Responsabilità:
-
-- mapping errori Argo CD in error model interno.
-
-### File `wait.go`
-
-Responsabilità:
-
-- polling sync/health;
-- polling operation state;
-- gestione timeout.
+The package should remain independently testable through fake HTTP servers or fake clients.
 
 ---
 
-## 6. Modello dati normalizzato
+## 6. Normalized data model
 
-## 6.1 ApplicationSummary
+## 6.1 Application summary
+
+Example normalized Application summary:
 
 ```yaml
 name: demo-go-color-app
 namespace: openshift-gitops
-project: devops-ci-demo
+project: default
 targetNamespace: devops-ci-demo
 repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
 targetRevision: main
 path: apps/demo-go-color-app
 syncStatus: Synced
 healthStatus: Healthy
-currentRevision: b8e1d6b
+currentRevision: <revision>
 ```
 
----
+## 6.2 Application detail
 
-## 6.2 ApplicationDetail
+Example normalized Application detail:
 
 ```yaml
 name: demo-go-color-app
 namespace: openshift-gitops
-project: devops-ci-demo
-syncPolicy: Automated
-pruneEnabled: true
-selfHealEnabled: false
+project: default
 syncStatus: Synced
 healthStatus: Healthy
-currentRevision: b8e1d6b
+currentRevision: <revision>
 source:
   repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
   targetRevision: main
@@ -487,595 +258,505 @@ destination:
   namespace: devops-ci-demo
 conditions:
   - type: OrphanedResourceWarning
-    message: Application has 2 orphaned resources
+    message: Application has 5 orphaned resources
+```
+
+## 6.3 Deployment status
+
+The Control Plane deployment check maps Argo CD data to runtime status.
+
+Example:
+
+```yaml
+applicationName: demo-go-color-app
+syncStatus: Synced
+healthStatus: Healthy
+revision: <revision>
+runtimeStatus: DeploymentSyncedHealthy
+conditions:
+  - type: OrphanedResourceWarning
+    message: Application has 5 orphaned resources
 ```
 
 ---
 
-## 6.3 ApplicationResource
+## 7. Authentication and token handling
 
-```yaml
-group: apps
-kind: Deployment
-namespace: devops-ci-demo
-name: demo-go-color-app
-status: Synced
-health: Healthy
-orphaned: false
-message: ""
-```
+## 7.1 Token-based authentication
 
-Per core API group:
+The Control Plane authenticates to Argo CD with an API token stored in OpenShift Secret.
 
-```yaml
-group: ""
-kind: ConfigMap
-namespace: devops-ci-demo
-name: demo-go-color-app-config
-status: Synced
-health: Unknown
-orphaned: false
-```
-
----
-
-## 6.4 ApplicationHistoryItem
-
-```yaml
-id: 3
-revision: b8e1d6b2fc88b41909f87d505739bc855de41516
-deployedAt: "2026-06-25T11:04:50+02:00"
-sourcePath: apps/demo-go-color-app
-```
-
----
-
-## 6.5 OperationState
-
-```yaml
-phase: Failed
-message: "one or more synchronization tasks completed unsuccessfully"
-startedAt: "2026-06-25T11:04:50+02:00"
-finishedAt: "2026-06-25T11:04:53+02:00"
-syncRevision: b8e1d6b2fc88b41909f87d505739bc855de41516
-```
-
----
-
-## 7. Autenticazione verso Argo CD
-
-## 7.1 Token based authentication
-
-Il DevOps Control Plane deve autenticarsi ad Argo CD tramite token.
-
-Configurazione prevista:
+Configuration baseline:
 
 ```text
 ARGOCD_BASE_URL=https://openshift-gitops-server-openshift-gitops.apps.example.local
 ARGOCD_AUTH_TOKEN=<from Secret>
 ARGOCD_INSECURE_TLS=false
+ARGOCD_CA_FILE=/etc/dcp-trust/ca-bundle.crt
 ARGOCD_TIMEOUT_SECONDS=30
 ```
 
-### Regole
+### Rules
 
-- `ARGOCD_AUTH_TOKEN` deve arrivare da Secret;
-- il token non deve essere loggato;
-- il token non deve essere esposto via API;
-- errori HTTP 401/403 devono essere normalizzati.
+- `ARGOCD_AUTH_TOKEN` must come from Secret.
+- The token must not be logged.
+- The token must not be returned through API responses.
+- The token must not be stored in PostgreSQL.
+- The token must not appear in evidence payloads.
+- Token exposure requires rotation.
+
+## 7.2 Dedicated Argo CD account
+
+The current operational baseline uses a dedicated Argo CD account for the DevOps Control Plane with API token capability and minimal required permissions.
+
+This avoids using personal or admin credentials as a stable runtime pattern.
 
 ---
 
-## 7.2 Gestione TLS
+## 8. TLS and trust model
 
-In ambienti lab può essere necessario gestire certificati non trusted o route reencrypt.
+## 8.1 TLS strict baseline
 
-Configurazione proposta:
+The Argo CD integration must use TLS strict mode.
+
+Current baseline:
 
 ```text
 ARGOCD_INSECURE_TLS=false
-ARGOCD_CA_CERT_PATH=/var/run/secrets/argocd/ca.crt
+ARGOCD_CA_FILE=/etc/dcp-trust/ca-bundle.crt
 ```
 
-Regola:
+## 8.2 Application-dedicated trust bundle
 
-- in produzione preferire CA/certificati trusted;
-- opzione insecure solo per lab controllati;
-- se insecure è abilitato, loggare warning senza stampare dati sensibili.
+The cluster-wide trusted bundle did not include the ingress route CA required for the Argo CD Route in the current lab baseline.
+
+The validated approach is an application-dedicated trust bundle:
+
+```text
+ConfigMap: dcp-app-trust-bundle
+Mount: /etc/dcp-trust/ca-bundle.crt
+```
+
+The trust bundle contains the route CA required to validate the Argo CD route certificate.
+
+## 8.3 Rules
+
+- Do not modify cluster-wide OpenShift trust settings for this application-only requirement.
+- Keep TLS strict for Argo CD.
+- Keep the trust bundle managed as application configuration.
+- Validate the mounted CA file before disabling insecure mode.
 
 ---
 
-## 8. Mapping stati Argo CD
+## 9. Sync and health status mapping
 
-## 8.1 Sync status
+## 9.1 Sync status
 
-| Stato Argo CD | Significato operativo |
+| Argo CD status | Meaning |
 |---|---|
-| Synced | Runtime allineato allo stato desiderato Git |
-| OutOfSync | Runtime diverso dallo stato desiderato Git |
-| Unknown | Stato non determinato |
+| `Synced` | Runtime state matches desired Git state according to Argo CD. |
+| `OutOfSync` | Runtime state differs from desired Git state according to Argo CD. |
+| `Unknown` | Argo CD cannot determine the sync state. |
 
----
+## 9.2 Health status
 
-## 8.2 Health status
-
-| Stato Argo CD | Significato operativo |
+| Argo CD status | Meaning |
 |---|---|
-| Healthy | Risorse considerate sane |
-| Progressing | Risorse in aggiornamento |
-| Degraded | Risorse in errore o non sane |
-| Missing | Risorsa attesa mancante |
-| Suspended | Risorsa sospesa |
-| Unknown | Stato non determinato |
+| `Healthy` | Resources are considered healthy. |
+| `Progressing` | Resources are still reconciling or rolling out. |
+| `Degraded` | Resources are not healthy. |
+| `Missing` | Expected resource is missing. |
+| `Suspended` | Resource is intentionally suspended. |
+| `Unknown` | Health state cannot be determined. |
 
----
+## 9.3 Control Plane runtime status mapping
 
-## 8.3 Interpretazione combinata
-
-| Sync | Health | Interpretazione |
+| Sync | Health | Runtime status |
 |---|---|---|
-| Synced | Healthy | Stato desiderato raggiunto |
-| OutOfSync | Healthy | Applicazione sana ma non allineata a Git |
-| Synced | Degraded | Manifest applicato ma runtime non sano |
-| OutOfSync | Degraded | Drift o sync incompleta con runtime non sano |
-| Unknown | Unknown | Stato non determinabile |
+| `Synced` | `Healthy` | `DeploymentSyncedHealthy` |
+| `OutOfSync` | any | `DeploymentOutOfSync` |
+| any | `Progressing` | `DeploymentProgressing` |
+| any | `Degraded` | `DeploymentDegraded` |
+| any | unknown or unsupported | `DeploymentUnknown` |
+
+The mapping must remain explicit and auditable.
 
 ---
 
-## 9. Conditions e warning
+## 10. Conditions and warnings
 
-## 9.1 OrphanedResourceWarning
+## 10.1 `OrphanedResourceWarning`
 
-Argo CD può segnalare:
+Argo CD can report:
 
 ```text
 OrphanedResourceWarning
 ```
 
-Questo warning indica che nel namespace target esistono risorse non gestite dalla Application.
+This condition indicates that resources exist in the target namespace but are not managed by the Application.
 
-Esempio:
+### Control Plane rule
 
-```text
-ImageStream demo-go-color-app orphaned
-```
+- Show the warning.
+- Store the warning in evidence.
+- Do not automatically mark a `Synced` and `Healthy` application as failed only because this warning exists.
+- Include the warning count in deployment diagnostics.
 
-### Regola DevOps Control Plane
+## 10.2 AppProject resource restrictions
 
-- Mostrare il warning.
-- Non considerarlo automaticamente errore se `Health=Healthy` e `Sync=Synced`.
-- Salvare il warning nelle evidenze.
-- Collegarlo alla sezione didattica del dettaglio Application.
+Argo CD may fail sync or report errors when an AppProject does not allow a resource.
 
----
-
-## 9.2 Resource not permitted by AppProject
-
-Errore tipico:
+Example:
 
 ```text
 resource :ConfigMap is not permitted in project devops-ci-demo
 ```
 
-Interpretazione:
+Operational interpretation:
 
 ```text
-La risorsa è presente nel repository GitOps, ma l’AppProject non consente alla Application di gestirla.
+The resource exists in the GitOps repository, but the AppProject does not allow the Application to manage that resource kind.
 ```
 
-Messaggio operativo:
+Suggested message:
 
 ```text
-Aggiungere group: "" kind: ConfigMap alla namespaceResourceWhitelist dell’AppProject devops-ci-demo.
-```
-
-### Regola DevOps Control Plane
-
-- Riconoscere l’errore.
-- Classificarlo come `ARGO_RESOURCE_NOT_PERMITTED`.
-- Suggerire correzione.
-- Registrare evento `SyncFailed`.
-
----
-
-## 10. Sync operation management
-
-## 10.1 Avvio sync
-
-Prima di avviare una sync, il sistema deve:
-
-1. leggere stato attuale Application;
-2. verificare operation in corso;
-3. registrare evento `SyncRequested`;
-4. invocare sync;
-5. registrare evento `SyncRunning`.
-
----
-
-## 10.2 Operation already in progress
-
-Errore tipico:
-
-```text
-another operation is already in progress
-```
-
-Gestione:
-
-- classificare come `ARGO_OPERATION_IN_PROGRESS`;
-- non lanciare sync duplicata;
-- suggerire wait o terminate manuale, se previsto;
-- registrare evento nel workflow.
-
-Nota MVP:
-
-DevOps Control Plane, nel primo MVP, dovrebbe limitarsi a segnalare e attendere. La terminazione automatica di operation può essere valutata in futuro con policy esplicita.
-
----
-
-## 10.3 Polling operation state
-
-Il sistema deve leggere periodicamente lo stato operation.
-
-Stati possibili:
-
-```text
-Running
-Succeeded
-Failed
-Error
-Terminating
-```
-
-Regole:
-
-- timeout obbligatorio;
-- polling interval configurabile;
-- ogni transizione significativa può generare evento;
-- failure deve salvare messaggio Argo CD.
-
----
-
-## 10.4 Wait Synced/Healthy
-
-Dopo sync succeeded, il sistema deve attendere:
-
-```text
-syncStatus=Synced
-healthStatus=Healthy
-```
-
-Se entro il timeout lo stato non viene raggiunto:
-
-- registrare `SyncFailed` o `SyncTimeout`;
-- salvare stato finale osservato;
-- salvare resources non sane o OutOfSync;
-- generare messaggio operativo.
-
----
-
-## 11. Rollback Argo CD
-
-## 11.1 Regola generale
-
-Il rollback Argo CD è operativo e non modifica Git.
-
-Nel modello DevOps Control Plane, il rollback definitivo deve essere preferibilmente gestito tramite GitLab:
-
-```text
-git revert / MR di revert
-  -> merge
-  -> Argo CD sync
-```
-
-## 11.2 Supporto MVP
-
-Nel primo MVP:
-
-- leggere history Argo CD: SHOULD;
-- mostrare revision precedenti: SHOULD;
-- eseguire rollback Argo CD automatico: COULD / fuori dal flusso principale;
-- proporre rollback GitLab: SHOULD in roadmap.
-
-## 11.3 Nota didattica
-
-Se un rollback Argo CD porta il cluster a una revision precedente, Git può restare su `main` corrente.
-
-In questa situazione la Application può risultare:
-
-```text
-OutOfSync from main
-Healthy
-```
-
-Questo significa:
-
-```text
-runtime sano, ma non allineato al target Git corrente.
+Review the AppProject namespaceResourceWhitelist and allow the required resource kind if the change is expected and approved.
 ```
 
 ---
 
-## 12. AppProject awareness
+## 11. Deployment check workflow
 
-## 12.1 Perché serve
+The current baseline uses deployment checks rather than relying only on an imperative sync flow.
 
-Molti errori di sync derivano da policy AppProject.
-
-Esempio:
-
-- Application introduce ConfigMap;
-- AppProject consente Service, Deployment e Route;
-- AppProject non consente ConfigMap;
-- sync fallisce.
-
----
-
-## 12.2 Requisito MVP
-
-Il sistema dovrebbe rilevare almeno alcuni errori AppProject noti, tra cui:
+### Endpoint
 
 ```text
-resource :ConfigMap is not permitted in project ...
+POST /api/v1/changes/{id}/check-deployment
 ```
 
-Nel futuro può interrogare direttamente AppProject tramite Kubernetes API o Argo CD API, se disponibile nel modello scelto.
-
----
-
-## 12.3 Messaggio operativo
+### Main flow
 
 ```text
-La risorsa ConfigMap non è autorizzata dall’AppProject.
-Verificare namespaceResourceWhitelist e aggiungere:
-
-- group: ""
-  kind: ConfigMap
+ChangeRequest
+  -> ChangeService.CheckDeployment
+  -> Argo CD adapter GetApplication
+  -> map sync and health status
+  -> update runtime status
+  -> create technical event
+  -> return normalized deployment result
 ```
+
+### Acceptance criteria
+
+- `Synced` and `Healthy` produce `DeploymentSyncedHealthy`.
+- `OutOfSync`, `Progressing`, `Degraded` and unknown states are handled explicitly.
+- Previous runtime status is preserved in event payload where useful.
+- Lifecycle status is not overwritten by runtime status.
 
 ---
 
-## 13. Error model Argo CD
+## 12. Deployment evidence workflow
 
-## 13.1 Codici errore interni
+### Endpoint
 
 ```text
-ARGO_AUTH_FAILED
-ARGO_FORBIDDEN
-ARGO_APPLICATION_NOT_FOUND
-ARGO_LIST_FAILED
-ARGO_GET_FAILED
-ARGO_RESOURCES_FAILED
-ARGO_HISTORY_FAILED
-ARGO_SYNC_FAILED
-ARGO_SYNC_TIMEOUT
-ARGO_OPERATION_IN_PROGRESS
-ARGO_RESOURCE_NOT_PERMITTED
-ARGO_APPLICATION_DEGRADED
-ARGO_APPLICATION_OUTOFSYNC_TIMEOUT
-ARGO_UNKNOWN_ERROR
+POST /api/v1/changes/{id}/collect-evidence
 ```
+
+### Main flow
+
+```text
+ChangeRequest
+  -> collect Argo CD state
+  -> collect Kubernetes/OpenShift runtime state
+  -> build sanitized deployment evidence
+  -> build diagnostics summary
+  -> persist evidence in PostgreSQL
+  -> update runtime status to EvidenceCollected
+```
+
+### Evidence includes
+
+- ChangeRequest metadata;
+- Application name;
+- target environment;
+- Argo CD sync status;
+- Argo CD health status;
+- Git revision;
+- Argo CD conditions;
+- Kubernetes/OpenShift runtime evidence;
+- deployment diagnostics.
 
 ---
 
-## 13.2 Struttura errore normalizzata
+## 13. Deployment diagnostics
+
+Deployment evidence includes diagnostics derived from Argo CD and Kubernetes/OpenShift payloads.
+
+Diagnostics include:
+
+```text
+argocdSynced
+argocdHealthy
+deploymentReady
+generationObserved
+readyReplicas
+podsReady
+totalRestarts
+serviceAvailable
+routeAvailable
+warnings
+summary
+```
+
+Example summary:
+
+```text
+Application demo-go-color-app is Synced/Healthy with 2/2 replicas ready; warnings: 1
+```
+
+Diagnostics are displayed in the UI and stored in the evidence payload.
+
+---
+
+## 14. Error model
+
+## 14.1 Argo CD error codes
+
+Recommended internal error family:
+
+```text
+ARGOCD_AUTH_FAILED
+ARGOCD_FORBIDDEN
+ARGOCD_APPLICATION_NOT_FOUND
+ARGOCD_LIST_FAILED
+ARGOCD_GET_FAILED
+ARGOCD_SYNC_FAILED
+ARGOCD_OPERATION_IN_PROGRESS
+ARGOCD_RESOURCE_NOT_PERMITTED
+ARGOCD_APPLICATION_DEGRADED
+ARGOCD_APPLICATION_OUT_OF_SYNC
+ARGOCD_UNKNOWN_ERROR
+```
+
+Current APIs may still expose broader validation or workflow error codes. Error refinements should preserve backward compatibility where possible.
+
+## 14.2 Normalized error structure
+
+Example:
 
 ```yaml
-code: ARGO_RESOURCE_NOT_PERMITTED
-technicalMessage: "resource :ConfigMap is not permitted in project devops-ci-demo"
-userMessage: "La ConfigMap non è consentita dall’AppProject devops-ci-demo."
-suggestedAction: "Aggiungere group: \"\" kind: ConfigMap alla namespaceResourceWhitelist."
+code: ARGOCD_RESOURCE_NOT_PERMITTED
+message: Argo CD resource is not permitted
+technicalMessage: resource :ConfigMap is not permitted in project devops-ci-demo
 recoverable: true
+suggestedAction: Review AppProject namespaceResourceWhitelist.
 ```
+
+Rules:
+
+- do not expose tokens;
+- include technical details only when safe;
+- make recoverability explicit where useful;
+- record relevant failures as ChangeRequest events.
 
 ---
 
-## 14. Evidence Argo CD
+## 15. Argo CD evidence examples
 
-Per ogni sync o dettaglio change, il sistema deve poter salvare evidenze Argo CD.
-
-## 14.1 Evidence minima
+## 15.1 Healthy evidence
 
 ```yaml
 application: demo-go-color-app
-project: devops-ci-demo
+targetEnvironment: dev
 syncStatus: Synced
 healthStatus: Healthy
-revision: b8e1d6b
-syncPolicy: Automated
+revision: <revision>
 conditions:
   - type: OrphanedResourceWarning
-    message: Application has 2 orphaned resources
-resources:
-  - kind: Deployment
-    name: demo-go-color-app
-    status: Synced
-    health: Healthy
+    message: Application has 5 orphaned resources
+diagnostics:
+  argocdSynced: true
+  argocdHealthy: true
+  warnings:
+    - OrphanedResourceWarning: Application has 5 orphaned resources
 ```
 
----
-
-## 14.2 Evidence in caso di errore
+## 15.2 Non-healthy evidence
 
 ```yaml
 application: demo-go-color-app
+targetEnvironment: dev
 syncStatus: OutOfSync
-healthStatus: Healthy
-operationPhase: Failed
-errorCode: ARGO_RESOURCE_NOT_PERMITTED
-message: "resource :ConfigMap is not permitted in project devops-ci-demo"
+healthStatus: Degraded
+runtimeStatus: DeploymentDegraded
+conditions:
+  - type: Error
+    message: Example condition message
 ```
 
 ---
 
-## 15. Configurazione Argo CD
+## 16. API endpoints related to Argo CD
 
-Variabili previste:
+### Applications
 
 ```text
-ARGOCD_BASE_URL=https://openshift-gitops-server-openshift-gitops.apps.example.local
-ARGOCD_AUTH_TOKEN=<from secret>
-ARGOCD_INSECURE_TLS=false
-ARGOCD_CA_CERT_PATH=
-ARGOCD_TIMEOUT_SECONDS=30
-ARGOCD_POLL_INTERVAL_SECONDS=5
-ARGOCD_DEFAULT_NAMESPACE=openshift-gitops
+GET /api/v1/applications
+GET /api/v1/applications/{name}
+GET /api/v1/applications/{name}/resources
+GET /api/v1/applications/{name}/history
+GET /api/v1/applications/{name}/runtime
 ```
 
-### Regole
-
-- token da Secret;
-- base URL da ConfigMap o env;
-- TLS insecure solo per lab;
-- timeout obbligatorio.
-
----
-
-## 16. API interne DevOps Control Plane collegate ad Argo CD
-
-## 16.1 Applications
+### ChangeRequest deployment and evidence
 
 ```text
-GET /api/applications
-GET /api/applications/{name}
-GET /api/applications/{name}/resources
-GET /api/applications/{name}/history
+POST /api/v1/changes/{id}/check-deployment
+POST /api/v1/changes/{id}/collect-evidence
+GET  /api/v1/changes/{id}/evidence
+GET  /api/v1/changes/{id}/evidence/deployment
 ```
+
+Legacy endpoint references without `/api/v1` should be considered historical and updated during documentation migration.
 
 ---
 
-## 16.2 Sync
+## 17. Security requirements specific to Argo CD
 
-```text
-POST /api/applications/{name}/sync
-GET  /api/applications/{name}/operation
-POST /api/changes/{id}/sync
-```
-
----
-
-## 16.3 Evidence
-
-```text
-GET /api/changes/{id}/evidence/argocd
-```
-
----
-
-## 17. Security requirements specifici
-
-- Non loggare `ARGOCD_AUTH_TOKEN`.
-- Non restituire token nelle API.
-- Non salvare token in PostgreSQL.
-- Non includere token nelle evidenze.
-- Usare timeout su tutte le chiamate.
-- Limitare il token Argo CD alle Application/progetti richiesti, se possibile.
-- Preferire token applicativo/servizio rispetto a credenziali admin.
+- Do not log `ARGOCD_AUTH_TOKEN`.
+- Do not return Argo CD token values through API.
+- Do not persist Argo CD token values in PostgreSQL.
+- Do not include Argo CD token values in evidence.
+- Use explicit timeouts.
+- Use TLS strict mode.
+- Use a dedicated service account or Argo CD account token.
+- Rotate token immediately if exposed.
+- Keep the token permission scope minimal.
 
 ---
 
 ## 18. Testing strategy
 
-## 18.1 Unit test
+## 18.1 Unit tests
 
-Testare:
+Test:
 
-- mapping Application raw -> normalized model;
-- mapping resources;
-- mapping health/sync status;
-- mapping errori noti;
-- wait loop con fake client.
+- raw Application payload mapping;
+- sync and health status mapping;
+- condition preservation;
+- warning handling;
+- error mapping;
+- TLS utility behavior where applicable.
 
----
+## 18.2 Runtime validation
 
-## 18.2 Integration test manuale MVP
+Runtime validation should cover:
 
-Scenario minimo:
+- `GET /api/v1/applications/{name}` returns the expected application;
+- deployment check maps `Synced/Healthy` correctly;
+- `OrphanedResourceWarning` is preserved;
+- deployment evidence contains Argo CD state;
+- TLS strict mode works with the mounted trust bundle;
+- token rotation does not break runtime access after rollout.
 
-1. configurare Argo CD base URL e token;
-2. chiamare `GET /api/applications`;
-3. verificare `demo-go-color-app` presente;
-4. chiamare dettaglio;
-5. chiamare resources;
-6. verificare orphaned resources;
-7. lanciare sync su Application già Synced;
-8. verificare gestione stato finale.
+## 18.3 Failure scenarios
 
----
+Scenarios to validate or simulate:
 
-## 18.3 Casi errore da simulare
-
-- token errato;
-- Application inesistente;
-- operation già in corso;
-- risorsa non permessa da AppProject;
-- Application Degraded;
-- timeout wait Synced/Healthy.
-
----
-
-## 19. MVP implementation order per Argo CD adapter
-
-Ordine consigliato:
-
-1. configurazione Argo CD;
-2. HTTP client base;
-3. autenticazione token;
-4. `ListApplications`;
-5. `GetApplication`;
-6. mapping sync/health/revision;
-7. resources;
-8. history;
-9. sync;
-10. operation state;
-11. wait Synced/Healthy;
-12. mapping errori;
-13. evidence builder.
+- invalid token;
+- expired token;
+- missing Application;
+- TLS trust failure;
+- `OutOfSync` application;
+- `Degraded` application;
+- AppProject restriction;
+- Argo CD API unavailable.
 
 ---
 
-## 20. Checklist di completamento integrazione Argo CD
+## 19. Multi-environment direction
 
-La prima implementazione Argo CD sarà considerata pronta quando:
+The future environment-aware architecture will resolve Argo CD Application names through the environment catalog.
 
-- il backend legge configurazione Argo CD;
-- il token è letto da Secret/env e non loggato;
-- la lista Application funziona;
-- il dettaglio Application funziona;
-- resources e orphaned resources sono visibili;
-- history è disponibile o gestita come funzione opzionale;
-- sync può essere invocata;
-- wait Synced/Healthy funziona con timeout;
-- errori noti sono normalizzati;
-- evidence Argo CD è salvabile in PostgreSQL;
-- i test manuali sono documentati.
-
----
-
-## 21. Relazione con documenti successivi
-
-Questo documento alimenta:
-
-- `docs/10-data-model.md`, per entità Application, ArgoStatus e Evidence;
-- `docs/11-change-workflows.md`, per i workflow sync e wait;
-- `docs/13-api-design.md`, per endpoint applicativi;
-- `docs/09-security-rbac.md`, per token e permessi;
-- ADR specifico `ADR-0002-argocd-as-gitops-engine.md`.
-
----
-
-## 22. Messaggio chiave
-
-L’integrazione Argo CD deve essere robusta, ma semplice.
-
-DevOps Control Plane deve usare Argo CD per ciò che Argo CD fa meglio:
+Example mapping:
 
 ```text
-confrontare Git e cluster
-sincronizzare manifest
-mostrare health
-mostrare history
-segnalare drift e warning
+demo-go-color-app + dev        -> demo-go-color-app-dev
+demo-go-color-app + staging    -> demo-go-color-app-staging
+demo-go-color-app + production -> demo-go-color-app-production
 ```
 
-DevOps Control Plane aggiunge valore correlando queste informazioni con GitLab, Tekton, OpenShift runtime e storico ChangeRequest.
+The Control Plane should resolve Argo CD integration context from:
+
+```text
+applicationName
+targetEnvironment
+environment configuration
+```
+
+Production-related Argo CD workflows must remain disabled until production guardrails, RBAC/AuthZ and evidence policies are validated.
+
+---
+
+## 20. Relationship with other documents
+
+This document informs and is informed by:
+
+- `docs/05-architecture.md`;
+- `docs/13-api-design.md`;
+- `docs/04-non-functional-requirements.md`;
+- `docs/multi-environment-model.md`;
+- `docs/environment-configuration-model.md`;
+- `docs/change-promotion-model.md`;
+- `docs/adr/ADR-0002-argocd-as-gitops-engine.md`;
+- `docs/runbooks/secrets-rotation.md`;
+- `docs/runbooks/operability-health-check.md`.
+
+---
+
+## 21. Completion checklist
+
+The Argo CD integration baseline is considered ready when:
+
+- Argo CD configuration is loaded safely;
+- token is read from Secret and not logged;
+- TLS strict mode works;
+- application detail can be retrieved;
+- deployment check maps state correctly;
+- warnings are preserved;
+- deployment evidence includes Argo CD state;
+- errors are normalized;
+- evidence is persisted in PostgreSQL;
+- UI shows the relevant deployment and evidence information;
+- runtime validation is documented.
+
+---
+
+## 22. Key message
+
+The Argo CD integration must be robust, secure and simple.
+
+Argo CD provides GitOps reconciliation and application health insight. The DevOps Control Plane adds value by correlating Argo CD status with:
+
+```text
+GitLab workflow
+Tekton validation
+OpenShift runtime evidence
+ChangeRequest history
+PostgreSQL evidence
+Web UI visibility
+```
+
+The integration must preserve Argo CD semantics while making application state understandable, auditable and operationally useful.
+
+---
+
+## 23. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial Argo CD integration document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed to align with the current Argo CD adapter, TLS strict, deployment check, evidence and multi-environment baseline. |
