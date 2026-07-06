@@ -1,234 +1,253 @@
-# DevOps Control Plane - Data Model
+# DevOps Control Plane — Data Model
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-- `docs/05-architecture.md`  
-- `docs/06-argocd-integration.md`  
-- `docs/07-gitlab-integration.md`  
-- `docs/08-tekton-integration.md`  
-- `docs/09-security-rbac.md`  
-**Stato:** Draft iniziale / Data Model
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento definisce il **modello dati iniziale** del progetto **DevOps Control Plane**.
-
-L’obiettivo è descrivere:
-
-- entità principali;
-- relazioni tra entità;
-- tabelle PostgreSQL MVP;
-- campi obbligatori e opzionali;
-- convenzioni di naming;
-- stati ChangeRequest;
-- payload JSONB previsti;
-- regole di auditabilità;
-- regole di sicurezza sui dati;
-- prime migration SQL;
-- mapping tra modello dati, workflow e API.
-
-Il modello dati deve supportare il primo obiettivo del prodotto:
-
-```text
-tracciare change GitOps end-to-end
-```
-
-Il flusso dati minimo da rappresentare è:
-
-```text
-Application
-  -> ChangeRequest
-  -> Git operation
-  -> Tekton validation
-  -> Argo CD sync
-  -> Runtime evidence
-  -> Change history
-```
+- **Project:** DevOps Control Plane
+- **Document:** 10 — Data Model
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+  - `docs/05-architecture.md`
+  - `docs/06-argocd-integration.md`
+  - `docs/07-gitlab-integration.md`
+  - `docs/08-tekton-integration.md`
+  - `docs/09-security-rbac.md`
+- **Status:** Rewritten in English and refreshed while preserving the original PostgreSQL-as-functional-history intent
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Principi del data model
+## 1. Purpose
 
-## 2.1 PostgreSQL come change store
+This document defines the data model of the DevOps Control Plane.
 
-PostgreSQL è il database interno del DevOps Control Plane.
+The original document established the core data-model spirit of the project:
 
-Responsabilità:
+```text
+PostgreSQL is the functional change store.
+ChangeRequest is the central entity.
+ChangeEvent provides the auditable timeline.
+Evidence provides technical proof.
+JSONB stores extensible integration payloads.
+No secrets are persisted in the database.
+GitLab, Tekton, Argo CD and OpenShift data are correlated into one readable operational history.
+```
 
-- conservare storico funzionale dei change;
-- correlare GitLab, Argo CD, Tekton e OpenShift;
-- salvare eventi di workflow;
-- salvare evidenze tecniche;
-- permettere audit e troubleshooting.
+This refreshed version preserves that intent and aligns the document with the implemented advanced MVP baseline, including:
 
-PostgreSQL non sostituisce:
+- current PostgreSQL tables;
+- ChangeRequest lifecycle status and runtime status separation;
+- `requestedBy` and multi-developer visibility;
+- `targetEnvironment` and future environment catalog alignment;
+- validation and deployment evidence;
+- Tekton `PipelineRun` and `TaskRun` diagnostics;
+- Argo CD deployment status and warnings;
+- Kubernetes/OpenShift runtime evidence and diagnostics;
+- future promotion metadata such as `promotionGroupID` and `promotedFromChangeNumber`;
+- backup, restore and disaster recovery implications for persisted data.
 
-- GitLab history;
+The data model must support the central objective of the product:
+
+```text
+trace GitOps changes end to end in a functional, auditable and evidence-driven way
+```
+
+---
+
+## 2. Data model principles
+
+## 2.1 PostgreSQL stores the functional history
+
+PostgreSQL is the internal database of the DevOps Control Plane.
+
+PostgreSQL stores:
+
+- ChangeRequests;
+- lifecycle events;
+- technical workflow events;
+- validation evidence;
+- deployment evidence;
+- runtime status;
+- audit-oriented payloads;
+- external references to GitLab, Tekton, Argo CD and OpenShift.
+
+PostgreSQL does not replace:
+
+- GitLab Git history;
 - Argo CD history;
-- Tekton Results;
-- Kubernetes Events.
+- Tekton objects or Tekton Results;
+- Kubernetes events;
+- OpenShift audit logs.
 
-PostgreSQL conserva una vista funzionale e normalizzata del workflow.
+PostgreSQL provides a normalized functional view that makes those external systems understandable together.
 
----
+## 2.2 No secrets in the database
 
-## 2.2 Nessun secret nel database
+The database must not contain:
 
-Il database non deve contenere:
+- GitLab tokens;
+- Argo CD tokens;
+- Kubernetes bearer tokens;
+- kubeconfigs;
+- PostgreSQL passwords in clear text;
+- Kubernetes Secret values;
+- Docker auth JSON values;
+- private keys;
+- raw logs containing credentials.
 
-- token GitLab;
-- token Argo CD;
-- kubeconfig;
-- password PostgreSQL;
-- secret Kubernetes;
-- `.dockerconfigjson`;
-- private key;
-- valori sensibili trovati in manifest.
+All evidence payloads must be sanitized before persistence.
 
-Le evidenze devono essere sanitizzate prima della persistenza.
+## 2.3 Relational columns and JSONB are both intentional
 
----
+The design uses relational columns for frequently queried, indexed and stable fields.
 
-## 2.3 JSONB per payload estensibili
+The design uses `jsonb` for extensible technical payloads such as:
 
-Il modello usa colonne `jsonb` per dati estensibili.
+- ChangeRequest creation payload;
+- event payloads;
+- Tekton diagnostics;
+- Argo CD status details;
+- Kubernetes/OpenShift runtime evidence;
+- future promotion metadata details.
 
-Esempi:
-
-- payload iniziale ChangeRequest;
-- dettaglio evento;
-- snapshot Argo CD;
-- summary Tekton;
-- evidence runtime.
-
-Regola:
-
-```text
-Usare colonne relazionali per campi interrogati spesso.
-Usare jsonb per dati variabili e dettagli tecnici.
-```
-
----
-
-## 2.4 Event sourcing leggero
-
-Ogni cambio stato rilevante deve generare un record in `change_events`.
-
-Questo non è un event sourcing completo, ma consente di ricostruire la timeline del workflow.
-
-Esempio:
+Rule:
 
 ```text
-Created
-BranchCreated
-FilesUpdated
-ValidationRequested
-ValidationSucceeded
-SyncRequested
-SyncSucceeded
-EvidenceCollected
-Completed
+Use relational columns for stable search and filtering.
+Use JSONB for variable integration payloads and diagnostics.
 ```
+
+## 2.4 Lightweight event sourcing
+
+Every significant lifecycle or technical action creates a `change_events` row.
+
+This is not full event sourcing, but it provides a reliable audit timeline.
+
+Examples:
+
+```text
+change_created
+change_submitted
+change_approved
+technical_step_completed BranchCreated
+technical_step_completed CommitCreated
+technical_step_completed ValidationSucceeded
+technical_step_completed DeploymentSyncedHealthy
+technical_step_completed EvidenceCollected
+```
+
+## 2.5 Evidence is a first-class model
+
+Evidence is not an afterthought. Evidence is one of the reasons the Control Plane exists.
+
+Evidence must answer operational and audit questions such as:
+
+- which validation ran;
+- which task failed;
+- which Argo CD state was observed;
+- which deployment state was observed;
+- which warnings were present;
+- whether the payload was sanitized.
 
 ---
 
-## 3. Entità principali
+## 3. Main entities
 
 ## 3.1 Application
 
-Rappresenta una Application Argo CD nota al DevOps Control Plane.
+An Application represents an Argo CD Application known to the Control Plane.
 
-Origine principale:
+Primary source:
 
 ```text
 Argo CD API
 ```
 
-Arricchimenti:
+Additional metadata can include:
 
-- GitLab repository metadata;
-- namespace target;
-- ultimo commit Git;
-- stato sync/health corrente;
-- path GitOps.
+- Git repository information;
+- target namespace;
+- GitOps path;
+- target revision;
+- current revision;
+- sync status;
+- health status;
+- environment mapping in future phases.
 
----
+The current implementation can operate with live Argo CD data and does not require every Application to be pre-cached.
 
 ## 3.2 ChangeRequest
 
-Rappresenta una richiesta di change GitOps.
+A ChangeRequest represents a requested GitOps change.
 
-Esempi:
+It is the central entity of the system.
 
-- update repliche;
-- update `APP_VERSION`;
-- update `PAGE_COLOR`;
-- update ConfigMap values;
-- governance change futuro.
+A ChangeRequest captures:
 
-È l’entità centrale del sistema.
+- change number;
+- title;
+- application name;
+- target environment;
+- change type;
+- risk level;
+- requester;
+- description;
+- lifecycle status;
+- runtime status;
+- timestamps;
+- request payload.
 
----
+The current model separates lifecycle status from runtime status.
 
 ## 3.3 ChangeEvent
 
-Rappresenta un evento della timeline di una ChangeRequest.
+A ChangeEvent represents one point in the history of a ChangeRequest.
 
-Esempi:
+Events can represent:
 
-- branch creato;
-- commit creato;
-- validazione Tekton fallita;
-- sync Argo CD completata;
-- evidenza raccolta.
-
----
+- lifecycle transitions;
+- technical workflow completions;
+- validation results;
+- deployment checks;
+- evidence collection;
+- failures;
+- authorization-relevant activity where applicable.
 
 ## 3.4 Evidence
 
-Rappresenta una evidenza tecnica associata a una ChangeRequest.
+Evidence represents technical proof associated with a ChangeRequest.
 
-Tipi:
+Current evidence types include:
 
-- GitLab evidence;
-- Tekton evidence;
-- Argo CD evidence;
-- Kubernetes/OpenShift runtime evidence;
-- health check evidence;
-- diff summary.
+```text
+validation
+deployment
+```
 
----
+Evidence payloads can contain GitLab, Tekton, Argo CD and Kubernetes/OpenShift data as long as the payload is sanitized.
 
-## 3.5 IntegrationSnapshot
+## 3.5 Future integration snapshot
 
-Entità opzionale per salvare snapshot raw o normalizzati da sistemi esterni.
+A future `integration_snapshots` table may be introduced if evidence payloads become too broad or if raw normalized snapshots must be retained separately.
 
-Uso futuro:
-
-- snapshot Application Argo CD;
-- snapshot PipelineRun;
-- snapshot Deployment runtime.
-
-Per MVP può essere sostituita da `evidences.payload`.
+For the current baseline, `evidences.payload` is sufficient.
 
 ---
 
-## 4. Diagramma relazionale logico
+## 4. Logical relationship diagram
 
 ```text
 applications
     |
-    | 1:N
+    | 1:N optional
     v
 change_requests
     |
@@ -244,28 +263,34 @@ evidences
 
 change_requests
     |
-    | 1:1 logical
+    | logical references
     v
-GitLab branch / commit / merge request fields
+GitLab branch / commit / merge request
 
 change_requests
     |
-    | 1:1 logical
+    | logical references
     v
-Tekton validation fields
+Tekton PipelineRun / TaskRun diagnostics
 
 change_requests
     |
-    | 1:1 logical
+    | logical references
     v
-Argo CD sync fields
+Argo CD deployment status
+
+change_requests
+    |
+    | logical references
+    v
+Kubernetes/OpenShift runtime evidence
 ```
 
 ---
 
-## 5. Tabelle MVP
+## 5. Current PostgreSQL tables
 
-Per il primo MVP sono previste queste tabelle:
+The implemented MVP baseline is centered on:
 
 ```text
 applications
@@ -274,7 +299,7 @@ change_events
 evidences
 ```
 
-Tabelle future possibili:
+Future tables may include:
 
 ```text
 users
@@ -282,18 +307,20 @@ application_repositories
 application_environments
 workflow_locks
 integration_snapshots
+promotion_groups
+change_promotions
 audit_exports
 ```
 
 ---
 
-## 6. Tabella applications
+## 6. Table: applications
 
-## 6.1 Scopo
+## 6.1 Purpose
 
-Conserva le applicazioni note, normalmente scoperte da Argo CD API.
+Stores known application metadata, normally discovered from Argo CD API or configured for workflow correlation.
 
-## 6.2 Campi
+## 6.2 Conceptual fields
 
 ```sql
 CREATE TABLE applications (
@@ -322,206 +349,140 @@ CREATE TABLE applications (
 );
 ```
 
-## 6.3 Note campi
+## 6.3 Notes
 
-### `name`
+`name` is the Argo CD Application name.
 
-Nome Argo CD Application.
-
-Esempio:
-
-```text
-demo-go-color-app
-```
-
-### `argocd_namespace`
-
-Namespace in cui vive la Application Argo CD.
-
-Esempio:
-
-```text
-openshift-gitops
-```
-
-### `repo_provider`
-
-Per MVP:
+`repo_provider` is currently expected to be:
 
 ```text
 gitlab
 ```
 
-### `repo_project_id`
+`repo_project_id` can be a GitLab numeric project ID or an encoded project path, depending on the adapter configuration.
 
-Project ID GitLab numerico o path URL-encoded.
+`sync_status` and `health_status` represent the latest observed Argo CD values when cached.
 
-### `sync_status` e `health_status`
-
-Snapshot ultimo dello stato Argo CD.
+Future environment-aware behavior may move some fields to an environment mapping model.
 
 ---
 
-## 6.4 Indici consigliati
+## 7. Table: change_requests
 
-```sql
-CREATE INDEX idx_applications_name ON applications(name);
-CREATE INDEX idx_applications_argocd_project ON applications(argocd_project);
-CREATE INDEX idx_applications_target_namespace ON applications(target_namespace);
-CREATE INDEX idx_applications_repo_project_id ON applications(repo_project_id);
-```
+## 7.1 Purpose
 
----
+Stores the current functional and technical state of a ChangeRequest.
 
-## 7. Tabella change_requests
+This is the central table of the Control Plane.
 
-## 7.1 Scopo
-
-Conserva la richiesta di change e lo stato corrente del workflow.
-
-È la tabella centrale del sistema.
-
-## 7.2 Campi
+## 7.2 Current conceptual fields
 
 ```sql
 CREATE TABLE change_requests (
-    id                      uuid PRIMARY KEY,
-    change_number           text UNIQUE NOT NULL,
+    id                  uuid PRIMARY KEY,
+    change_number       text UNIQUE NOT NULL,
 
-    application_id          uuid REFERENCES applications(id),
-    application_name        text NOT NULL,
+    application_id      uuid REFERENCES applications(id),
+    application_name    text NOT NULL,
 
-    change_type             text NOT NULL,
-    status                  text NOT NULL,
-    requested_by            text,
-    description             text,
+    title               text,
+    change_type         text NOT NULL,
+    risk_level          text,
+    target_environment  text,
+    requested_by        text,
+    description         text,
 
-    request_payload         jsonb,
+    status              text NOT NULL,
+    runtime_status      text,
+    request_payload     jsonb,
 
-    -- GitLab fields
-    git_provider            text,
-    gitlab_project_id       text,
-    repo_url                text,
-    source_branch           text,
-    target_branch           text,
-    commit_sha              text,
-    commit_short_sha        text,
-    merge_request_iid       integer,
-    merge_request_url       text,
-    merge_request_state     text,
-
-    -- Tekton fields
-    tekton_namespace        text,
-    tekton_pipeline_name    text,
-    tekton_pipelinerun_name text,
-    tekton_status           text,
-    tekton_started_at       timestamptz,
-    tekton_completed_at     timestamptz,
-
-    -- Argo CD fields
-    argocd_application      text,
-    argocd_project          text,
-    argocd_sync_revision    text,
-    argocd_sync_status      text,
-    argocd_health_status    text,
-    argocd_operation_phase  text,
-
-    -- Runtime summary
-    runtime_namespace       text,
-    runtime_status          text,
-
-    created_at              timestamptz NOT NULL DEFAULT now(),
-    updated_at              timestamptz NOT NULL DEFAULT now(),
-    completed_at            timestamptz
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    completed_at        timestamptz
 );
 ```
 
----
+Some early design fields for GitLab, Tekton and Argo CD can be represented either as columns or as event/evidence payloads. The current implementation favors keeping integration details in events and evidence payloads where appropriate.
 
 ## 7.3 Change number
 
-Formato proposto:
+Human-readable format:
 
 ```text
 CHG-YYYY-NNNN
 ```
 
-Esempio:
+Example:
 
 ```text
-CHG-2026-0001
+CHG-2026-0006
 ```
 
-Per MVP, il contatore può essere gestito dal database o dal codice applicativo.
+The UUID remains the technical primary key. The change number is the operator-friendly identifier.
 
-Opzione consigliata iniziale:
+## 7.4 Lifecycle status
 
-- UUID come chiave tecnica;
-- `change_number` come identificativo leggibile.
-
----
-
-## 7.4 Change type
-
-Valori MVP:
+Current lifecycle states:
 
 ```text
-update-replicas
-update-app-version
-update-page-color
-update-configmap-values
+draft
+submitted
+approved
+executing
+executed
+closed
 ```
 
-Valori futuri:
+Lifecycle status represents process state, not technical execution state.
+
+## 7.5 Runtime status
+
+Runtime status represents technical execution state.
+
+Examples:
 
 ```text
-governance-appproject-change
-rollback-git-revert
-sync-only
-validate-only
-```
-
----
-
-## 7.5 Status
-
-Stati iniziali:
-
-```text
-Draft
-Created
 BranchCreated
-FilesUpdated
-ValidationRequested
+CommitCreated
+MergeRequestOpened
+MergeRequestMerged
 ValidationRunning
 ValidationSucceeded
 ValidationFailed
-MergeRequestOpened
-Merged
-SyncRequested
-SyncRunning
-SyncSucceeded
-SyncFailed
+DeploymentSyncedHealthy
+DeploymentProgressing
+DeploymentOutOfSync
+DeploymentDegraded
 EvidenceCollected
-Completed
-Failed
-Cancelled
 ```
 
----
+## 7.6 Target environment
 
-## 7.6 Request payload
+`target_environment` identifies the intended environment.
 
-Esempio `update-replicas`:
+Current canonical values:
+
+```text
+dev
+staging
+production
+```
+
+Current baseline defaults to `dev` where needed. Future implementation must validate this field against the environment catalog fail-closed.
+
+## 7.7 Request payload
+
+Example standard payload:
 
 ```json
 {
-  "replicas": 3,
-  "deploymentName": "demo-go-color-app"
+  "applicationName": "demo-go-color-app",
+  "targetEnvironment": "dev",
+  "changeType": "standard"
 }
 ```
 
-Esempio `update-configmap-values`:
+Example future ConfigMap payload:
 
 ```json
 {
@@ -535,27 +496,13 @@ Esempio `update-configmap-values`:
 
 ---
 
-## 7.7 Indici consigliati
+## 8. Table: change_events
 
-```sql
-CREATE INDEX idx_change_requests_application_id ON change_requests(application_id);
-CREATE INDEX idx_change_requests_application_name ON change_requests(application_name);
-CREATE INDEX idx_change_requests_status ON change_requests(status);
-CREATE INDEX idx_change_requests_change_type ON change_requests(change_type);
-CREATE INDEX idx_change_requests_created_at ON change_requests(created_at DESC);
-CREATE INDEX idx_change_requests_source_branch ON change_requests(source_branch);
-CREATE INDEX idx_change_requests_commit_sha ON change_requests(commit_sha);
-```
+## 8.1 Purpose
 
----
+Stores the timeline of each ChangeRequest.
 
-## 8. Tabella change_events
-
-## 8.1 Scopo
-
-Conserva la timeline di ogni ChangeRequest.
-
-## 8.2 Campi
+## 8.2 Conceptual fields
 
 ```sql
 CREATE TABLE change_events (
@@ -575,92 +522,78 @@ CREATE TABLE change_events (
 );
 ```
 
----
+## 8.3 Event types
 
-## 8.3 Event type
-
-Esempi:
+Current and recommended event types include:
 
 ```text
-Created
-GitRepositoryResolved
-GitBranchCreated
-GitFileRead
-GitFilesUpdated
-GitCommitCreated
-GitMergeRequestOpened
-ValidationRequested
-ValidationRunning
-ValidationSucceeded
-ValidationFailed
-SyncRequested
-SyncRunning
-SyncSucceeded
-SyncFailed
-EvidenceCollected
-Completed
-Failed
-Cancelled
+change_created
+change_submitted
+change_approved
+change_execution_started
+change_execution_completed
+change_closed
+technical_step_completed
+technical_step_failed
+evidence_collected
 ```
 
----
+Technical step details are usually carried in the payload, for example:
 
-## 8.4 Source
+```json
+{
+  "step": "ValidationSucceeded",
+  "lifecycleStatus": "draft",
+  "previousRuntimeStatus": "ValidationRunning"
+}
+```
 
-Origine evento:
+## 8.4 Event source
+
+Recommended sources:
 
 ```text
 system
+user
 gitlab
 argocd
 tekton
 kubernetes
-user
 workflow
+authz
 ```
 
----
+## 8.5 Payload examples
 
-## 8.5 Payload esempio
+Branch event:
 
 ```json
 {
-  "branch": "change/CHG-2026-0001-update-replicas",
+  "branch": "change/CHG-2026-0006",
   "projectId": "12345",
   "ref": "main"
 }
 ```
 
-Errore:
+Validation failure:
 
 ```json
 {
-  "operation": "CreateBranch",
-  "recoverable": true,
-  "suggestedAction": "Verificare se il branch è già collegato alla stessa ChangeRequest."
+  "step": "ValidationFailed",
+  "failedTasks": ["clone-repository"],
+  "summary": "Tekton validation failed in task clone-repository"
 }
 ```
 
 ---
 
-## 8.6 Indici consigliati
+## 9. Table: evidences
 
-```sql
-CREATE INDEX idx_change_events_change_request_id ON change_events(change_request_id);
-CREATE INDEX idx_change_events_event_type ON change_events(event_type);
-CREATE INDEX idx_change_events_created_at ON change_events(created_at DESC);
-CREATE INDEX idx_change_events_source ON change_events(source);
-```
+## 9.1 Purpose
 
----
+Stores sanitized technical evidence associated with a ChangeRequest.
 
-## 9. Tabella evidences
-
-## 9.1 Scopo
-
-Conserva evidenze tecniche associate alla ChangeRequest.
-
-## 9.2 Campi
+## 9.2 Conceptual fields
 
 ```sql
 CREATE TABLE evidences (
@@ -679,11 +612,16 @@ CREATE TABLE evidences (
 );
 ```
 
----
+## 9.3 Current evidence types
 
-## 9.3 Evidence type
+Current baseline uses:
 
-Valori iniziali:
+```text
+validation
+deployment
+```
+
+Future or logical evidence categories may include:
 
 ```text
 gitlab
@@ -696,161 +634,117 @@ workflow-summary
 security-validation
 ```
 
----
-
-## 9.4 Evidence GitLab esempio
-
-```json
-{
-  "provider": "gitlab",
-  "projectId": "12345",
-  "repoUrl": "https://gitlab.example.local/group/demo-app-gitops.git",
-  "sourceBranch": "change/CHG-2026-0001-update-replicas",
-  "targetBranch": "main",
-  "commitSha": "b8e1d6b2fc88b41909f87d505739bc855de41516",
-  "mergeRequestIid": 42,
-  "mergeRequestUrl": "https://gitlab.example.local/group/repo/-/merge_requests/42",
-  "filesChanged": [
-    "apps/demo-go-color-app/deployment.yaml"
-  ]
-}
-```
-
----
-
-## 9.5 Evidence Tekton esempio
+## 9.4 Validation evidence example
 
 ```json
 {
   "provider": "tekton",
-  "namespace": "devops-control-plane",
-  "pipelineRunName": "validate-gitops-change-chg-2026-0001-abcde",
+  "namespace": "devops-ci-demo",
+  "pipelineRunName": "devops-cp-validate-chg-2026-0006-xxxxx",
+  "pipelineName": "validate-gitops",
+  "gitRevision": "change/CHG-2026-0006",
+  "validationPath": "apps/demo-go-color-app",
   "status": "Succeeded",
+  "reason": "Succeeded",
   "taskRuns": [
     {
-      "name": "yaml-validate",
+      "name": "clone-repository",
       "status": "Succeeded"
     },
     {
-      "name": "server-side-dry-run",
+      "name": "validate-gitops-manifests",
       "status": "Succeeded"
     }
   ]
 }
 ```
 
----
-
-## 9.6 Evidence Argo CD esempio
+## 9.5 Failed validation evidence example
 
 ```json
 {
-  "application": "demo-go-color-app",
-  "project": "devops-ci-demo",
-  "syncStatus": "Synced",
-  "healthStatus": "Healthy",
-  "revision": "b8e1d6b",
-  "operationPhase": "Succeeded"
+  "provider": "tekton",
+  "pipelineRunName": "devops-cp-validate-chg-2026-0001-xxxxx",
+  "status": "Failed",
+  "failedTaskCount": 1,
+  "failedTasks": ["clone-repository"],
+  "summary": "Tekton validation failed in task clone-repository"
 }
 ```
 
----
-
-## 9.7 Evidence runtime esempio
+## 9.6 Deployment evidence example
 
 ```json
 {
-  "namespace": "devops-ci-demo",
-  "deployment": {
-    "name": "demo-go-color-app",
-    "availableReplicas": 3,
-    "readyReplicas": 3,
-    "updatedReplicas": 3
+  "change": {
+    "changeNumber": "CHG-2026-0006",
+    "applicationName": "demo-go-color-app",
+    "targetEnvironment": "dev"
   },
-  "pods": [
-    {
-      "name": "demo-go-color-app-abcde",
-      "phase": "Running",
-      "ready": true
-    }
-  ]
+  "argocd": {
+    "syncStatus": "Synced",
+    "healthStatus": "Healthy",
+    "revision": "<revision>",
+    "conditions": [
+      {
+        "type": "OrphanedResourceWarning",
+        "message": "Application has 5 orphaned resources"
+      }
+    ]
+  },
+  "kubernetes": {
+    "deployment": {
+      "name": "demo-go-color-app",
+      "desiredReplicas": 2,
+      "readyReplicas": 2,
+      "availableReplicas": 2
+    },
+    "pods": [
+      {
+        "name": "demo-go-color-app-xxxxx",
+        "phase": "Running",
+        "ready": true,
+        "restartCount": 0
+      }
+    ]
+  },
+  "diagnostics": {
+    "argocdSynced": true,
+    "argocdHealthy": true,
+    "deploymentReady": true,
+    "readyReplicas": "2/2",
+    "podsReady": "2/2",
+    "totalRestarts": 0,
+    "warnings": ["OrphanedResourceWarning: Application has 5 orphaned resources"]
+  }
 }
 ```
 
 ---
 
-## 9.8 Indici consigliati
-
-```sql
-CREATE INDEX idx_evidences_change_request_id ON evidences(change_request_id);
-CREATE INDEX idx_evidences_evidence_type ON evidences(evidence_type);
-CREATE INDEX idx_evidences_created_at ON evidences(created_at DESC);
-```
-
----
-
-## 10. Tabelle future
+## 10. Future tables
 
 ## 10.1 users
 
-Quando sarà introdotta autenticazione reale:
+A future users table may be introduced when user identity needs to be normalized beyond trusted headers.
 
-```sql
-CREATE TABLE users (
-    id              uuid PRIMARY KEY,
-    username        text UNIQUE NOT NULL,
-    display_name    text,
-    email           text,
-    provider        text,
-    created_at      timestamptz NOT NULL DEFAULT now(),
-    updated_at      timestamptz NOT NULL DEFAULT now()
-);
-```
-
-Per MVP, `requested_by` può restare testo.
-
----
+For the current baseline, `requested_by` remains a text field derived from request data or authenticated identity context.
 
 ## 10.2 workflow_locks
 
-Per impedire change concorrenti sullo stesso file/applicazione:
+A future workflow lock table may prevent conflicting changes against the same application, path, environment or resource.
 
-```sql
-CREATE TABLE workflow_locks (
-    id                  uuid PRIMARY KEY,
-    application_id      uuid REFERENCES applications(id),
-    resource_key        text NOT NULL,
-    change_request_id   uuid REFERENCES change_requests(id),
-    created_at          timestamptz NOT NULL DEFAULT now(),
-    expires_at          timestamptz
-);
-```
-
-Esempio `resource_key`:
+Example resource key:
 
 ```text
-demo-go-color-app:apps/demo-go-color-app/configmap.yaml
+demo-go-color-app:dev:apps/demo-go-color-app/configmap.yaml
 ```
-
----
 
 ## 10.3 integration_snapshots
 
-Per salvare snapshot raw o semi-normalizzati:
+A future integration snapshot table may store normalized snapshots from external systems if evidence payloads become too large or too specialized.
 
-```sql
-CREATE TABLE integration_snapshots (
-    id                  uuid PRIMARY KEY,
-    change_request_id   uuid REFERENCES change_requests(id),
-    application_id      uuid REFERENCES applications(id),
-    provider            text NOT NULL,
-    snapshot_type       text NOT NULL,
-    payload             jsonb NOT NULL,
-    created_at          timestamptz NOT NULL DEFAULT now()
-);
-```
-
-Provider:
+Providers:
 
 ```text
 gitlab
@@ -859,266 +753,145 @@ tekton
 kubernetes
 ```
 
+## 10.4 promotion metadata and promotion tables
+
+Future multi-environment promotion can start with nullable fields on `change_requests`:
+
+```text
+promotion_group_id
+promoted_from_change_number
+```
+
+A richer future design may introduce:
+
+```text
+change_promotions
+promotion_groups
+```
+
+The initial recommendation is to start with nullable metadata fields and introduce separate promotion tables only if workflow state requires them.
+
 ---
 
-## 11. Errori e stati
+## 11. Status and error model
 
 ## 11.1 Error codes
 
-Gli error code sono salvati in `change_events.error_code`.
+Errors associated with ChangeRequests should be stored in `change_events.error_code`.
 
-Famiglie:
+Recommended families:
 
 ```text
 GITLAB_*
-ARGO_*
+ARGOCD_*
 TEKTON_*
 KUBERNETES_*
 DATABASE_*
 VALIDATION_*
+AUTH_*
 SECURITY_*
 WORKFLOW_*
 ```
 
-Esempi:
+Examples:
 
 ```text
-GITLAB_FILE_NOT_FOUND
 GITLAB_BRANCH_EXISTS
-ARGO_OPERATION_IN_PROGRESS
-ARGO_RESOURCE_NOT_PERMITTED
+GITLAB_FILE_NOT_FOUND
+ARGOCD_APPLICATION_OUT_OF_SYNC
 TEKTON_PIPELINERUN_FAILED
 VALIDATION_SECRET_DETECTED
+AUTH_FORBIDDEN
 WORKFLOW_CONFLICT_ACTIVE_CHANGE
 ```
 
----
+## 11.2 Final and non-final states
 
-## 11.2 Status finale
-
-Stati finali:
+Lifecycle final states:
 
 ```text
-Completed
-Failed
-Cancelled
+closed
 ```
 
-Stati non finali:
+Technical terminal runtime states can include:
 
 ```text
-Created
-BranchCreated
-ValidationRunning
-SyncRunning
+ValidationSucceeded
+ValidationFailed
+DeploymentSyncedHealthy
+DeploymentOutOfSync
+DeploymentDegraded
+EvidenceCollected
 ```
 
-Regola:
-
-```text
-Una ChangeRequest in stato non finale deve avere updated_at recente o un timeout gestito.
-```
+The project intentionally separates lifecycle and runtime status so that a technical step can complete without incorrectly changing business/process lifecycle state.
 
 ---
 
-## 12. Sicurezza dati
+## 12. Data security rules
 
-## 12.1 Campi vietati
+## 12.1 Forbidden columns
 
-Non creare colonne per:
-
-- `gitlab_token`;
-- `argocd_token`;
-- `kubeconfig`;
-- `secret_value`;
-- `password` non strettamente necessaria.
-
----
-
-## 12.2 Payload sanitizzato
-
-Ogni `payload` e `content` deve essere sanitizzato se deriva da log o output esterno.
-
-Regola:
+Do not create columns such as:
 
 ```text
-Se non sei sicuro che un payload sia sicuro, non salvarlo integralmente.
+gitlab_token
+argocd_token
+kubernetes_token
+kubeconfig
+secret_value
+raw_secret_yaml
+password
 ```
 
----
+unless there is a formally approved secure design. Current baseline does not require these columns.
 
-## 12.3 Evidences sanitized flag
+## 12.2 Sanitized payloads
 
-La colonna `sanitized` indica se l’evidenza è stata filtrata.
+Every `payload` and `content` field must be sanitized if it comes from external logs, command output or API responses.
 
-Per MVP deve essere sempre:
+Rule:
 
 ```text
-true
+If the payload may contain secrets and cannot be sanitized confidently, do not persist it as raw content.
 ```
 
-Se in futuro si salva un riferimento esterno a log raw, la gestione deve essere documentata.
+## 12.3 Sanitized flag
+
+The `evidences.sanitized` flag must be `true` for current stored evidence.
+
+If future evidence references external raw logs, that external storage model must be documented with retention and access controls.
 
 ---
 
-## 13. Migration iniziale proposta
+## 13. Current migration baseline
 
-File suggerito:
+The initial migration creates the four core tables:
 
 ```text
-migrations/000001_init.up.sql
+applications
+change_requests
+change_events
+evidences
 ```
 
-Contenuto:
+The exact SQL lives in the repository migrations and should be treated as source of truth for runtime schema.
 
-```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TABLE applications (
-    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    name                text NOT NULL,
-    argocd_namespace    text NOT NULL,
-    argocd_project      text,
-    target_namespace    text,
-    repo_provider       text,
-    repo_url            text,
-    repo_project_id     text,
-    repo_default_branch text,
-    repo_path           text,
-    target_revision     text,
-    current_revision    text,
-    sync_status         text,
-    health_status       text,
-    last_seen_at        timestamptz,
-    created_at          timestamptz NOT NULL DEFAULT now(),
-    updated_at          timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (argocd_namespace, name)
-);
-
-CREATE TABLE change_requests (
-    id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    change_number           text UNIQUE NOT NULL,
-    application_id          uuid REFERENCES applications(id),
-    application_name        text NOT NULL,
-    change_type             text NOT NULL,
-    status                  text NOT NULL,
-    requested_by            text,
-    description             text,
-    request_payload         jsonb,
-    git_provider            text,
-    gitlab_project_id       text,
-    repo_url                text,
-    source_branch           text,
-    target_branch           text,
-    commit_sha              text,
-    commit_short_sha        text,
-    merge_request_iid       integer,
-    merge_request_url       text,
-    merge_request_state     text,
-    tekton_namespace        text,
-    tekton_pipeline_name    text,
-    tekton_pipelinerun_name text,
-    tekton_status           text,
-    tekton_started_at       timestamptz,
-    tekton_completed_at     timestamptz,
-    argocd_application      text,
-    argocd_project          text,
-    argocd_sync_revision    text,
-    argocd_sync_status      text,
-    argocd_health_status    text,
-    argocd_operation_phase  text,
-    runtime_namespace       text,
-    runtime_status          text,
-    created_at              timestamptz NOT NULL DEFAULT now(),
-    updated_at              timestamptz NOT NULL DEFAULT now(),
-    completed_at            timestamptz
-);
-
-CREATE TABLE change_events (
-    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    change_request_id   uuid NOT NULL REFERENCES change_requests(id) ON DELETE CASCADE,
-    event_type          text NOT NULL,
-    previous_status     text,
-    new_status          text,
-    message             text,
-    technical_message   text,
-    error_code          text,
-    source              text,
-    payload             jsonb,
-    created_at          timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE evidences (
-    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    change_request_id   uuid NOT NULL REFERENCES change_requests(id) ON DELETE CASCADE,
-    evidence_type       text NOT NULL,
-    name                text,
-    summary             text,
-    content             text,
-    payload             jsonb,
-    external_ref        text,
-    sanitized           boolean NOT NULL DEFAULT true,
-    created_at          timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_applications_name ON applications(name);
-CREATE INDEX idx_applications_argocd_project ON applications(argocd_project);
-CREATE INDEX idx_applications_target_namespace ON applications(target_namespace);
-CREATE INDEX idx_applications_repo_project_id ON applications(repo_project_id);
-
-CREATE INDEX idx_change_requests_application_id ON change_requests(application_id);
-CREATE INDEX idx_change_requests_application_name ON change_requests(application_name);
-CREATE INDEX idx_change_requests_status ON change_requests(status);
-CREATE INDEX idx_change_requests_change_type ON change_requests(change_type);
-CREATE INDEX idx_change_requests_created_at ON change_requests(created_at DESC);
-CREATE INDEX idx_change_requests_source_branch ON change_requests(source_branch);
-CREATE INDEX idx_change_requests_commit_sha ON change_requests(commit_sha);
-
-CREATE INDEX idx_change_events_change_request_id ON change_events(change_request_id);
-CREATE INDEX idx_change_events_event_type ON change_events(event_type);
-CREATE INDEX idx_change_events_created_at ON change_events(created_at DESC);
-CREATE INDEX idx_change_events_source ON change_events(source);
-
-CREATE INDEX idx_evidences_change_request_id ON evidences(change_request_id);
-CREATE INDEX idx_evidences_evidence_type ON evidences(evidence_type);
-CREATE INDEX idx_evidences_created_at ON evidences(created_at DESC);
-```
+This design document describes the intended model and evolution direction. When code and migrations differ, the migration files and Go repository code must be reviewed as the runtime truth and this document should be updated.
 
 ---
 
-## 14. Migration rollback proposta
+## 14. Useful queries
 
-File suggerito:
-
-```text
-migrations/000001_init.down.sql
-```
-
-Contenuto:
-
-```sql
-DROP TABLE IF EXISTS evidences;
-DROP TABLE IF EXISTS change_events;
-DROP TABLE IF EXISTS change_requests;
-DROP TABLE IF EXISTS applications;
-```
-
-Nota:
-
-In contesti production-like, il rollback distruttivo deve essere usato con estrema cautela.
-
----
-
-## 15. Query utili MVP
-
-## 15.1 Lista change recenti
+## 14.1 Recent changes
 
 ```sql
 SELECT
     change_number,
     application_name,
-    change_type,
+    target_environment,
     status,
+    runtime_status,
     requested_by,
     created_at,
     completed_at
@@ -1127,9 +900,7 @@ ORDER BY created_at DESC
 LIMIT 50;
 ```
 
----
-
-## 15.2 Timeline di una ChangeRequest
+## 14.2 ChangeRequest timeline
 
 ```sql
 SELECT
@@ -1139,15 +910,14 @@ SELECT
     message,
     error_code,
     source,
+    payload,
     created_at
 FROM change_events
 WHERE change_request_id = $1
 ORDER BY created_at ASC;
 ```
 
----
-
-## 15.3 Evidenze di una ChangeRequest
+## 14.3 ChangeRequest evidence
 
 ```sql
 SELECT
@@ -1155,57 +925,57 @@ SELECT
     name,
     summary,
     sanitized,
+    external_ref,
     created_at
 FROM evidences
 WHERE change_request_id = $1
 ORDER BY created_at ASC;
 ```
 
----
-
-## 15.4 Change attivi per Application
+## 14.4 Active changes by application and environment
 
 ```sql
 SELECT
     change_number,
     application_name,
-    change_type,
+    target_environment,
     status,
-    source_branch,
+    runtime_status,
+    requested_by,
     created_at
 FROM change_requests
 WHERE application_name = $1
-  AND status NOT IN ('Completed', 'Failed', 'Cancelled')
+  AND target_environment = $2
+  AND status NOT IN ('closed')
 ORDER BY created_at ASC;
 ```
 
 ---
 
-## 16. Mapping verso API
+## 15. Mapping to API
 
-## 16.1 `GET /api/changes`
+## 15.1 `GET /api/v1/changes`
 
-Origine principale:
+Primary source:
 
 ```text
 change_requests
 ```
 
-Campi restituiti:
+Returned fields should include:
 
 - change number;
+- title;
 - application;
-- type;
-- status;
-- requested by;
-- created at;
-- completed at.
+- target environment;
+- lifecycle status;
+- runtime status;
+- requester;
+- creation timestamp.
 
----
+## 15.2 `GET /api/v1/changes/{id}`
 
-## 16.2 `GET /api/changes/{id}`
-
-Origine:
+Primary sources:
 
 ```text
 change_requests
@@ -1213,184 +983,234 @@ change_events
 evidences
 ```
 
-Restituisce:
+Returned data should include:
 
-- dettaglio ChangeRequest;
-- timeline eventi;
-- riferimenti GitLab;
-- stato Tekton;
-- stato Argo CD;
-- evidenze.
+- ChangeRequest detail;
+- lifecycle and runtime status;
+- events;
+- GitLab references from event/evidence payloads;
+- Tekton validation status;
+- Argo CD deployment status;
+- Kubernetes/OpenShift evidence.
 
----
+## 15.3 `GET /api/v1/changes/{id}/evidence`
 
-## 16.3 `GET /api/applications`
-
-Origine:
+Primary source:
 
 ```text
-Argo CD API live
-applications cache opzionale
+evidences
 ```
 
-Per MVP, può interrogare Argo CD live e aggiornare `applications`.
+Returned data should include evidence summaries and sanitized payloads.
 
----
+## 15.4 `GET /api/v1/applications`
 
-## 17. Mapping verso workflow
-
-## 17.1 update-replicas
-
-Campi principali:
+Primary source:
 
 ```text
-change_requests.change_type = update-replicas
-change_requests.request_payload.replicas
-change_requests.source_branch
-change_requests.commit_sha
-change_requests.tekton_pipelinerun_name
-change_requests.argocd_sync_status
-change_requests.runtime_status
+Argo CD API live data
+applications cache where available
 ```
 
 ---
 
-## 17.2 update-configmap-values
+## 16. Mapping to workflows
 
-Campi principali:
+## 16.1 GitLab workflow
+
+GitLab branch, file update, commit and merge request details are represented through:
+
+- ChangeRequest runtime status;
+- ChangeEvent payloads;
+- evidence payloads where needed.
+
+## 16.2 Tekton validation workflow
+
+Tekton validation is represented through:
+
+- runtime status `ValidationRunning`, `ValidationSucceeded` or `ValidationFailed`;
+- ChangeEvent payloads;
+- validation evidence;
+- TaskRun diagnostics inside evidence payload.
+
+## 16.3 Argo CD deployment check workflow
+
+Argo CD deployment state is represented through:
+
+- runtime status such as `DeploymentSyncedHealthy`;
+- ChangeEvent payloads;
+- deployment evidence payload.
+
+## 16.4 Runtime evidence workflow
+
+Kubernetes/OpenShift state is represented through deployment evidence and diagnostics.
+
+---
+
+## 17. Consistency rules
+
+## 17.1 ChangeRequest without application ID
+
+`application_id` may remain nullable because a ChangeRequest can be created before the Application cache exists or when the system uses live Argo CD data.
+
+`application_name` remains mandatory.
+
+## 17.2 Final lifecycle status and completion timestamp
+
+When lifecycle status reaches a final business state, `completed_at` should be set where applicable.
+
+The current implementation may keep lifecycle and runtime closure intentionally separate; consistency rules should not collapse the two models.
+
+## 17.3 Tekton references
+
+If validation evidence contains a PipelineRun name, the namespace and pipeline name should also be available in the payload.
+
+## 17.4 Argo CD references
+
+If deployment evidence contains an Argo CD Application, the evidence should include sync status, health status and revision where available.
+
+## 17.5 Target environment
+
+Every new ChangeRequest should include `target_environment` or be defaulted to `dev` by explicit compatibility logic.
+
+Future validation must reject unknown target environments.
+
+---
+
+## 18. Backup, restore and retention
+
+## 18.1 Backup
+
+PostgreSQL stores functional history and evidence. It must be backed up.
+
+Current baseline includes:
+
+- PostgreSQL backup runbook;
+- checksum validation;
+- restore validation plan;
+- isolated restore test;
+- disaster recovery runbook.
+
+## 18.2 Restore validation
+
+Restore validation must prove that core tables and representative ChangeRequests can be restored.
+
+Representative validation queries should check:
+
+- `applications` count;
+- `change_requests` count;
+- `change_events` count;
+- `evidences` count;
+- known ChangeRequest records.
+
+## 18.3 Evidence retention
+
+Evidence can grow over time.
+
+Current guidance:
+
+- store summaries and sanitized payloads;
+- avoid large raw logs;
+- keep content excerpts bounded;
+- consider external storage or Tekton Results integration only in future phases.
+
+---
+
+## 19. Multi-environment data model direction
+
+The multi-environment model introduces environment-aware ChangeRequests and future promotion chains.
+
+Canonical environments:
 
 ```text
-change_requests.change_type = update-configmap-values
-change_requests.request_payload.configMapName
-change_requests.request_payload.values
-change_requests.source_branch
-change_requests.commit_sha
-evidences.evidence_type = diff-summary
+dev
+staging
+production
 ```
 
----
+Current and future data model requirements:
 
-## 18. Regole di consistenza
+- `target_environment` must be visible and queryable;
+- environment configuration remains externalized in the initial design;
+- future promotion metadata can link related ChangeRequests;
+- production workflows must remain guarded by RBAC/AuthZ and approval policy.
 
-## 18.1 ChangeRequest senza Application ID
-
-Per MVP, `application_id` può essere nullable perché alcune ChangeRequest potrebbero nascere prima della cache Application.
-
-Tuttavia `application_name` è obbligatorio.
-
----
-
-## 18.2 Stato finale e completed_at
-
-Regola:
+Future fields:
 
 ```text
-Se status IN ('Completed', 'Failed', 'Cancelled'), completed_at deve essere valorizzato.
+promotion_group_id
+promoted_from_change_number
 ```
 
-Questa regola può essere applicata nel codice all’inizio e poi con constraint/check in futuro.
-
----
-
-## 18.3 Stato Tekton
-
-Se `tekton_pipelinerun_name` è valorizzato, `tekton_namespace` dovrebbe essere valorizzato.
-
----
-
-## 18.4 Stato Argo CD
-
-Se `argocd_application` è valorizzato, `argocd_sync_status` e `argocd_health_status` dovrebbero rappresentare l’ultimo stato osservato.
-
----
-
-## 19. Backup e retention
-
-## 19.1 Backup
-
-PostgreSQL conserva storico change ed evidenze.
-
-Per MVP:
-
-```text
-Documentare backup necessario.
-```
-
-Per futuro:
-
-- backup schedulato;
-- retention policy;
-- restore testato;
-- export audit.
-
----
-
-## 19.2 Retention evidenze
-
-Le evidenze possono crescere.
-
-Per MVP:
-
-- salvare summary e payload sanitizzati;
-- evitare log enormi;
-- limitare `content` a excerpt.
-
-Per futuro:
-
-- storage esterno;
-- retention configurabile;
-- compressione evidenze;
-- Tekton Results integration.
+These fields should be nullable for backward compatibility.
 
 ---
 
 ## 20. Data model validation checklist
 
-Il data model MVP è considerato pronto quando:
+The data model baseline is ready when:
 
-- le quattro tabelle principali sono definite;
-- ogni ChangeRequest ha Change ID leggibile;
-- gli eventi sono persistiti;
-- le evidenze sono persistite;
-- nessun secret è previsto nel modello;
-- GitLab, Tekton e Argo CD hanno campi minimi di correlazione;
-- le query principali sono supportate;
-- le migration up/down sono disponibili;
-- il modello alimenta API e workflow.
+- the core tables exist;
+- each ChangeRequest has a readable change number;
+- lifecycle and runtime status are distinguishable;
+- requester is visible;
+- target environment is represented;
+- events are persisted;
+- evidence records are persisted;
+- evidence is sanitized;
+- no Secret value is part of the schema;
+- GitLab, Tekton, Argo CD and Kubernetes/OpenShift references can be correlated;
+- backup and restore procedures protect the data;
+- future promotion metadata has a clear extension path.
 
 ---
 
-## 21. Relazione con altri documenti
+## 21. Relationship with other documents
 
-Questo documento alimenta:
+This document informs and is informed by:
 
-- `migrations/000001_init.up.sql`;
-- `migrations/000001_init.down.sql`;
+- `migrations/`;
 - `internal/domain/`;
 - `internal/database/`;
 - `docs/11-change-workflows.md`;
 - `docs/12-evidence-model.md`;
 - `docs/13-api-design.md`;
-- ADR `ADR-0004-postgresql-change-history.md`.
+- `docs/environment-configuration-model.md`;
+- `docs/change-promotion-model.md`;
+- `docs/runbooks/postgresql-backup-restore.md`;
+- `docs/runbooks/disaster-recovery.md`;
+- `docs/adr/ADR-0004-postgresql-change-history.md`.
 
 ---
 
-## 22. Messaggio chiave
+## 22. Key message
 
-Il data model del DevOps Control Plane deve permettere di ricostruire ogni change in modo semplice.
+The data model must make every GitOps change reconstructable.
 
-Domande a cui il database deve rispondere:
+The database must answer questions such as:
 
 ```text
-Chi ha richiesto il change?
-Su quale applicazione?
-Che cosa voleva modificare?
-Quale branch GitLab è stato creato?
-Quale commit o MR ha rappresentato il change?
-Quale PipelineRun Tekton ha validato il change?
-Quale revisione Argo CD è stata sincronizzata?
-Quale stato runtime è stato osservato?
-Quali evidenze sono disponibili?
+Who requested the change?
+Which application and environment were targeted?
+What was the requested change?
+Which GitLab branch, commit or merge request represented the change?
+Which Tekton PipelineRun validated the change?
+Which TaskRun failed, if validation failed?
+Which Argo CD state was observed?
+Which Kubernetes/OpenShift runtime state was collected?
+Which evidence is available?
+Was the evidence sanitized?
 ```
 
-Il database non deve sostituire Git, Argo CD o Tekton. Deve correlare le informazioni prodotte da questi strumenti in uno storico funzionale unico, leggibile e auditabile.
+The database must not replace GitLab, Tekton, Argo CD or OpenShift. The database must correlate information from those systems into one readable, auditable and evidence-driven functional history.
+
+This preserves the original spirit of the project: one small but solid data model that makes GitOps workflows understandable, traceable and safe to audit.
+
+---
+
+## 23. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial data model document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original PostgreSQL change-store, event timeline and evidence model intent and aligning it with the current advanced MVP and multi-environment direction. |
