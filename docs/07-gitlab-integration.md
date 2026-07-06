@@ -1,154 +1,184 @@
-# DevOps Control Plane - GitLab Integration
+# DevOps Control Plane — GitLab Integration
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-- `docs/05-architecture.md`  
-- `docs/06-argocd-integration.md`  
-**Stato:** Draft iniziale / GitLab Integration
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento descrive come **DevOps Control Plane** deve integrarsi con **GitLab**.
-
-L’obiettivo è definire:
-
-- responsabilità dell’integrazione GitLab;
-- funzionalità MVP da implementare;
-- modello di autenticazione;
-- modello dati normalizzato;
-- operazioni API richieste;
-- gestione repository, branch, file, commit e merge request;
-- convenzioni di naming;
-- gestione errori;
-- requisiti di sicurezza;
-- evidenze GitLab da salvare;
-- mapping verso ChangeRequest, Argo CD e Tekton.
-
-Nel modello DevOps Control Plane, GitLab rappresenta il sistema che ospita i repository GitOps target e diventa il punto di origine dei change dichiarativi applicati da Argo CD.
+- **Project:** DevOps Control Plane
+- **Document:** 07 — GitLab Integration
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+  - `docs/05-architecture.md`
+  - `docs/06-argocd-integration.md`
+- **Status:** Rewritten in English and refreshed while preserving the original GitOps-oriented integration intent
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Ruolo di GitLab nell’architettura
+## 1. Purpose
 
-GitLab ha il ruolo di **Git provider e change collaboration platform**.
+This document describes how the DevOps Control Plane integrates with GitLab.
 
-Responsabilità GitLab:
+The original document defined GitLab as the system that hosts the target GitOps repositories and as the source of declarative changes later reconciled by Argo CD. This refreshed version preserves that original architectural intent while updating the document to match the current implementation baseline.
 
-- ospitare repository GitOps;
-- esporre branch e commit;
-- permettere lettura e modifica file tramite API;
-- gestire merge request;
-- mantenere history Git;
-- fornire link auditabili a commit, branch e MR.
+The document defines:
 
-Responsabilità DevOps Control Plane:
+- GitLab responsibilities in the DevOps Control Plane architecture;
+- responsibilities of the GitLab adapter;
+- branch, file update, commit and merge request workflows;
+- naming conventions;
+- authentication and token handling;
+- normalized data model;
+- error handling;
+- evidence expectations;
+- security requirements;
+- current `/api/v1` endpoints;
+- relationship with ChangeRequests, Tekton validation, Argo CD deployment checks and future environment-aware GitOps paths.
 
-- leggere file GitOps;
-- creare branch per ChangeRequest;
-- modificare file YAML in modo controllato;
-- creare commit;
-- aprire merge request quando previsto;
-- leggere stato MR;
-- leggere ultimo commit;
-- correlare commit/MR con ChangeRequest, Tekton validation e Argo CD sync;
-- impedire che token o secret finiscano in Git.
+GitLab is the system that keeps GitOps changes explicit, reviewable, auditable and reversible.
 
 ---
 
-## 3. Principi di integrazione
+## 2. Role of GitLab in the architecture
 
-## 3.1 GitLab è la sorgente del change dichiarativo
+GitLab has the role of Git provider and change collaboration platform.
 
-DevOps Control Plane deve produrre modifiche Git, non modifiche runtime dirette.
+GitLab is responsible for:
 
-Flusso corretto:
+- hosting target GitOps repositories;
+- exposing repository files;
+- managing branches;
+- storing commits;
+- managing merge requests;
+- keeping Git history;
+- providing auditable links to branches, commits and merge requests.
+
+The DevOps Control Plane is responsible for:
+
+- using GitLab API through a dedicated adapter;
+- resolving the target project, branch and path;
+- creating a ChangeRequest branch;
+- updating GitOps files in a controlled way;
+- creating commits;
+- opening merge requests where review is required;
+- merging merge requests where policy and authorization allow it;
+- correlating GitLab references with ChangeRequests, Tekton validation, Argo CD deployment checks and runtime evidence;
+- preventing tokens or secrets from being committed to Git.
+
+---
+
+## 3. Integration principles
+
+### 3.1 GitLab is the source of declarative change
+
+The DevOps Control Plane must produce Git changes, not permanent runtime mutations.
+
+The intended flow is:
 
 ```text
 ChangeRequest
   -> GitLab branch
-  -> file update
-  -> commit / merge request
+  -> GitOps file update
+  -> commit or merge request
   -> Tekton validation
-  -> merge su branch target
-  -> Argo CD sync
+  -> merge into target branch where required
+  -> Argo CD deployment state check
+  -> OpenShift runtime evidence
+  -> PostgreSQL audit and evidence history
 ```
 
----
+This preserves the original project rule:
 
-## 3.2 DevOps Control Plane usa GitLab API
+```text
+Every permanent desired-state change must pass through Git.
+```
 
-L’integrazione target deve usare **GitLab REST API**.
+### 3.2 DevOps Control Plane uses GitLab API
 
-Il backend Go non deve dipendere dalla CLI `git` per il workflow principale.
+The product integration must use GitLab REST API through a Go adapter.
 
-La CLI `git` può essere usata per sviluppo, troubleshooting e test manuali, ma il prodotto deve usare l’adapter GitLab API.
+The `git` CLI remains useful for development, troubleshooting and manual validation, but the application runtime workflow must not depend on local shell Git commands.
 
----
+### 3.3 Every change must be traceable
 
-## 3.3 Ogni change deve essere tracciabile
+Each ChangeRequest should retain GitLab-related references such as:
 
-Ogni ChangeRequest deve salvare almeno:
-
-- project ID GitLab;
+- project ID;
 - repository URL;
 - source branch;
 - target branch;
 - commit SHA;
-- merge request IID/URL, se presente;
-- autore logico/richiedente;
-- messaggio commit;
-- diff summary;
-- stato MR;
-- timestamp.
+- merge request IID and URL, when present;
+- requester;
+- logical actor;
+- commit message;
+- merge request title;
+- merge result;
+- timestamps;
+- related technical events.
+
+### 3.4 Branch plus merge request remains the preferred model
+
+The original document allowed two modes:
+
+```text
+Mode A — Direct commit to target branch
+Mode B — Branch plus merge request
+```
+
+The preferred model remains:
+
+```text
+Branch plus merge request
+```
+
+Rationale:
+
+- clearer review;
+- better auditability;
+- safer production-oriented workflow;
+- explicit separation between proposal and application;
+- better alignment with Tekton validation before merge;
+- clearer rollback through revert commit or revert merge request.
+
+Direct commit can remain useful only for controlled lab or bootstrap scenarios, if explicitly allowed by policy.
 
 ---
 
-## 3.4 Commit diretto o Merge Request
+## 4. Current implementation baseline
 
-MVP può supportare due modalità:
+The GitLab integration currently includes:
 
-```text
-Mode A - Commit diretto su branch target
-Mode B - Branch + Merge Request
-```
+- GitLab REST client;
+- branch creation workflow;
+- GitOps file update workflow;
+- open merge request workflow;
+- merge request merge workflow;
+- external reference persistence through ChangeRequest events;
+- runtime status updates such as `BranchCreated`, `CommitCreated`, `MergeRequestOpened` and `MergeRequestMerged`;
+- integration with Tekton validation;
+- integration with downstream Argo CD deployment checks and evidence collection;
+- token handling through OpenShift Secret;
+- TLS strict baseline for GitLab access.
 
-Modalità raccomandata:
-
-```text
-Branch + Merge Request
-```
-
-Motivo:
-
-- review più chiara;
-- audit migliore;
-- validazione Tekton prima del merge;
-- rollback più controllato;
-- separazione tra proposta e applicazione finale.
-
-Nel lab iniziale può essere utile supportare anche commit diretto per velocizzare test controllati.
+The implemented workflow preserves the original intent of making GitLab the auditable source of GitOps change.
 
 ---
 
-## 4. Funzionalità MVP GitLab
+## 5. GitLab repository configuration
 
-## 4.1 Configurazione repository GitLab
+## 5.1 Required repository metadata
 
-### Obiettivo
+A managed application must be associated with GitLab repository metadata.
 
-Associare una Application Argo CD a un repository GitLab e a un path GitOps.
-
-### Dati minimi
+Example baseline:
 
 ```yaml
 applicationName: demo-go-color-app
@@ -158,302 +188,204 @@ gitlabProjectId: "12345"
 repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
 defaultBranch: main
 path: apps/demo-go-color-app
+targetEnvironment: dev
 ```
 
-### Regole
+### Rules
 
-- `gitlabProjectId` può essere ID numerico o path URL-encoded.
-- `defaultBranch` deve essere configurabile.
-- `path` deve puntare al path GitOps Argo CD.
+- `gitlabProjectId` may be a numeric ID or URL-encoded project path depending on GitLab API usage.
+- `defaultBranch` must be configurable.
+- `path` must align with the GitOps path used by Argo CD.
+- Future environment-aware behavior must resolve GitOps path from the environment catalog.
 
 ---
 
-## 4.2 Lettura file repository
+## 6. GitLab adapter
 
-### Obiettivo
+## 6.1 Responsibilities
 
-Leggere file GitOps dal repository.
+The GitLab adapter encapsulates all interactions with GitLab API.
 
-### File principali MVP
+The rest of the application must not know raw GitLab endpoints, token headers, file encoding details or raw GitLab error payloads.
 
-```text
-apps/demo-go-color-app/deployment.yaml
-apps/demo-go-color-app/configmap.yaml
-apps/demo-go-color-app/kustomization.yaml
-apps/demo-go-color-app/service.yaml
-apps/demo-go-color-app/route.yaml
-```
+Current responsibilities:
 
-### Uso
+- create branch;
+- create or update repository files;
+- open merge request;
+- merge merge request;
+- map GitLab responses to internal models;
+- normalize GitLab errors;
+- support TLS strict mode.
 
-- individuare valore `replicas`;
-- individuare `APP_VERSION`;
-- individuare `PAGE_COLOR`;
-- verificare ConfigMap;
-- verificare `kustomization.yaml`;
-- generare diff;
-- produrre evidenza.
+Future responsibilities may include richer read-only repository metadata, diff retrieval and environment-aware path resolution.
 
-### Regole
+## 6.2 Conceptual interface
 
-- Il contenuto file letto via API può essere base64 encoded e deve essere decodificato.
-- File mancanti devono produrre errore leggibile.
-- Path file deve essere URL-encoded quando richiesto dall’API.
-
----
-
-## 4.3 Creazione branch
-
-### Obiettivo
-
-Creare un branch per la ChangeRequest.
-
-### Naming convention
-
-```text
-change/<change-id>-<change-type>
-```
-
-Esempio:
-
-```text
-change/CHG-2026-0001-update-replicas
-```
-
-### Regole
-
-- Il branch nasce da `defaultBranch` o da ref configurata.
-- Il nome deve essere normalizzato.
-- Il sistema deve gestire branch già esistente.
-- Il branch deve essere salvato nella ChangeRequest.
-
----
-
-## 4.4 Commit file modificati
-
-### Obiettivo
-
-Creare commit su branch GitLab con modifiche GitOps prodotte dal workflow.
-
-### Commit message convention
-
-```text
-<change-id> <change-type> <application-name>
-```
-
-Esempio:
-
-```text
-CHG-2026-0001 update-replicas demo-go-color-app
-```
-
-### Descrizione commit estesa
-
-Il body del commit può includere:
-
-```text
-Application: demo-go-color-app
-Change-Type: update-replicas
-Requested-By: vmarzario
-Change-Id: CHG-2026-0001
-```
-
-### Regole
-
-- Il commit deve includere Change ID.
-- Secret scanning deve avvenire prima del commit o nella Tekton validation.
-- Il commit SHA risultante deve essere salvato in PostgreSQL.
-
----
-
-## 4.5 Apertura Merge Request
-
-### Obiettivo
-
-Aprire MR per review e merge del change.
-
-### Titolo MR
-
-```text
-[CHG-2026-0001] update-replicas demo-go-color-app
-```
-
-### Descrizione MR suggerita
-
-```text
-## Change Summary
-
-Application: demo-go-color-app
-Change Type: update-replicas
-Requested By: vmarzario
-
-## Files Changed
-
-- apps/demo-go-color-app/deployment.yaml
-
-## Validation
-
-Tekton validation: pending
-
-## GitOps Flow
-
-After merge, Argo CD will sync the application.
-
-## Rollback
-
-Recommended rollback: revert this merge commit or create a revert MR.
-```
-
-### Regole
-
-- MR source branch = branch ChangeRequest.
-- MR target branch = default branch, tipicamente `main`.
-- MR IID e URL devono essere salvati.
-- Lo stato MR deve essere interrogabile.
-
----
-
-## 4.6 Lettura ultimo commit
-
-### Obiettivo
-
-Recuperare ultimo commit rilevante per repository/path/branch.
-
-### Uso
-
-- dettaglio Application;
-- correlazione con Argo CD revision;
-- storico change;
-- troubleshooting OutOfSync.
-
-### Regole
-
-- Se viene passato un path, GitLab deve filtrare commit relativi al path quando supportato.
-- Il commit short SHA e full SHA devono essere gestiti.
-
----
-
-## 4.7 Lettura stato MR
-
-### Obiettivo
-
-Capire se una MR è ancora aperta, merged, closed o bloccata.
-
-### Stati minimi
-
-```text
-opened
-merged
-closed
-locked
-```
-
-### Uso nel workflow
-
-- se MR è `opened`, il change resta in attesa merge;
-- se MR è `merged`, il sistema può procedere a sync Argo CD;
-- se MR è `closed`, il change può passare a `Cancelled` o `Failed`, secondo policy.
-
----
-
-## 5. GitLab Adapter
-
-## 5.1 Responsabilità
-
-Il componente `GitLabAdapter` incapsula tutte le interazioni con GitLab API.
-
-Il resto dell’applicazione non deve conoscere endpoint HTTP GitLab, header token, encoding file o codici errore raw.
-
----
-
-## 5.2 Interfaccia logica MVP
-
-Interfaccia concettuale:
+Conceptual adapter interface:
 
 ```go
 type GitLabAdapter interface {
-    GetProject(ctx context.Context, projectID string) (*GitLabProject, error)
-    GetFile(ctx context.Context, projectID string, ref string, filePath string) (*RepositoryFile, error)
-    ListCommits(ctx context.Context, projectID string, opts ListCommitsOptions) ([]GitCommit, error)
-    GetBranch(ctx context.Context, projectID string, branch string) (*GitBranch, error)
-    CreateBranch(ctx context.Context, projectID string, branch string, ref string) (*GitBranch, error)
-    CommitFiles(ctx context.Context, projectID string, branch string, message string, actions []CommitAction) (*GitCommit, error)
-    CreateMergeRequest(ctx context.Context, projectID string, req CreateMergeRequestRequest) (*MergeRequest, error)
-    GetMergeRequest(ctx context.Context, projectID string, iid int) (*MergeRequest, error)
+    CreateBranch(ctx context.Context, projectID int, branch string, ref string) error
+    CreateOrUpdateFile(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
+    OpenMergeRequest(ctx context.Context, projectID int, sourceBranch string, targetBranch string, title string, description string) (int, string, error)
+    MergeRequest(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error)
 }
 ```
 
-Nota: l’interfaccia è indicativa. La forma finale sarà definita durante l’implementazione Go.
+The exact implementation can evolve, but services should depend on ports rather than raw HTTP implementation details.
 
----
+## 6.3 Package location
 
-## 5.3 Posizione package proposta
+Current package area:
 
 ```text
 internal/adapters/gitlab/
-├── client.go
-├── models.go
-├── mapper.go
-├── files.go
-├── branches.go
-├── commits.go
-├── merge_requests.go
-└── errors.go
 ```
 
-### File `client.go`
+Expected responsibilities:
 
-Responsabilità:
-
-- configurazione HTTP client;
-- base URL;
-- header autenticazione;
-- timeout;
-- gestione status code comuni.
-
-### File `files.go`
-
-Responsabilità:
-
-- lettura file;
-- decodifica base64;
-- gestione file not found.
-
-### File `branches.go`
-
-Responsabilità:
-
-- lettura branch;
-- creazione branch;
-- gestione branch exists.
-
-### File `commits.go`
-
-Responsabilità:
-
-- commit multi-file;
-- list commit;
-- mapping commit metadata.
-
-### File `merge_requests.go`
-
-Responsabilità:
-
-- create MR;
-- get MR;
-- mapping stato MR.
-
-### File `errors.go`
-
-Responsabilità:
-
-- conversione errori GitLab in error model interno.
+```text
+client.go           -> HTTP client, auth header, base URL, timeout
+models.go           -> GitLab DTOs and normalized models
+branches.go         -> branch operations
+files.go            -> file create/update operations
+merge_requests.go   -> merge request operations
+errors.go           -> GitLab error mapping
+```
 
 ---
 
-## 6. Modello dati normalizzato
+## 7. Branch workflow
 
-## 6.1 GitRepository
+## 7.1 Branch naming
+
+The branch should be derived from the ChangeRequest number.
+
+Current practical convention:
+
+```text
+change/<change-number>
+```
+
+Example:
+
+```text
+change/CHG-2026-0006
+```
+
+The original extended convention remains valid as a future option:
+
+```text
+change/<change-number>-<change-type>
+```
+
+The current shorter form is easier to correlate and avoids overly long branch names.
+
+## 7.2 Branch creation flow
+
+```text
+ChangeRequest
+  -> build branch name
+  -> GitLab adapter CreateBranch(projectId, branch, ref=main)
+  -> record technical event BranchCreated
+  -> update runtime status
+```
+
+### Rules
+
+- The branch starts from the configured target branch or reference.
+- The branch name must be normalized.
+- Existing branch conflicts must produce a readable error.
+- The branch reference must be recorded in the ChangeRequest event history.
+
+---
+
+## 8. File update and commit workflow
+
+## 8.1 File update purpose
+
+The Control Plane updates GitOps files as part of a ChangeRequest technical workflow.
+
+Examples:
+
+- generated control-plane marker file;
+- deployment manifest update;
+- ConfigMap update;
+- Kustomize overlay update in the future environment-aware model.
+
+## 8.2 Commit message convention
+
+Commit messages should include the ChangeRequest number.
+
+Example:
+
+```text
+CHG-2026-0006 Update demo-go-color-app GitOps files
+```
+
+For generated workflow commits, concise messages are acceptable if the ChangeRequest event carries additional context.
+
+## 8.3 Rules
+
+- The commit must include ChangeRequest context.
+- Generated content must not contain tokens or secrets.
+- Anti-secret validation must be performed before commit or through Tekton validation before merge.
+- The commit SHA or resulting GitLab reference must be recorded where available.
+
+---
+
+## 9. Merge request workflow
+
+## 9.1 Merge request creation
+
+The Control Plane can open a merge request from the ChangeRequest branch to the target branch.
+
+Example title:
+
+```text
+[CHG-2026-0006] Update demo-go-color-app via DevOps Control Plane
+```
+
+Recommended description sections:
+
+```text
+Change Summary
+Application
+Target Environment
+Requested By
+Files Changed
+Validation Status
+GitOps Flow
+Rollback
+```
+
+## 9.2 Merge request merge
+
+The Control Plane can merge a merge request when policy and authorization allow it.
+
+The merge result should record:
+
+- merge request IID;
+- merge request URL;
+- merge commit SHA;
+- target branch;
+- runtime status `MergeRequestMerged`;
+- technical event payload.
+
+## 9.3 Rules
+
+- Merge request source branch is the ChangeRequest branch.
+- Merge request target branch is the configured target branch, usually `main`.
+- Merge action must be authorized.
+- Merge result must be auditable.
+- Production merge behavior must remain guarded by future environment-aware AuthZ.
+
+---
+
+## 10. Normalized GitLab data model
+
+## 10.1 Git repository
 
 ```yaml
 provider: gitlab
@@ -463,73 +395,43 @@ repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
 defaultBranch: main
 ```
 
----
-
-## 6.2 RepositoryFile
+## 10.2 Git branch
 
 ```yaml
-filePath: apps/demo-go-color-app/deployment.yaml
-fileName: deployment.yaml
+name: change/CHG-2026-0006
 ref: main
-blobId: abcdef
-commitId: 123456
-lastCommitId: 789abc
-encoding: base64
-contentDecoded: "apiVersion: apps/v1..."
-contentSha256: "..."
+webUrl: https://gitlab.example.local/group/repo/-/tree/change/CHG-2026-0006
 ```
 
----
-
-## 6.3 GitBranch
+## 10.3 Git commit
 
 ```yaml
-name: change/CHG-2026-0001-update-replicas
-protected: false
-merged: false
-canPush: true
-commit:
-  id: b8e1d6b2fc88b41909f87d505739bc855de41516
-  shortId: b8e1d6b
-  title: "Previous commit title"
+id: <full-sha>
+shortId: <short-sha>
+title: CHG-2026-0006 Update demo-go-color-app GitOps files
+webUrl: https://gitlab.example.local/group/repo/-/commit/<sha>
 ```
 
----
-
-## 6.4 GitCommit
-
-```yaml
-id: b8e1d6b2fc88b41909f87d505739bc855de41516
-shortId: b8e1d6b
-title: "CHG-2026-0001 update-replicas demo-go-color-app"
-message: "..."
-authorName: "DevOps Control Plane"
-committedDate: "2026-06-25T14:00:00+02:00"
-webUrl: "https://gitlab.example.local/group/repo/-/commit/b8e1d6b"
-```
-
----
-
-## 6.5 MergeRequest
+## 10.4 Merge request
 
 ```yaml
 iid: 42
 id: 123456
-title: "[CHG-2026-0001] update-replicas demo-go-color-app"
+title: "[CHG-2026-0006] Update demo-go-color-app via DevOps Control Plane"
 state: opened
-sourceBranch: change/CHG-2026-0001-update-replicas
+sourceBranch: change/CHG-2026-0006
 targetBranch: main
-webUrl: "https://gitlab.example.local/group/repo/-/merge_requests/42"
-mergeStatus: unchecked
+webUrl: https://gitlab.example.local/group/repo/-/merge_requests/42
+mergeStatus: can_be_merged
 ```
 
 ---
 
-## 7. Autenticazione verso GitLab
+## 11. Authentication and token handling
 
-## 7.1 Token based authentication
+## 11.1 Token-based authentication
 
-Configurazione prevista:
+Configuration baseline:
 
 ```text
 GITLAB_BASE_URL=https://gitlab.example.local
@@ -537,250 +439,142 @@ GITLAB_TOKEN=<from Secret>
 GITLAB_TIMEOUT_SECONDS=30
 GITLAB_DEFAULT_PROJECT_ID=
 GITLAB_DEFAULT_BRANCH=main
+GITLAB_INSECURE_TLS=false
+GITLAB_CA_FILE=/etc/dcp-trust/ca-bundle.crt
 ```
 
-### Regole
+### Rules
 
-- `GITLAB_TOKEN` deve arrivare da Secret;
-- il token non deve essere loggato;
-- il token non deve essere restituito via API;
-- il token non deve essere salvato in PostgreSQL;
-- errori 401/403 devono essere normalizzati.
+- `GITLAB_TOKEN` must come from OpenShift Secret.
+- The token must not be logged.
+- The token must not be returned by API responses.
+- The token must not be persisted in PostgreSQL.
+- The token must not be included in evidence payloads.
+- HTTP 401 and 403 errors must be normalized.
 
----
+## 11.2 Token type
 
-## 7.2 Tipi token
+For lab usage, a technical token may be used. For production-oriented use, prefer a governed token with the minimum permissions compatible with the workflow.
 
-Per MVP/lab può essere usato un token tecnico, ma in produzione è preferibile usare token con privilegi minimi e scadenza definita.
+Possible token types:
 
-Opzioni possibili:
+- Project Access Token;
+- Group Access Token;
+- service account or bot user token;
+- Personal Access Token only for controlled lab or development use.
 
-- Project Access Token, se il workflow opera su un singolo progetto;
-- Group Access Token, se serve accesso a più repository di un gruppo;
-- Service account / bot user token, se disponibile e governato;
-- Personal Access Token solo per sviluppo o lab controllato.
+### Security rule
 
-### Regola di sicurezza
-
-Usare sempre il token con scope più restrittivo compatibile con il workflow.
-
----
-
-## 7.3 Scope minimi indicativi
-
-Per le funzioni MVP servono capacità di:
-
-- leggere repository;
-- leggere file;
-- creare branch;
-- creare commit;
-- aprire MR.
-
-In molti scenari GitLab, lo scope `api` abilita l’uso completo delle API richieste. Per ambienti più restrittivi, valutare token/project role con permessi minimi compatibili.
+Use the most restrictive token scope that supports the required workflow.
 
 ---
 
-## 8. Workflow GitLab
+## 12. TLS model
 
-## 8.1 Flow A - Lettura file
+GitLab integration must support TLS strict mode.
+
+Baseline:
 
 ```text
-Application Service / Workflow
-  -> GitLab Adapter GetFile(projectId, ref, path)
-  -> GitLab API repository files
-  -> decode content
-  -> return RepositoryFile
+GITLAB_INSECURE_TLS=false
 ```
 
-### Errori
+If the GitLab Route or endpoint uses a CA not available in the default trust store, the application trust bundle must include the required CA.
 
-- project not found;
-- file not found;
-- ref not found;
-- unauthorized;
-- timeout.
+Rules:
+
+- insecure TLS must not be used as the production-oriented default;
+- CA bundle configuration must be explicit;
+- TLS errors must be readable and must not expose token values.
 
 ---
 
-## 8.2 Flow B - Creazione branch ChangeRequest
+## 13. ChangeRequest to GitLab mapping
 
-```text
-Workflow Engine
-  -> build branch name
-  -> GitLab Adapter CreateBranch(projectId, branch, ref=main)
-  -> save branch in ChangeRequest
-  -> add event BranchCreated
-```
+A ChangeRequest should be correlated with GitLab references through events and payloads.
 
-### Errori
-
-- branch already exists;
-- ref not found;
-- protected branch policy;
-- unauthorized.
-
----
-
-## 8.3 Flow C - Commit multi-file
-
-Esempio change ConfigMap:
-
-```text
-Workflow Engine
-  -> read configmap.yaml
-  -> modify values
-  -> read kustomization.yaml, se necessario
-  -> build commit actions
-  -> GitLab Adapter CommitFiles
-  -> save commit SHA
-  -> add event FilesUpdated / CommitCreated
-```
-
-### Commit actions logiche
+Example logical mapping:
 
 ```yaml
-- action: update
-  filePath: apps/demo-go-color-app/configmap.yaml
-  content: "..."
-- action: update
-  filePath: apps/demo-go-color-app/kustomization.yaml
-  content: "..."
-```
-
----
-
-## 8.4 Flow D - Apertura Merge Request
-
-```text
-Workflow Engine
-  -> GitLab Adapter CreateMergeRequest
-  -> save MR IID and URL
-  -> add event MergeRequestOpened
-```
-
-### Regole
-
-- MR descrizione include Change ID;
-- MR descrizione include file modificati;
-- MR descrizione include stato validazione Tekton, se già disponibile;
-- MR descrizione include rollback hint.
-
----
-
-## 8.5 Flow E - Polling Merge Request
-
-```text
-Workflow Engine / Scheduler
-  -> GitLab Adapter GetMergeRequest
-  -> if state=merged: continue sync Argo CD
-  -> if state=closed: cancel/fail change
-  -> if state=opened: wait
-```
-
-### Nota MVP
-
-Il polling MR può essere implementato dopo il primo workflow end-to-end. Nel primissimo MVP può essere manuale: l’utente conferma che la MR è stata mergiata.
-
----
-
-## 9. Mapping ChangeRequest -> GitLab
-
-## 9.1 Campi ChangeRequest
-
-```yaml
-changeId: CHG-2026-0001
+changeNumber: CHG-2026-0006
 applicationName: demo-go-color-app
-changeType: update-replicas
+targetEnvironment: dev
+changeType: standard
 git:
   provider: gitlab
   projectId: "12345"
   repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
-  sourceBranch: change/CHG-2026-0001-update-replicas
+  sourceBranch: change/CHG-2026-0006
   targetBranch: main
-  commitSha: b8e1d6b2fc88b41909f87d505739bc855de41516
-  commitShortSha: b8e1d6b
+  commitSha: <sha>
   mergeRequestIid: 42
   mergeRequestUrl: https://gitlab.example.local/group/repo/-/merge_requests/42
 ```
 
+Current implementation stores most of this information through technical events and responses rather than a separate rich Git table.
+
 ---
 
-## 9.2 Change events GitLab
+## 14. GitLab-related events
 
-Eventi minimi:
+Recommended event names:
 
 ```text
-GitRepositoryResolved
-GitFileRead
-GitBranchCreated
-GitFilesUpdated
-GitCommitCreated
-GitMergeRequestOpened
-GitMergeRequestMerged
-GitMergeRequestClosed
+BranchCreated
+CommitCreated
+MergeRequestOpened
+MergeRequestMerged
 GitOperationFailed
 ```
 
----
+Events should include safe payload fields such as:
 
-## 10. File modification strategy
+- project ID;
+- branch;
+- target branch;
+- commit SHA;
+- merge request IID;
+- merge request URL;
+- actor;
+- target environment.
 
-## 10.1 YAML modifications
-
-DevOps Control Plane dovrà modificare YAML in modo sicuro.
-
-Possibili approcci:
-
-1. parsing YAML strutturato;
-2. patch mirata su oggetti noti;
-3. manipolazione testuale controllata solo per MVP/lab.
-
-### Raccomandazione
-
-Per workflow stabili, preferire parsing YAML e update strutturato.
-
-### Rischio
-
-Manipolazioni testuali possono rompere indentazione YAML, come già osservato nel lab con `valueFrom` e `configMapKeyRef`.
+Events must not include token values.
 
 ---
 
-## 10.2 Diff generation
+## 15. File modification strategy
 
-Il sistema deve produrre un diff leggibile prima del commit o nella ChangeRequest.
+## 15.1 Controlled file modifications
 
-### Uso
+The Control Plane should modify GitOps files through controlled logic rather than arbitrary text editing.
 
-- review;
-- evidenza;
-- audit;
-- troubleshooting.
+Preferred approaches:
 
-### Regola
+1. structured YAML parsing and update;
+2. targeted patch logic for known objects;
+3. controlled generated files for lab and validation workflows.
 
-Il diff non deve includere secret.
+### Rule
 
----
+Avoid fragile text manipulation when the Workflow is intended for production-oriented usage.
 
-## 10.3 File locking/concurrency
+## 15.2 Diff and review
 
-MVP può impedire ChangeRequest concorrenti sulla stessa Application e stesso file.
+The workflow should make changes reviewable through GitLab commits and merge requests.
 
-### Esempio
+Diffs must not include secrets.
 
-Se esiste già un change aperto su:
+## 15.3 Concurrency
 
-```text
-apps/demo-go-color-app/configmap.yaml
-```
+The system should eventually detect conflicting active ChangeRequests affecting the same application, target environment or GitOps path.
 
-un nuovo change sullo stesso file deve essere bloccato o segnalato come conflitto.
+This is especially important before enabling production workflows.
 
 ---
 
-## 11. Error model GitLab
+## 16. GitLab error model
 
-## 11.1 Codici errore interni
+## 16.1 Recommended error codes
 
 ```text
 GITLAB_AUTH_FAILED
@@ -792,285 +586,223 @@ GITLAB_BRANCH_EXISTS
 GITLAB_BRANCH_CREATE_FAILED
 GITLAB_COMMIT_FAILED
 GITLAB_MR_CREATE_FAILED
+GITLAB_MR_MERGE_FAILED
 GITLAB_MR_NOT_FOUND
 GITLAB_RATE_LIMITED
 GITLAB_TIMEOUT
 GITLAB_UNKNOWN_ERROR
 ```
 
----
-
-## 11.2 Struttura errore normalizzata
+## 16.2 Normalized error example
 
 ```yaml
 code: GITLAB_FILE_NOT_FOUND
-technicalMessage: "404 File Not Found"
-userMessage: "Il file GitOps richiesto non esiste nel repository o nel branch indicato."
-suggestedAction: "Verificare projectId, branch e path del file."
+message: GitLab file not found
+technicalMessage: 404 File Not Found
 recoverable: true
+suggestedAction: Verify project ID, branch and file path.
 ```
+
+## 16.3 Branch already exists
+
+If the branch already exists, the system should:
+
+- reuse it only if clearly associated with the same ChangeRequest and policy allows it;
+- otherwise fail with a readable conflict error;
+- avoid silently writing to an unrelated branch.
 
 ---
 
-## 11.3 Branch già esistente
+## 17. GitLab evidence
 
-Errore:
-
-```text
-GITLAB_BRANCH_EXISTS
-```
-
-Possibili azioni:
-
-- riusare branch se la ChangeRequest è la stessa;
-- fallire se branch appartiene ad altro change;
-- generare nome branch alternativo;
-- richiedere intervento manuale.
-
-MVP consigliato:
-
-```text
-fallire con messaggio chiaro se branch esiste e non è collegato alla stessa ChangeRequest.
-```
-
----
-
-## 12. Evidence GitLab
-
-## 12.1 Evidence minima
+## 17.1 Minimal evidence
 
 ```yaml
 provider: gitlab
 projectId: "12345"
 repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
-sourceBranch: change/CHG-2026-0001-update-replicas
+sourceBranch: change/CHG-2026-0006
 targetBranch: main
-commitSha: b8e1d6b2fc88b41909f87d505739bc855de41516
-commitShortSha: b8e1d6b
+commitSha: <sha>
 mergeRequestIid: 42
 mergeRequestUrl: https://gitlab.example.local/group/repo/-/merge_requests/42
 filesChanged:
   - apps/demo-go-color-app/deployment.yaml
 ```
 
----
-
-## 12.2 Evidence diff summary
-
-```yaml
-files:
-  - path: apps/demo-go-color-app/deployment.yaml
-    changeType: update
-    summary: "replicas changed from 2 to 3"
-```
-
----
-
-## 12.3 Evidence in caso di errore
+## 17.2 Error evidence
 
 ```yaml
 provider: gitlab
 operation: CreateBranch
 errorCode: GITLAB_BRANCH_EXISTS
-message: "Branch change/CHG-2026-0001-update-replicas already exists"
+message: Branch change/CHG-2026-0006 already exists
 ```
+
+Evidence must be sanitized and must not include token values.
 
 ---
 
-## 13. Configurazione GitLab
+## 18. API endpoints related to GitLab workflows
 
-Variabili previste:
+The current Control Plane APIs use `/api/v1`.
+
+Change workflow actions:
 
 ```text
-GITLAB_BASE_URL=https://gitlab.example.local
-GITLAB_TOKEN=<from secret>
-GITLAB_TIMEOUT_SECONDS=30
-GITLAB_DEFAULT_BRANCH=main
-GITLAB_DEFAULT_PROJECT_ID=
-GITLAB_INSECURE_TLS=false
-GITLAB_CA_CERT_PATH=
+POST /api/v1/changes/{id}/create-branch
+POST /api/v1/changes/{id}/update-files
+POST /api/v1/changes/{id}/open-merge-request
+POST /api/v1/changes/{id}/merge-request
+GET  /api/v1/changes/{id}
+GET  /api/v1/changes/{id}/events
+GET  /api/v1/changes/{id}/evidence
 ```
 
-### Regole
-
-- token da Secret;
-- base URL da ConfigMap/env;
-- TLS insecure solo per lab;
-- timeout obbligatorio;
-- project ID per Application salvato in PostgreSQL o configurazione.
+Legacy endpoint references without `/api/v1` should be considered historical and updated during documentation migration.
 
 ---
 
-## 14. API interne DevOps Control Plane collegate a GitLab
+## 19. Integration with Tekton and Argo CD
 
-## 14.1 Git metadata
+GitLab workflow is not the end of the change lifecycle.
+
+The GitLab branch, commit and merge request are followed by:
 
 ```text
-GET /api/applications/{name}/git/commits
-GET /api/applications/{name}/git/files
+Tekton validation
+  -> Argo CD deployment check
+  -> Kubernetes/OpenShift runtime evidence
+  -> PostgreSQL evidence and audit history
 ```
+
+Tekton validates the GitOps content. Argo CD reflects deployment state. OpenShift evidence verifies runtime behavior.
 
 ---
 
-## 14.2 Change workflow Git operations
+## 20. Multi-environment direction
+
+Future environment-aware behavior will resolve GitOps path and target branch from the environment catalog.
+
+Example mapping:
 
 ```text
-POST /api/changes/{id}/create-branch
-POST /api/changes/{id}/update-files
-POST /api/changes/{id}/open-merge-request
-GET  /api/changes/{id}/git
+demo-go-color-app + dev        -> apps/demo-go-color-app/overlays/dev
+demo-go-color-app + staging    -> apps/demo-go-color-app/overlays/staging
+demo-go-color-app + production -> apps/demo-go-color-app/overlays/production
 ```
 
----
-
-## 14.3 Evidence
-
-```text
-GET /api/changes/{id}/evidence/gitlab
-```
+Production workflows must remain disabled until production guardrails, approval policy and environment-aware AuthZ are implemented and validated.
 
 ---
 
-## 15. Security requirements specifici
+## 21. Security requirements specific to GitLab
 
-- Non loggare `GITLAB_TOKEN`.
-- Non restituire token via API.
-- Non salvare token in PostgreSQL.
-- Non includere token nelle evidenze.
-- Usare token con privilegi minimi.
-- Preferire Project Access Token o service account rispetto a token personali per produzione.
-- Impostare scadenza token e rotazione.
-- Non salvare `.env` in Git.
-- Eseguire anti-secret check sui file modificati.
-
----
-
-## 16. Testing strategy
-
-## 16.1 Unit test
-
-Testare:
-
-- generazione branch name;
-- normalizzazione path;
-- mapping file GitLab;
-- decodifica base64;
-- mapping commit;
-- mapping MR;
-- mapping errori GitLab.
+- Do not log `GITLAB_TOKEN`.
+- Do not return token values through API.
+- Do not persist token values in PostgreSQL.
+- Do not include token values in evidence.
+- Use token with least required privileges.
+- Prefer project, group or service account tokens over personal tokens for production-oriented usage.
+- Define token expiration and rotation procedures.
+- Keep `.env` out of Git.
+- Run anti-secret validation before merge.
+- Use TLS strict mode.
 
 ---
 
-## 16.2 Test con fake GitLab client
+## 22. Testing strategy
 
-Il Workflow Engine deve poter essere testato senza GitLab reale usando fake adapter.
+## 22.1 Unit tests
 
-Scenario:
+Test:
+
+- branch naming;
+- path normalization;
+- GitLab response mapping;
+- merge request mapping;
+- error mapping;
+- token redaction behavior where applicable.
+
+## 22.2 Fake GitLab adapter tests
+
+Workflow services must be testable without real GitLab.
+
+Example fake flow:
 
 ```text
 CreateBranch -> success
-GetFile -> returns deployment.yaml
-CommitFiles -> returns commit SHA
-CreateMergeRequest -> returns MR IID
+CreateOrUpdateFile -> success
+OpenMergeRequest -> returns IID and URL
+MergeRequest -> returns merge commit SHA
 ```
 
----
+## 22.3 Runtime validation
 
-## 16.3 Integration test manuale MVP
+Runtime validation should cover:
 
-Scenario minimo:
+- create branch from a ChangeRequest;
+- update a file in the ChangeRequest branch;
+- open a merge request;
+- merge a merge request;
+- verify ChangeRequest events;
+- verify GitLab references in responses and evidence;
+- verify token values are not printed.
 
-1. configurare GitLab base URL e token;
-2. leggere file `deployment.yaml`;
-3. creare branch test;
-4. creare commit su branch;
-5. aprire MR;
-6. leggere stato MR;
-7. verificare che ChangeRequest contenga branch, commit e MR.
+## 22.4 Failure scenarios
 
----
+Scenarios to validate or simulate:
 
-## 16.4 Casi errore da simulare
-
-- token errato;
-- project ID errato;
-- file non trovato;
-- branch già esistente;
-- commit fallito;
-- MR non creabile;
-- timeout API;
-- rate limit.
+- invalid token;
+- wrong project ID;
+- branch already exists;
+- file update failure;
+- merge request creation failure;
+- merge request merge failure;
+- timeout;
+- TLS trust error.
 
 ---
 
-## 17. MVP implementation order per GitLab adapter
+## 23. Completion checklist
 
-Ordine consigliato:
+The GitLab integration baseline is considered ready when:
 
-1. configurazione GitLab;
-2. HTTP client base;
-3. autenticazione token;
-4. `GetFile`;
-5. decode base64;
-6. `ListCommits`;
-7. `CreateBranch`;
-8. `CommitFiles`;
-9. `CreateMergeRequest`;
-10. `GetMergeRequest`;
-11. mapping errori;
-12. evidence builder.
-
----
-
-## 18. Checklist di completamento integrazione GitLab
-
-La prima implementazione GitLab sarà considerata pronta quando:
-
-- il backend legge configurazione GitLab;
-- il token è letto da Secret/env e non loggato;
-- un file GitOps può essere letto;
-- un branch ChangeRequest può essere creato;
-- un commit può essere creato su branch;
-- una MR può essere aperta;
-- l’ultimo commit può essere letto;
-- gli errori GitLab principali sono normalizzati;
-- le evidenze GitLab sono salvabili in PostgreSQL;
-- i test manuali sono documentati.
+- GitLab configuration is loaded safely;
+- token is read from Secret and not logged;
+- TLS strict mode works;
+- a ChangeRequest branch can be created;
+- GitOps files can be updated;
+- a merge request can be opened;
+- a merge request can be merged where authorized;
+- GitLab external references are stored in events or evidence;
+- errors are normalized;
+- GitLab workflow integrates with Tekton validation and Argo CD deployment checks;
+- runtime validation is documented.
 
 ---
 
-## 19. Relazione con altri documenti
+## 24. Relationship with other documents
 
-Questo documento alimenta:
+This document informs and is informed by:
 
-- `docs/10-data-model.md`, per entità GitRepository, GitCommit, MergeRequest;
-- `docs/11-change-workflows.md`, per branch/commit/MR workflow;
-- `docs/13-api-design.md`, per endpoint Git e ChangeRequest;
-- `docs/09-security-rbac.md`, per gestione token GitLab;
-- ADR specifico `ADR-0007-gitlab-api-as-git-provider.md`.
-
----
-
-## 20. Riferimenti tecnici GitLab
-
-Riferimenti da consultare durante l’implementazione:
-
-- GitLab Repository Files API;
-- GitLab Branches API;
-- GitLab Commits API;
-- GitLab Merge Requests API;
-- GitLab Personal Access Tokens;
-- GitLab Project Access Tokens.
+- `docs/05-architecture.md`;
+- `docs/08-tekton-integration.md`;
+- `docs/06-argocd-integration.md`;
+- `docs/13-api-design.md`;
+- `docs/04-non-functional-requirements.md`;
+- `docs/environment-configuration-model.md`;
+- `docs/change-promotion-model.md`;
+- `docs/adr/ADR-0007-gitlab-api-as-git-provider.md`;
+- `docs/runbooks/secrets-rotation.md`.
 
 ---
 
-## 21. Messaggio chiave
+## 25. Key message
 
-L’integrazione GitLab è il punto che consente a DevOps Control Plane di restare coerente con GitOps.
+The GitLab integration is what keeps the DevOps Control Plane aligned with GitOps.
 
-Il sistema non deve cambiare direttamente il cluster.
-
-Deve invece produrre change Git tracciati:
+The system must not change the cluster directly as the desired state. The system must produce tracked Git changes:
 
 ```text
 branch
@@ -1079,7 +811,16 @@ branch
   -> merge request
   -> validation
   -> merge
-  -> Argo CD sync
+  -> Argo CD deployment state
 ```
 
-In questo modo ogni modifica è leggibile, revisionabile, auditabile e reversibile.
+This preserves the original spirit of the project: every change should be readable, reviewable, auditable and reversible.
+
+---
+
+## 26. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial GitLab integration document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original GitOps-oriented GitLab integration model and aligning it with the implemented advanced MVP baseline. |
