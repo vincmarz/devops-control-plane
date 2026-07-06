@@ -43,6 +43,10 @@ data:
   KUBERNETES_CA_FILE: ""
   KUBERNETES_NAMESPACE: "devops-ci-demo"
   EVIDENCE_BASE_PATH: ""
+
+  # Environment Catalog runtime loading. File is mounted from devops-control-plane-environments ConfigMap.
+  ENVIRONMENT_CATALOG_FILE: "/etc/dcp-environments/environments.yaml"
+
   # AuthN/AuthZ. Enabled behind OpenShift OAuth Proxy.
   AUTH_ENABLED: "true"
   AUTH_HEADER_USER: "X-Forwarded-User"

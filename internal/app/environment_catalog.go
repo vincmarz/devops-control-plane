@@ -3,22 +3,27 @@ package app
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
+const environmentCatalogFileEnv = "ENVIRONMENT_CATALOG_FILE"
+
 type EnvironmentDefinition struct {
-	Name                  string
-	DisplayName           string
-	Enabled               bool
-	Category              string
-	Description           string
-	KubernetesNamespace   string
-	TektonNamespace       string
-	ArgoCDApplicationName string
-	GitTargetBranch       string
-	AllowTechnicalActions bool
-	AllowPromotionSource  bool
-	AllowPromotionTarget  bool
+	Name                  string `yaml:"name"`
+	DisplayName           string `yaml:"displayName"`
+	Enabled               bool   `yaml:"enabled"`
+	Category              string `yaml:"category"`
+	Description           string `yaml:"description"`
+	KubernetesNamespace   string `yaml:"kubernetesNamespace"`
+	TektonNamespace       string `yaml:"tektonNamespace"`
+	ArgoCDApplicationName string `yaml:"argocdApplicationName"`
+	GitTargetBranch       string `yaml:"gitTargetBranch"`
+	AllowTechnicalActions bool   `yaml:"allowTechnicalActions"`
+	AllowPromotionSource  bool   `yaml:"allowPromotionSource"`
+	AllowPromotionTarget  bool   `yaml:"allowPromotionTarget"`
 }
 
 type EnvironmentCatalog struct {
@@ -26,58 +31,61 @@ type EnvironmentCatalog struct {
 	environments       map[string]EnvironmentDefinition
 }
 
+type environmentCatalogFile struct {
+	DefaultEnvironment string                  `yaml:"defaultEnvironment"`
+	Environments       []EnvironmentDefinition `yaml:"environments"`
+}
+
 func DefaultEnvironmentCatalog() EnvironmentCatalog {
+	catalog, err := LoadEnvironmentCatalogFromFile(os.Getenv(environmentCatalogFileEnv))
+	if err == nil {
+		return catalog
+	}
+
+	return DefaultEnvironmentCatalogFallback()
+}
+
+func DefaultEnvironmentCatalogFallback() EnvironmentCatalog {
 	return NewEnvironmentCatalog([]EnvironmentDefinition{
-		{
-			Name:                  "dev",
-			DisplayName:           "Development",
-			Enabled:               true,
-			Category:              "development",
-			Description:           "Current active development environment.",
-			KubernetesNamespace:   "devops-ci-demo",
-			TektonNamespace:       "devops-ci-demo",
-			ArgoCDApplicationName: "demo-go-color-app",
-			GitTargetBranch:       "main",
-			AllowTechnicalActions: true,
-			AllowPromotionSource:  true,
-			AllowPromotionTarget:  false,
-		},
-		{
-			Name:                  "staging",
-			DisplayName:           "Staging",
-			Enabled:               false,
-			Category:              "preproduction",
-			Description:           "Future controlled staging environment. Not enabled yet.",
-			KubernetesNamespace:   "",
-			TektonNamespace:       "",
-			ArgoCDApplicationName: "",
-			GitTargetBranch:       "",
-			AllowTechnicalActions: false,
-			AllowPromotionSource:  false,
-			AllowPromotionTarget:  true,
-		},
-		{
-			Name:                  "production",
-			DisplayName:           "Production",
-			Enabled:               false,
-			Category:              "production",
-			Description:           "Future production environment. Not enabled yet.",
-			KubernetesNamespace:   "",
-			TektonNamespace:       "",
-			ArgoCDApplicationName: "",
-			GitTargetBranch:       "",
-			AllowTechnicalActions: false,
-			AllowPromotionSource:  false,
-			AllowPromotionTarget:  true,
-		},
+		{Name: "dev", DisplayName: "Development", Enabled: true, Category: "development", Description: "Current active development environment.", KubernetesNamespace: "devops-ci-demo", TektonNamespace: "devops-ci-demo", ArgoCDApplicationName: "demo-go-color-app", GitTargetBranch: "main", AllowTechnicalActions: true, AllowPromotionSource: true, AllowPromotionTarget: false},
+		{Name: "staging", DisplayName: "Staging", Enabled: false, Category: "preproduction", Description: "Future controlled staging environment. Not enabled yet.", AllowPromotionTarget: true},
+		{Name: "production", DisplayName: "Production", Enabled: false, Category: "production", Description: "Future production environment. Not enabled yet.", AllowPromotionTarget: true},
 	}, "dev")
 }
 
-func NewEnvironmentCatalog(definitions []EnvironmentDefinition, defaultEnvironment string) EnvironmentCatalog {
-	catalog := EnvironmentCatalog{
-		defaultEnvironment: strings.TrimSpace(defaultEnvironment),
-		environments:       map[string]EnvironmentDefinition{},
+func LoadEnvironmentCatalogFromFile(path string) (EnvironmentCatalog, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return EnvironmentCatalog{}, errors.New("environment catalog file path is empty")
 	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return EnvironmentCatalog{}, fmt.Errorf("read environment catalog file: %w", err)
+	}
+
+	return ParseEnvironmentCatalogYAML(content)
+}
+
+func ParseEnvironmentCatalogYAML(content []byte) (EnvironmentCatalog, error) {
+	var parsed environmentCatalogFile
+	if err := yaml.Unmarshal(content, &parsed); err != nil {
+		return EnvironmentCatalog{}, fmt.Errorf("parse environment catalog yaml: %w", err)
+	}
+	if len(parsed.Environments) == 0 {
+		return EnvironmentCatalog{}, errors.New("environment catalog does not define any environments")
+	}
+
+	catalog := NewEnvironmentCatalog(parsed.Environments, parsed.DefaultEnvironment)
+	if _, ok := catalog.Resolve(catalog.DefaultEnvironment()); !ok {
+		return EnvironmentCatalog{}, fmt.Errorf("default environment %q is not configured", catalog.DefaultEnvironment())
+	}
+
+	return catalog, nil
+}
+
+func NewEnvironmentCatalog(definitions []EnvironmentDefinition, defaultEnvironment string) EnvironmentCatalog {
+	catalog := EnvironmentCatalog{defaultEnvironment: normalizeEnvironmentName(defaultEnvironment), environments: map[string]EnvironmentDefinition{}}
 
 	for _, definition := range definitions {
 		name := normalizeEnvironmentName(definition.Name)
