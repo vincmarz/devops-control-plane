@@ -1,960 +1,788 @@
-# DevOps Control Plane - Tekton Integration
+# DevOps Control Plane — Tekton Integration
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-- `docs/05-architecture.md`  
-- `docs/06-argocd-integration.md`  
-- `docs/07-gitlab-integration.md`  
-**Stato:** Draft iniziale / Tekton Integration
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento descrive come **DevOps Control Plane** deve integrarsi con **Tekton / OpenShift Pipelines**.
-
-L’obiettivo è definire:
-
-- responsabilità dell’integrazione Tekton;
-- motivazione dell’uso di Tekton nel progetto;
-- modello di interazione tramite Kubernetes API diretta;
-- risorse Tekton coinvolte;
-- modello `PipelineRun` / `TaskRun`;
-- pipeline di validazione MVP;
-- parametri, workspace e ServiceAccount;
-- raccolta stato e log;
-- evidenze prodotte;
-- error handling;
-- requisiti RBAC;
-- ordine di implementazione dell’adapter Tekton.
-
-Tekton non sostituisce GitLab o Argo CD. Nel DevOps Control Plane, Tekton ha il ruolo di **motore di validazione e automazione tecnica** dei change GitOps.
+- **Project:** DevOps Control Plane
+- **Document:** 08 — Tekton Integration
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+  - `docs/05-architecture.md`
+  - `docs/06-argocd-integration.md`
+  - `docs/07-gitlab-integration.md`
+- **Status:** Rewritten in English and refreshed while preserving the original validation-engine intent
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Ruolo di Tekton nell’architettura
+## 1. Purpose
 
-Nel progetto DevOps Control Plane, Tekton ha il ruolo di **Validation Engine**.
+This document describes how the DevOps Control Plane integrates with Tekton / Red Hat OpenShift Pipelines.
 
-Responsabilità Tekton:
+The original document defined Tekton as the validation and technical automation engine for GitOps changes. This refreshed version preserves that original architectural intent while aligning the document with the current implementation baseline.
 
-- eseguire pipeline di validazione;
-- clonare repository/branch GitOps;
-- validare YAML;
-- eseguire `kustomize build`, se applicabile;
-- eseguire `oc apply --dry-run=server`;
-- eseguire controlli anti-secret;
-- verificare regole GitOps/AppProject quando possibile;
-- produrre stato `Succeeded` o `Failed`;
-- generare log tecnici associabili alla ChangeRequest.
+The document defines:
 
-Responsabilità DevOps Control Plane:
+- why Tekton is used in the project;
+- how the Control Plane interacts with Tekton through Kubernetes API;
+- the role of `PipelineRun` and `TaskRun` resources;
+- the current GitOps validation pipeline;
+- validation parameters and execution model;
+- validation runtime status mapping;
+- TaskRun diagnostics and failure analysis;
+- validation evidence persisted in PostgreSQL;
+- anti-secret and manifest guardrails;
+- RBAC and security requirements;
+- current `/api/v1` validation endpoints;
+- future environment-aware Tekton mapping for `dev`, `staging` and `production`.
 
-- creare `PipelineRun` tramite Kubernetes API;
-- passare parametri alla PipelineRun;
-- monitorare stato PipelineRun;
-- raccogliere TaskRun collegate;
-- raccogliere log principali;
-- salvare evidenze in PostgreSQL;
-- aggiornare lo stato della ChangeRequest;
-- interpretare errori Tekton in modo operativo.
+Tekton does not replace GitLab or Argo CD. In the DevOps Control Plane architecture, Tekton validates that a GitOps change is technically acceptable before the change is considered safe to move forward in the workflow.
 
 ---
 
-## 3. Perché usare Kubernetes API diretta
+## 2. Role of Tekton in the architecture
 
-La scelta architetturale iniziale è:
+Tekton has the role of **Validation Engine**.
 
-```text
-DevOps Control Plane -> Kubernetes API -> Tekton CRDs
-```
+Tekton is responsible for:
 
-Il backend Go non deve dipendere dalla CLI `tkn` o da wrapper shell.
+- executing validation pipelines;
+- cloning the GitOps repository and selected branch or revision;
+- validating YAML and rendered manifests;
+- executing Kustomize validation where applicable;
+- running dry-run checks;
+- enforcing anti-secret and GitOps manifest guardrails;
+- producing `PipelineRun` and `TaskRun` status;
+- producing technical logs and diagnostics associated with validation.
 
-### Vantaggi
+The DevOps Control Plane is responsible for:
 
-- integrazione nativa con OpenShift/Kubernetes;
-- nessuna dipendenza dalla shell del container;
-- migliore controllo degli errori;
-- migliore osservabilità via status CRD;
-- possibilità di watch/polling programmatico;
-- coerenza con il modello Kubernetes-native di Tekton.
-
-### Regola
-
-La CLI `tkn` resta utile per troubleshooting manuale, ma non è il meccanismo primario del prodotto.
-
----
-
-## 4. Concetti Tekton rilevanti
-
-## 4.1 Task
-
-Una `Task` definisce un’unità riutilizzabile di lavoro.
-
-Esempi:
-
-- clone repository;
-- validazione YAML;
-- `kustomize build`;
-- dry-run server-side;
-- anti-secret check;
-- generazione report.
+- creating `PipelineRun` resources through Kubernetes API;
+- passing ChangeRequest, Git and path parameters to Tekton;
+- checking `PipelineRun` status;
+- collecting associated `TaskRun` diagnostics;
+- storing validation evidence in PostgreSQL;
+- updating ChangeRequest runtime status;
+- exposing validation status and diagnostics through API and UI;
+- preserving a clear audit trail.
 
 ---
 
-## 4.2 TaskRun
+## 3. Integration principles
 
-Una `TaskRun` rappresenta l’esecuzione concreta di una `Task`.
+### 3.1 Tekton validates GitOps change proposals
 
-Nel workflow DevOps Control Plane, le TaskRun sono generate dalla PipelineRun e devono essere lette per conoscere:
+Tekton validates the GitOps branch or revision produced through GitLab workflow.
 
-- task eseguite;
-- stato task;
-- durata;
-- errore eventuale;
-- log principali.
-
----
-
-## 4.3 Pipeline
-
-Una `Pipeline` definisce una sequenza o grafo di Task.
-
-Per l’MVP, la pipeline principale sarà:
-
-```text
-validate-gitops-change
-```
-
----
-
-## 4.4 PipelineRun
-
-Una `PipelineRun` istanzia ed esegue una `Pipeline`.
-
-Nel DevOps Control Plane, ogni ChangeRequest che richiede validazione deve generare una PipelineRun dedicata.
-
-Esempio naming:
-
-```text
-validate-gitops-change-chg-2026-0001
-```
-
-oppure con suffisso generato:
-
-```text
-validate-gitops-change-chg-2026-0001-abcde
-```
-
----
-
-## 5. Funzionalità MVP Tekton
-
-## 5.1 Creare PipelineRun di validazione
-
-### Obiettivo
-
-DevOps Control Plane deve creare una PipelineRun per validare un branch GitLab relativo a una ChangeRequest.
-
-### Input minimo
-
-```yaml
-changeId: CHG-2026-0001
-applicationName: demo-go-color-app
-repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
-revision: change/CHG-2026-0001-update-replicas
-path: apps/demo-go-color-app
-targetNamespace: devops-ci-demo
-```
-
-### Output atteso
-
-```yaml
-pipelineRunName: validate-gitops-change-chg-2026-0001-abcde
-namespace: devops-control-plane
-status: Running
-```
-
----
-
-## 5.2 Monitorare PipelineRun
-
-### Obiettivo
-
-DevOps Control Plane deve monitorare la PipelineRun fino allo stato finale.
-
-### Stati logici
-
-```text
-ValidationRequested
-ValidationRunning
-ValidationSucceeded
-ValidationFailed
-ValidationTimeout
-```
-
-### Regole
-
-- timeout obbligatorio;
-- polling interval configurabile;
-- stato finale salvato in PostgreSQL;
-- messaggio errore salvato se fallisce;
-- evidence Tekton salvata.
-
----
-
-## 5.3 Raccogliere TaskRun
-
-### Obiettivo
-
-Associare alla ChangeRequest le TaskRun generate dalla PipelineRun.
-
-### Dati minimi
-
-```yaml
-taskRunName: validate-gitops-change-chg-2026-0001-yaml-lint
-pipelineRunName: validate-gitops-change-chg-2026-0001-abcde
-taskName: yaml-lint
-status: Succeeded
-startTime: "2026-06-25T15:00:00+02:00"
-completionTime: "2026-06-25T15:00:15+02:00"
-```
-
----
-
-## 5.4 Raccogliere log principali
-
-### Obiettivo
-
-Raccogliere log utili alla diagnosi e all’audit.
-
-### Regole
-
-- non salvare token;
-- non salvare secret;
-- limitare dimensione log;
-- salvare summary leggibile;
-- salvare log completi solo se sanitizzati o referenziati in storage adeguato.
-
----
-
-## 6. Pipeline MVP: validate-gitops-change
-
-## 6.1 Obiettivo
-
-Validare un change GitOps prima della sync Argo CD.
-
-La Pipeline deve dimostrare che:
-
-- il branch Git esiste;
-- i manifest sono leggibili;
-- YAML è valido;
-- Kustomize build funziona, se applicabile;
-- il dry-run server-side non fallisce;
-- non ci sono secret evidenti nei file modificati;
-- le risorse introdotte sono coerenti con governance prevista.
-
----
-
-## 6.2 Task candidate
-
-### Task 1 - clone-repository
-
-Responsabilità:
-
-- clonare repository GitLab;
-- checkout del branch ChangeRequest;
-- rendere il workspace disponibile alle task successive.
-
-Parametri:
-
-```yaml
-repo-url: https://gitlab.example.local/group/demo-app-gitops.git
-revision: change/CHG-2026-0001-update-replicas
-```
-
----
-
-### Task 2 - show-context
-
-Responsabilità:
-
-- stampare contesto non sensibile;
-- mostrare Change ID;
-- mostrare branch;
-- mostrare path GitOps.
-
-### Nota
-
-Non stampare token o credenziali.
-
----
-
-### Task 3 - yaml-validate
-
-Responsabilità:
-
-- validare sintassi YAML;
-- individuare errori di indentazione;
-- fallire se file YAML non validi.
-
-Motivazione:
-
-Nel lab è stato osservato che un errore di indentazione `valueFrom/configMapKeyRef` può causare failure durante la sync Argo CD.
-
----
-
-### Task 4 - kustomize-build
-
-Responsabilità:
-
-- eseguire `kustomize build` sul path applicativo, se presente `kustomization.yaml`;
-- verificare che tutti i manifest referenziati esistano;
-- individuare file non inclusi in `resources`.
-
-Esempio problema da intercettare:
-
-```text
-configmap.yaml creato ma non aggiunto a kustomization.yaml
-```
-
----
-
-### Task 5 - server-side-dry-run
-
-Responsabilità:
-
-- eseguire dry-run server-side contro OpenShift/Kubernetes;
-- intercettare errori schema Kubernetes;
-- intercettare risorse non valide.
-
-Esempio errore da intercettare:
-
-```text
-valueFrom: Invalid value: must specify configMapKeyRef, secretKeyRef, fieldRef or resourceFieldRef
-```
-
----
-
-### Task 6 - anti-secret-check
-
-Responsabilità:
-
-- cercare pattern sospetti nei file modificati;
-- bloccare commit/promozione se vengono trovati secret evidenti.
-
-Pattern minimi:
-
-```text
-token
-password
-secret
-auth
-PRIVATE KEY
-BEGIN RSA
-ghp_
-github_pat_
-AKIA
-ASIA
-.dockerconfigjson
-config.json
-```
-
----
-
-### Task 7 - appproject-policy-check
-
-Responsabilità:
-
-- verificare se le risorse introdotte sono consentite dall’AppProject;
-- almeno per MVP, intercettare casi noti come ConfigMap non autorizzata.
-
-Esempio:
-
-```text
-resource :ConfigMap is not permitted in project devops-ci-demo
-```
-
-Nota: questa task può essere implementata in modo incrementale. Nel primissimo MVP può essere un controllo statico o opzionale.
-
----
-
-### Task 8 - report
-
-Responsabilità:
-
-- produrre summary finale;
-- elencare task eseguite;
-- elencare file validati;
-- elencare esito;
-- produrre eventuale messaggio didattico.
-
----
-
-## 7. PipelineRun template concettuale
-
-Esempio concettuale non definitivo:
-
-```yaml
-apiVersion: tekton.dev/v1
-kind: PipelineRun
-metadata:
-  generateName: validate-gitops-change-
-  namespace: devops-control-plane
-  labels:
-    app.kubernetes.io/name: devops-control-plane
-    devops-control-plane/change-id: CHG-2026-0001
-    devops-control-plane/application: demo-go-color-app
-spec:
-  pipelineRef:
-    name: validate-gitops-change
-  params:
-    - name: change-id
-      value: CHG-2026-0001
-    - name: repo-url
-      value: https://gitlab.example.local/group/demo-app-gitops.git
-    - name: revision
-      value: change/CHG-2026-0001-update-replicas
-    - name: gitops-path
-      value: apps/demo-go-color-app
-    - name: target-namespace
-      value: devops-ci-demo
-  workspaces:
-    - name: shared-workspace
-      persistentVolumeClaim:
-        claimName: devops-control-plane-workspace
-  serviceAccountName: pipeline
-```
-
-### Nota
-
-Il manifest definitivo sarà creato in `pipelines/validate-gitops-change.yaml` quando inizierà l’implementazione.
-
----
-
-## 8. Tekton Adapter
-
-## 8.1 Responsabilità
-
-Il componente `TektonAdapter` incapsula la gestione delle risorse Tekton tramite Kubernetes API.
-
-Il resto dell’applicazione non deve conoscere dettagli CRD, GVR, client-go dynamic client o YAML raw.
-
----
-
-## 8.2 Interfaccia logica MVP
-
-Interfaccia concettuale:
-
-```go
-type TektonAdapter interface {
-    CreatePipelineRun(ctx context.Context, namespace string, req CreatePipelineRunRequest) (*PipelineRunRef, error)
-    GetPipelineRun(ctx context.Context, namespace string, name string) (*PipelineRunStatus, error)
-    ListTaskRunsForPipelineRun(ctx context.Context, namespace string, pipelineRunName string) ([]TaskRunStatus, error)
-    GetTaskRunLogs(ctx context.Context, namespace string, taskRunName string) ([]TaskLog, error)
-    WaitPipelineRun(ctx context.Context, namespace string, name string, opts WaitOptions) (*PipelineRunStatus, error)
-}
-```
-
-Nota: l’interfaccia è indicativa. La forma finale sarà definita durante l’implementazione Go.
-
----
-
-## 8.3 Posizione package proposta
-
-```text
-internal/adapters/tekton/
-├── client.go
-├── models.go
-├── mapper.go
-├── pipelineruns.go
-├── taskruns.go
-├── logs.go
-├── wait.go
-└── errors.go
-```
-
-### File `client.go`
-
-Responsabilità:
-
-- inizializzare Kubernetes client;
-- gestire namespace Tekton;
-- gestire timeout;
-- configurare dynamic client o typed client.
-
-### File `pipelineruns.go`
-
-Responsabilità:
-
-- creare PipelineRun;
-- leggere PipelineRun;
-- serializzare/deserializzare spec e status.
-
-### File `taskruns.go`
-
-Responsabilità:
-
-- trovare TaskRun collegate a una PipelineRun;
-- leggere status e conditions.
-
-### File `logs.go`
-
-Responsabilità:
-
-- raccogliere log dai Pod/containers collegati alle TaskRun;
-- sanitizzare log;
-- limitare dimensione.
-
-### File `wait.go`
-
-Responsabilità:
-
-- polling stato PipelineRun;
-- timeout;
-- mapping condizioni finali.
-
-### File `errors.go`
-
-Responsabilità:
-
-- normalizzare errori Kubernetes/Tekton.
-
----
-
-## 9. Modello dati normalizzato
-
-## 9.1 PipelineRunRef
-
-```yaml
-name: validate-gitops-change-chg-2026-0001-abcde
-namespace: devops-control-plane
-uid: "..."
-changeId: CHG-2026-0001
-applicationName: demo-go-color-app
-```
-
----
-
-## 9.2 PipelineRunStatus
-
-```yaml
-name: validate-gitops-change-chg-2026-0001-abcde
-namespace: devops-control-plane
-status: Succeeded
-reason: Succeeded
-message: "Tasks Completed: 8 completed, 0 failed"
-startTime: "2026-06-25T15:00:00+02:00"
-completionTime: "2026-06-25T15:03:00+02:00"
-conditions:
-  - type: Succeeded
-    status: "True"
-    reason: Succeeded
-```
-
----
-
-## 9.3 TaskRunStatus
-
-```yaml
-name: validate-gitops-change-chg-2026-0001-yaml-validate
-namespace: devops-control-plane
-taskName: yaml-validate
-pipelineRunName: validate-gitops-change-chg-2026-0001-abcde
-status: Succeeded
-reason: Succeeded
-message: "All YAML files are valid"
-```
-
----
-
-## 9.4 TaskLog
-
-```yaml
-taskRunName: validate-gitops-change-chg-2026-0001-yaml-validate
-container: step-yaml-validate
-logExcerpt: "YAML validation completed successfully"
-truncated: false
-```
-
----
-
-## 10. ChangeRequest mapping
-
-## 10.1 Campi ChangeRequest
-
-```yaml
-changeId: CHG-2026-0001
-validation:
-  provider: tekton
-  namespace: devops-control-plane
-  pipelineRunName: validate-gitops-change-chg-2026-0001-abcde
-  status: Succeeded
-  startedAt: "2026-06-25T15:00:00+02:00"
-  completedAt: "2026-06-25T15:03:00+02:00"
-```
-
----
-
-## 10.2 Change events Tekton
-
-Eventi minimi:
-
-```text
-ValidationRequested
-ValidationRunning
-ValidationSucceeded
-ValidationFailed
-ValidationTimeout
-TektonPipelineRunCreated
-TektonTaskRunCollected
-TektonLogsCollected
-```
-
----
-
-## 11. Stati e conditions Tekton
-
-## 11.1 Mapping condition Succeeded
-
-| Tekton condition | Stato DevOps Control Plane |
-|---|---|
-| Succeeded=True | ValidationSucceeded |
-| Succeeded=False | ValidationFailed |
-| Succeeded=Unknown | ValidationRunning |
-| Timeout exceeded | ValidationTimeout |
-
----
-
-## 11.2 Regole
-
-- `Succeeded=True` è successo.
-- `Succeeded=False` è fallimento.
-- `Succeeded=Unknown` è running/pending.
-- assenza condition oltre timeout è timeout.
-- errori Kubernetes API sono errori adapter o infrastrutturali.
-
----
-
-## 12. Evidence Tekton
-
-## 12.1 Evidence minima
-
-```yaml
-provider: tekton
-namespace: devops-control-plane
-pipelineRunName: validate-gitops-change-chg-2026-0001-abcde
-status: Succeeded
-reason: Succeeded
-taskRuns:
-  - name: clone-repository
-    status: Succeeded
-  - name: yaml-validate
-    status: Succeeded
-  - name: kustomize-build
-    status: Succeeded
-  - name: server-side-dry-run
-    status: Succeeded
-```
-
----
-
-## 12.2 Evidence in caso di errore
-
-```yaml
-provider: tekton
-pipelineRunName: validate-gitops-change-chg-2026-0001-abcde
-status: Failed
-failedTask: server-side-dry-run
-message: "Deployment.apps demo-go-color-app is invalid: valueFrom is incomplete"
-errorCode: TEKTON_PIPELINERUN_FAILED
-```
-
----
-
-## 12.3 Log evidence
-
-I log dovrebbero essere salvati come:
-
-- excerpt sintetico;
-- riferimento a TaskRun;
-- eventuale payload JSON sanitizzato;
-- non come dump illimitato.
-
----
-
-## 13. Error model Tekton
-
-## 13.1 Codici errore interni
-
-```text
-TEKTON_AUTH_FAILED
-TEKTON_FORBIDDEN
-TEKTON_NAMESPACE_NOT_FOUND
-TEKTON_PIPELINE_NOT_FOUND
-TEKTON_PIPELINERUN_CREATE_FAILED
-TEKTON_PIPELINERUN_NOT_FOUND
-TEKTON_PIPELINERUN_FAILED
-TEKTON_PIPELINERUN_TIMEOUT
-TEKTON_TASKRUN_LIST_FAILED
-TEKTON_LOG_COLLECTION_FAILED
-TEKTON_UNKNOWN_ERROR
-```
-
----
-
-## 13.2 Struttura errore normalizzata
-
-```yaml
-code: TEKTON_PIPELINERUN_FAILED
-technicalMessage: "PipelineRun validate-gitops-change-chg-2026-0001 failed"
-userMessage: "La validazione Tekton del change è fallita."
-suggestedAction: "Consultare TaskRun e log associati alla ChangeRequest."
-recoverable: true
-```
-
----
-
-## 13.3 Errori YAML/dry-run noti
-
-Esempio:
-
-```text
-valueFrom: Invalid value: must specify configMapKeyRef, secretKeyRef, fieldRef or resourceFieldRef
-```
-
-Messaggio operativo:
-
-```text
-Il Deployment contiene un blocco valueFrom incompleto o indentato male. Verificare che configMapKeyRef sia correttamente indentato sotto valueFrom.
-```
-
----
-
-## 14. Configurazione Tekton
-
-Variabili previste:
-
-```text
-TEKTON_NAMESPACE=devops-control-plane
-TEKTON_PIPELINE_NAME=validate-gitops-change
-TEKTON_SERVICE_ACCOUNT=pipeline
-TEKTON_TIMEOUT_SECONDS=900
-TEKTON_POLL_INTERVAL_SECONDS=5
-TEKTON_WORKSPACE_CLAIM=devops-control-plane-workspace
-```
-
-### Regole
-
-- namespace configurabile;
-- timeout obbligatorio;
-- ServiceAccount dedicato o controllato;
-- PVC/workspace configurabile;
-- nessun token GitLab in chiaro nel manifest.
-
----
-
-## 15. RBAC e sicurezza
-
-## 15.1 ServiceAccount DevOps Control Plane
-
-Il ServiceAccount dell’applicazione deve poter:
-
-- creare PipelineRun nel namespace Tekton configurato;
-- leggere PipelineRun;
-- list/watch PipelineRun;
-- leggere TaskRun;
-- list/watch TaskRun;
-- leggere Pod e log associati alle TaskRun, se necessario.
-
----
-
-## 15.2 ServiceAccount PipelineRun
-
-La PipelineRun deve avere un ServiceAccount adeguato per:
-
-- clonare repository, se usa secret Git;
-- eseguire `oc apply --dry-run=server`, se previsto;
-- leggere AppProject o risorse governance, se previsto;
-- non avere privilegi eccessivi.
-
----
-
-## 15.3 Secret handling
-
-- Git credentials per la pipeline devono stare in Secret.
-- Token GitLab non devono essere stampati nei log.
-- Token non devono essere salvati in evidenza.
-- Il report finale deve essere sanitizzato.
-
----
-
-## 16. API interne DevOps Control Plane collegate a Tekton
-
-## 16.1 Validation endpoints
-
-```text
-POST /api/changes/{id}/validate
-GET  /api/changes/{id}/validation
-GET  /api/changes/{id}/validation/taskruns
-GET  /api/changes/{id}/validation/logs
-```
-
----
-
-## 16.2 Evidence endpoint
-
-```text
-GET /api/changes/{id}/evidence/tekton
-```
-
----
-
-## 17. Testing strategy
-
-## 17.1 Unit test
-
-Testare:
-
-- costruzione PipelineRun spec;
-- mapping PipelineRun status;
-- mapping TaskRun status;
-- mapping conditions;
-- mapping errori;
-- timeout wait loop;
-- sanitizzazione log.
-
----
-
-## 17.2 Test con fake Kubernetes client
-
-Il Workflow Engine deve poter essere testato senza cluster reale.
-
-Scenario fake:
-
-```text
-CreatePipelineRun -> returns PipelineRunRef
-GetPipelineRun -> Running
-GetPipelineRun -> Succeeded
-ListTaskRuns -> returns task status
-GetTaskRunLogs -> returns sanitized logs
-```
-
----
-
-## 17.3 Integration test manuale MVP
-
-Scenario minimo:
-
-1. creare namespace `devops-control-plane`;
-2. applicare Pipeline `validate-gitops-change`;
-3. configurare Secret Git, se necessario;
-4. creare PipelineRun via DevOps Control Plane;
-5. verificare PipelineRun Running;
-6. verificare TaskRun create;
-7. verificare stato finale Succeeded;
-8. verificare evidenze salvate nella ChangeRequest.
-
----
-
-## 17.4 Casi errore da simulare
-
-- namespace Tekton non esistente;
-- Pipeline non trovata;
-- ServiceAccount senza permessi;
-- repository non clonabile;
-- YAML non valido;
-- dry-run fallito;
-- secret rilevato;
-- PipelineRun timeout;
-- log non leggibili.
-
----
-
-## 18. MVP implementation order per Tekton adapter
-
-Ordine consigliato:
-
-1. configurazione Tekton;
-2. Kubernetes client base;
-3. modello `CreatePipelineRunRequest`;
-4. creazione PipelineRun;
-5. lettura PipelineRun;
-6. mapping condition `Succeeded`;
-7. wait con timeout;
-8. list TaskRuns collegate;
-9. raccolta log essenziale;
-10. evidence builder;
-11. mapping errori;
-12. integrazione con ChangeRequest Service.
-
----
-
-## 19. Checklist di completamento integrazione Tekton
-
-La prima integrazione Tekton sarà considerata pronta quando:
-
-- il backend legge configurazione Tekton;
-- il Kubernetes client è inizializzato;
-- una PipelineRun può essere creata;
-- la PipelineRun contiene label/annotation con Change ID;
-- lo stato PipelineRun viene monitorato;
-- TaskRun collegate sono visibili;
-- log principali sono raccoglibili o referenziabili;
-- timeout è gestito;
-- errori noti sono normalizzati;
-- l’esito validazione aggiorna la ChangeRequest;
-- evidence Tekton è salvabile in PostgreSQL.
-
----
-
-## 20. Relazione con altri documenti
-
-Questo documento alimenta:
-
-- `docs/10-data-model.md`, per entità TektonValidation, PipelineRun e TaskRun;
-- `docs/11-change-workflows.md`, per lo step validation;
-- `docs/12-evidence-model.md`, per evidenze Tekton;
-- `docs/13-api-design.md`, per endpoint validation;
-- `docs/09-security-rbac.md`, per ServiceAccount e Role/RoleBinding;
-- ADR specifico `ADR-0003-tekton-validation-engine.md`;
-- ADR specifico `ADR-0008-kubernetes-api-for-tekton.md`.
-
----
-
-## 21. Riferimenti tecnici Tekton/OpenShift Pipelines
-
-Riferimenti da consultare durante l’implementazione:
-
-- Tekton Tasks and Pipelines documentation;
-- Tekton PipelineRuns documentation;
-- Tekton Pipelines documentation;
-- Red Hat OpenShift Pipelines documentation;
-- Tekton Results documentation, per evoluzione futura della raccolta evidenze.
-
----
-
-## 22. Messaggio chiave
-
-Nel DevOps Control Plane, Tekton serve a trasformare la validazione dei change GitOps da attività manuale a processo ripetibile, osservabile e auditabile.
-
-Il flusso target è:
+The intended flow remains:
 
 ```text
 GitLab branch
   -> Tekton PipelineRun
   -> TaskRun validation
-  -> evidence
-  -> Argo CD sync solo se validation succeeded
+  -> validation evidence
+  -> Argo CD deployment state only after validation is acceptable
 ```
 
-Tekton non decide cosa deve essere deployato. Valida che il change GitOps sia tecnicamente corretto prima che Argo CD lo applichi al cluster.
+This preserves the original project spirit:
+
+```text
+Validation must be repeatable, observable and auditable.
+```
+
+### 3.2 The Control Plane uses Kubernetes API directly
+
+The architectural integration path is:
+
+```text
+DevOps Control Plane -> Kubernetes API -> Tekton CRDs
+```
+
+The backend Go application must not depend on the `tkn` CLI or shell wrappers for product runtime behavior.
+
+The `tkn` CLI remains useful for troubleshooting, manual validation and lab diagnostics, but it is not the Control Plane runtime integration mechanism.
+
+### 3.3 `PipelineRun` and `TaskRun` are first-class evidence sources
+
+A `PipelineRun` represents a validation execution. `TaskRun` resources represent the detailed validation steps.
+
+The Control Plane must preserve enough information to answer:
+
+- which validation was started;
+- which Git revision was validated;
+- which tasks ran;
+- which task failed, if any;
+- which reason and message Tekton reported;
+- which evidence was stored for audit.
+
+### 3.4 Tekton does not decide what is deployed
+
+Tekton validates the proposed GitOps change.
+
+GitLab remains the source of declarative change. Argo CD remains the GitOps reconciliation engine. OpenShift remains the runtime platform.
+
+---
+
+## 4. Current implementation baseline
+
+Current Tekton-related capabilities include:
+
+- Tekton integration through Kubernetes API;
+- `POST /api/v1/changes/{id}/validate` to start validation;
+- `POST /api/v1/changes/{id}/check-validation` to read validation result;
+- `PipelineRun` creation for ChangeRequests;
+- validation runtime statuses:
+  - `ValidationRunning`;
+  - `ValidationSucceeded`;
+  - `ValidationFailed`;
+- `TaskRun` diagnostics collection;
+- validation evidence persisted in PostgreSQL;
+- failure diagnostics exposed through API and UI;
+- hardened GitOps validation pipeline;
+- anti-secret and manifest guardrails;
+- pipeline source of truth in `pipelines/validate-gitops.yaml`;
+- runtime RBAC least-privilege baseline for Tekton resources;
+- relationship with GitLab branch workflow and Argo CD deployment checks.
+
+---
+
+## 5. Relevant Tekton concepts
+
+## 5.1 Task
+
+A `Task` defines a reusable unit of work.
+
+Examples in the validation workflow:
+
+- clone repository;
+- validate GitOps manifests;
+- run Kustomize rendering;
+- run dry-run checks;
+- apply anti-secret checks;
+- produce validation output.
+
+## 5.2 TaskRun
+
+A `TaskRun` is the execution of a `Task`.
+
+The Control Plane uses `TaskRun` information to identify:
+
+- executed validation steps;
+- task status;
+- failure reason;
+- failure message;
+- start and completion times;
+- diagnostics useful for operators and reviewers.
+
+## 5.3 Pipeline
+
+A `Pipeline` defines the validation workflow as a sequence or graph of tasks.
+
+The current source-of-truth pipeline is:
+
+```text
+pipelines/validate-gitops.yaml
+```
+
+The logical pipeline name in the current runtime baseline is:
+
+```text
+validate-gitops
+```
+
+## 5.4 PipelineRun
+
+A `PipelineRun` instantiates and executes the validation `Pipeline`.
+
+Each ChangeRequest validation attempt creates or refers to a dedicated `PipelineRun` associated with the ChangeRequest context.
+
+Example generated name pattern:
+
+```text
+devops-cp-validate-chg-2026-0006-xxxxx
+```
+
+---
+
+## 6. Validation pipeline baseline
+
+## 6.1 Purpose
+
+The validation pipeline validates a GitOps branch before deployment checks and evidence collection continue.
+
+The pipeline should prove that:
+
+- the Git branch or revision exists;
+- the expected GitOps path exists;
+- manifests can be rendered or validated;
+- unsafe Secret-like content is not introduced;
+- blocked Kubernetes Secret manifests are detected;
+- the change can be reviewed through repeatable technical evidence.
+
+## 6.2 Current validation tasks
+
+The current pipeline baseline includes the logical validation path:
+
+```text
+clone-repository
+validate-gitops-manifests
+```
+
+The validation task performs policy checks such as:
+
+- anti-secret and manifest guardrails;
+- Kubernetes `Secret` manifest detection;
+- inline secret-like value detection;
+- dry-run and manifest checks where configured;
+- readable policy violation messages.
+
+## 6.3 Original candidate task model
+
+The original design described a broader task model that remains useful as future direction:
+
+```text
+clone-repository
+show-context
+yaml-validate
+kustomize-build
+server-side-dry-run
+anti-secret-check
+appproject-policy-check
+report
+```
+
+This intent remains valid. The current implementation can evolve toward more explicit tasks over time while preserving the same validation purpose.
+
+---
+
+## 7. PipelineRun creation
+
+## 7.1 Validation trigger
+
+Validation is triggered by:
+
+```text
+POST /api/v1/changes/{id}/validate
+```
+
+Main flow:
+
+```text
+ChangeRequest
+  -> ChangeService.Validate
+  -> Tekton adapter creates PipelineRun
+  -> runtime status becomes ValidationRunning
+  -> technical event is recorded
+```
+
+## 7.2 Required parameters
+
+The Control Plane passes validation context such as:
+
+```yaml
+changeNumber: CHG-2026-0006
+applicationName: demo-go-color-app
+gitUrl: https://github.com/vincmarz/demo-app-gitops.git
+gitRevision: change/CHG-2026-0006
+validationPath: apps/demo-go-color-app
+pipelineName: validate-gitops
+namespace: devops-ci-demo
+```
+
+The exact values are resolved from the ChangeRequest, application configuration and future environment catalog.
+
+## 7.3 PipelineRun metadata
+
+A `PipelineRun` should include labels or generated names that make it traceable to the ChangeRequest.
+
+Recommended metadata:
+
+```text
+changeNumber
+applicationName
+targetEnvironment
+managedBy=devops-control-plane
+```
+
+---
+
+## 8. Tekton adapter
+
+## 8.1 Responsibilities
+
+The Tekton adapter encapsulates Tekton resource handling through Kubernetes API.
+
+The rest of the application must not depend on raw CRD payloads, `tkn` command output or shell wrappers.
+
+Current adapter responsibilities include:
+
+- create `PipelineRun`;
+- read `PipelineRun` status;
+- list related `TaskRun` resources;
+- map Tekton conditions to Control Plane runtime status;
+- return diagnostics to the ChangeService.
+
+## 8.2 Conceptual interface
+
+```go
+type TektonAdapter interface {
+    CreatePipelineRun(ctx context.Context, change domain.ChangeRequest) (name string, namespace string, uid string, err error)
+    CheckValidation(ctx context.Context, change domain.ChangeRequest) (TektonValidationResult, error)
+    ListTaskRunsByPipelineRun(ctx context.Context, namespace string, pipelineRunName string) ([]TektonTaskRunResult, error)
+}
+```
+
+The exact implementation can evolve, but the architectural boundary remains:
+
+```text
+application services depend on Tekton ports, not raw Kubernetes client details
+```
+
+## 8.3 Package location
+
+Current package area:
+
+```text
+internal/adapters/tekton/
+```
+
+Expected responsibilities:
+
+```text
+client.go        -> Kubernetes client and Tekton request handling
+models.go        -> normalized Tekton models
+pipelineruns.go  -> PipelineRun creation and retrieval
+taskruns.go      -> TaskRun listing and mapping
+errors.go        -> Tekton/Kubernetes error normalization
+```
+
+---
+
+## 9. Normalized data model
+
+## 9.1 PipelineRun reference
+
+```yaml
+name: devops-cp-validate-chg-2026-0006-xxxxx
+namespace: devops-ci-demo
+uid: <uid>
+changeNumber: CHG-2026-0006
+applicationName: demo-go-color-app
+```
+
+## 9.2 PipelineRun status
+
+```yaml
+name: devops-cp-validate-chg-2026-0006-xxxxx
+namespace: devops-ci-demo
+status: Succeeded
+reason: Succeeded
+message: "Tasks Completed: 2 completed, 0 failed"
+pipelineName: validate-gitops
+gitURL: https://github.com/vincmarz/demo-app-gitops.git
+gitRevision: change/CHG-2026-0006
+validationPath: apps/demo-go-color-app
+```
+
+## 9.3 TaskRun diagnostics
+
+```yaml
+name: devops-cp-validate-chg-2026-0006-xxxxx-validate-gitops-manifests
+namespace: devops-ci-demo
+pipelineTaskName: validate-gitops-manifests
+taskName: validate-gitops-manifests
+status: Succeeded
+reason: Succeeded
+message: policy checks passed
+```
+
+Failure example:
+
+```yaml
+name: devops-cp-validate-chg-2026-0001-xxxxx-clone-repository
+namespace: devops-ci-demo
+pipelineTaskName: clone-repository
+status: Failed
+reason: Failed
+message: step-prepare-and-run exited with code 1
+```
+
+---
+
+## 10. Runtime status mapping
+
+Tekton conditions map to Control Plane validation runtime statuses.
+
+| Tekton condition | Control Plane runtime status |
+|---|---|
+| `Succeeded=True` | `ValidationSucceeded` |
+| `Succeeded=False` | `ValidationFailed` |
+| `Succeeded=Unknown` | `ValidationRunning` |
+| timeout or missing terminal state | `ValidationFailed` or timeout-specific error, depending on implementation |
+
+Rules:
+
+- successful validation requires terminal Tekton success;
+- failed Tekton validation must not be hidden;
+- TaskRun diagnostics must identify failed tasks when possible;
+- lifecycle status must not be overwritten by runtime status.
+
+---
+
+## 11. Validation evidence
+
+## 11.1 Evidence creation
+
+Validation evidence is created when Tekton validation reaches a terminal state.
+
+Evidence type:
+
+```text
+validation
+```
+
+Evidence includes:
+
+- ChangeRequest metadata;
+- Tekton namespace;
+- PipelineRun name;
+- PipelineRun UID;
+- pipeline name;
+- Git URL;
+- Git revision;
+- validation path;
+- Tekton status;
+- reason;
+- message;
+- TaskRun diagnostics;
+- sanitized payload.
+
+## 11.2 Successful validation evidence
+
+```yaml
+provider: tekton
+namespace: devops-ci-demo
+pipelineRunName: devops-cp-validate-chg-2026-0006-xxxxx
+status: Succeeded
+reason: Succeeded
+gitRevision: change/CHG-2026-0006
+validationPath: apps/demo-go-color-app
+taskRuns:
+  - name: clone-repository
+    status: Succeeded
+  - name: validate-gitops-manifests
+    status: Succeeded
+```
+
+## 11.3 Failed validation evidence
+
+```yaml
+provider: tekton
+pipelineRunName: devops-cp-validate-chg-2026-0001-xxxxx
+status: Failed
+failedTaskCount: 1
+failedTasks:
+  - clone-repository
+summary: Tekton validation failed in task clone-repository
+```
+
+Evidence must not include tokens or Secret values.
+
+---
+
+## 12. Failure diagnostics
+
+The Control Plane must make Tekton failures understandable.
+
+Current diagnostics include:
+
+- failed task count;
+- failed task names;
+- TaskRun status;
+- TaskRun reason;
+- TaskRun message;
+- validation summary.
+
+Example summary:
+
+```text
+Tekton validation failed in task clone-repository
+```
+
+The UI and API should expose this information so the operator does not need to manually inspect all TaskRuns before understanding the failure point.
+
+---
+
+## 13. Anti-secret and GitOps guardrails
+
+## 13.1 Purpose
+
+The validation pipeline must prevent unsafe GitOps content from being accepted silently.
+
+## 13.2 Guardrails
+
+Current and expected guardrails include:
+
+- block Kubernetes `Secret` manifests where policy forbids them;
+- detect inline secret-like values;
+- detect common token, password, private key and authorization patterns;
+- allow safe external Secret references when policy permits;
+- produce clear `policy violation` messages.
+
+## 13.3 Examples of suspicious patterns
+
+```text
+password
+token
+client_secret
+authToken
+secret_key
+private_key
+PRIVATE KEY
+AWS access key patterns
+bearer
+authorization
+```
+
+## 13.4 Design rule
+
+Anti-secret checks must be treated as GitOps safety guardrails, not as a replacement for an enterprise Secret management platform.
+
+---
+
+## 14. Configuration
+
+Tekton configuration baseline:
+
+```text
+TEKTON_NAMESPACE=devops-ci-demo
+TEKTON_PIPELINE_NAME=validate-gitops
+TEKTON_TIMEOUT_SECONDS=900
+TEKTON_POLL_INTERVAL_SECONDS=5
+TEKTON_VALIDATION_PATH=apps/demo-go-color-app
+```
+
+Future environment-aware configuration will resolve these values by target environment.
+
+Rules:
+
+- namespace must be configurable;
+- pipeline name must be configurable;
+- validation path must be configurable;
+- timeouts must be explicit;
+- credentials used by pipelines must come from Secrets;
+- no token values may be printed in PipelineRun logs.
+
+---
+
+## 15. RBAC and security
+
+## 15.1 Runtime ServiceAccount
+
+The DevOps Control Plane runtime ServiceAccount must be able to:
+
+- create `PipelineRun` resources in the configured Tekton namespace;
+- get/list `PipelineRun` resources;
+- get/list `TaskRun` resources;
+- read runtime resources required for evidence where configured.
+
+It must not have broad cluster-admin permissions.
+
+## 15.2 Pipeline ServiceAccount
+
+The PipelineRun ServiceAccount must have only the permissions required by the validation pipeline.
+
+Depending on the pipeline design, it may require:
+
+- repository clone credentials;
+- read access to resources needed for dry-run or validation;
+- no unnecessary access to Secrets.
+
+## 15.3 Secret handling
+
+- Git credentials used by the pipeline must be stored in Secrets.
+- Git tokens must not be printed in Tekton logs.
+- Secret values must not be stored in evidence.
+- Validation output must be sanitized.
+
+---
+
+## 16. API endpoints related to Tekton validation
+
+Current validation endpoints:
+
+```text
+POST /api/v1/changes/{id}/validate
+POST /api/v1/changes/{id}/check-validation
+GET  /api/v1/changes/{id}/evidence
+GET  /api/v1/changes/{id}/evidence/validation
+```
+
+Legacy references without `/api/v1` should be considered historical and updated during documentation migration.
+
+---
+
+## 17. Relationship with GitLab and Argo CD
+
+Tekton validation sits between GitLab change creation and Argo CD deployment state.
+
+```text
+GitLab branch / file update / merge request
+  -> Tekton validation
+  -> Argo CD deployment check
+  -> Kubernetes/OpenShift runtime evidence
+```
+
+A validation failure should prevent the change from being treated as technically validated.
+
+A validation success does not itself deploy anything. Deployment state is still observed through Argo CD and runtime evidence collection.
+
+---
+
+## 18. Multi-environment direction
+
+Future environment-aware behavior will resolve Tekton settings from the environment catalog.
+
+Example mapping:
+
+```text
+dev:
+  namespace: devops-ci-demo
+  pipelineName: validate-gitops
+  validationPath: apps/demo-go-color-app/overlays/dev
+
+staging:
+  namespace: devops-ci-staging
+  pipelineName: validate-gitops
+  validationPath: apps/demo-go-color-app/overlays/staging
+
+production:
+  namespace: devops-ci-production
+  pipelineName: validate-gitops
+  validationPath: apps/demo-go-color-app/overlays/production
+```
+
+Production validation must remain guarded by environment-aware RBAC/AuthZ before production workflows are enabled.
+
+---
+
+## 19. Testing strategy
+
+## 19.1 Unit tests
+
+Test:
+
+- PipelineRun request construction;
+- PipelineRun status mapping;
+- TaskRun status mapping;
+- failed task diagnostics;
+- validation evidence payload construction;
+- error mapping;
+- timeout behavior where implemented.
+
+## 19.2 Fake Kubernetes client tests
+
+Workflow services should be testable without a real cluster.
+
+Example fake flow:
+
+```text
+CreatePipelineRun -> returns PipelineRunRef
+CheckValidation -> Running
+CheckValidation -> Succeeded
+ListTaskRuns -> returns task statuses
+```
+
+## 19.3 Runtime validation
+
+Runtime validation should cover:
+
+- PipelineRun creation through the Control Plane;
+- `check-validation` reading terminal status;
+- TaskRun diagnostics collection;
+- validation evidence persistence;
+- policy guardrail success case;
+- policy guardrail failure case;
+- RBAC permissions for create/get/list PipelineRun and TaskRun resources.
+
+## 19.4 Failure scenarios
+
+Validate or simulate:
+
+- namespace not found;
+- pipeline not found;
+- ServiceAccount permission failure;
+- repository clone failure;
+- manifest validation failure;
+- anti-secret policy violation;
+- PipelineRun failure;
+- TaskRun diagnostics unavailable;
+- timeout.
+
+---
+
+## 20. Completion checklist
+
+The Tekton integration baseline is considered ready when:
+
+- Tekton configuration is loaded safely;
+- Kubernetes client can create PipelineRuns;
+- PipelineRun contains ChangeRequest context;
+- PipelineRun status can be checked;
+- TaskRun diagnostics are collected;
+- validation evidence is persisted;
+- failed tasks are visible;
+- anti-secret and manifest guardrails are active;
+- runtime status is updated correctly;
+- RBAC is least-privilege;
+- runtime validation is documented.
+
+---
+
+## 21. Relationship with other documents
+
+This document informs and is informed by:
+
+- `docs/05-architecture.md`;
+- `docs/07-gitlab-integration.md`;
+- `docs/06-argocd-integration.md`;
+- `docs/09-kubernetes-openshift-integration.md`;
+- `docs/13-api-design.md`;
+- `docs/04-non-functional-requirements.md`;
+- `docs/environment-configuration-model.md`;
+- `docs/change-promotion-model.md`;
+- `docs/adr/ADR-0003-tekton-validation-engine.md`;
+- `docs/adr/ADR-0008-kubernetes-api-for-tekton.md`.
+
+---
+
+## 22. Key message
+
+Tekton transforms GitOps validation from a manual activity into a repeatable, observable and auditable process.
+
+The Control Plane uses Tekton to answer a simple operational question:
+
+```text
+Is this GitOps change technically safe enough to proceed?
+```
+
+Tekton does not decide what is deployed. Tekton validates the GitOps change before Argo CD deployment state and OpenShift runtime evidence are evaluated.
+
+This preserves the original spirit of the project: validation is explicit, traceable and associated with the ChangeRequest.
+
+---
+
+## 23. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial Tekton integration document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original Tekton validation-engine intent and aligning it with the implemented validation, diagnostics and evidence baseline. |
