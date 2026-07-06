@@ -1,1235 +1,953 @@
-# DevOps Control Plane - Architecture
+# DevOps Control Plane — Architecture
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-**Stato:** Draft iniziale / Architecture
+## Document metadata
+
+- **Project:** DevOps Control Plane
+- **Document:** 05 — Architecture
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+- **Status:** Rewritten in English and refreshed to align with the current advanced MVP, security, operability and multi-environment baseline
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 1. Scopo del documento
+## 1. Purpose
 
-Questo documento descrive l’architettura iniziale del progetto **DevOps Control Plane**.
+This document describes the current architecture of the DevOps Control Plane.
 
-L’obiettivo è definire:
+The original architecture document described the initial MVP direction. This refreshed version updates the architecture to reflect the current implementation baseline, including:
 
-- componenti principali;
-- responsabilità dei componenti;
-- boundary tra dominio e integrazioni esterne;
-- flussi principali;
-- modello di deployment iniziale;
-- dipendenze esterne;
-- modalità di integrazione con GitLab, Argo CD, Tekton, Kubernetes/OpenShift e PostgreSQL;
-- principi di sicurezza e osservabilità architetturale;
-- evoluzione prevista dopo il primo MVP.
+- Go backend;
+- PostgreSQL persistence;
+- versioned `/api/v1` API;
+- server-side Web UI;
+- GitLab integration;
+- Tekton integration through Kubernetes API;
+- Argo CD integration;
+- Kubernetes/OpenShift runtime evidence collection;
+- OpenShift OAuth Proxy;
+- backend AuthN/AuthZ;
+- OpenShift group lookup;
+- TLS strict and trust bundle model;
+- Secret/token handling;
+- RBAC least privilege;
+- PostgreSQL NetworkPolicy;
+- operability runbooks and smoke-test automation;
+- backup/restore, disaster recovery and maintenance baselines;
+- multi-developer UI validation;
+- multi-environment direction for `dev`, `staging` and `production`.
 
-Il documento traduce la vision e i requisiti in una struttura tecnica implementabile.
+The goal is to provide a technical architecture that is implementable, auditable, understandable for onboarding readers and aligned with the current repository language policy.
 
 ---
 
 ## 2. Executive summary
 
-**DevOps Control Plane** è un’applicazione backend scritta in Go che orchestra workflow GitOps standardizzati.
-
-Il sistema non sostituisce GitLab, Argo CD, Tekton o OpenShift. Li coordina.
+The DevOps Control Plane is a Go application deployed on OpenShift. It orchestrates GitOps workflows by coordinating external systems rather than replacing them.
 
 ```text
-GitLab       = gestione repository, branch, commit, merge request
-Argo CD      = motore GitOps di sync e riconciliazione
-Tekton       = motore di validazione workflow
-OpenShift    = piattaforma runtime
-PostgreSQL   = storico ChangeRequest, eventi ed evidenze
-Go backend   = orchestrazione, API, workflow, adapter
+GitLab       = repository, branch, commit and merge request workflow
+Tekton       = GitOps validation and technical execution diagnostics
+Argo CD      = GitOps deployment state and reconciliation status
+OpenShift    = runtime platform and Kubernetes/OpenShift evidence source
+PostgreSQL   = ChangeRequest, events and evidence store
+Go backend   = orchestration, API, UI, AuthZ, adapters and evidence correlation
+OAuth Proxy  = OpenShift-backed authentication gateway for Route traffic
 ```
 
-Il principio architetturale fondamentale è:
+The main architectural principle remains:
 
 ```text
-Ogni change permanente deve passare da Git.
+Every permanent desired-state change must be represented in Git.
 ```
 
-DevOps Control Plane non deve diventare un pannello alternativo di modifica runtime del cluster.
+The Control Plane is not an alternative runtime editor for the OpenShift cluster. It is an orchestration, governance, evidence and audit layer over the GitOps toolchain.
 
 ---
 
-## 3. Stack architetturale scelto
-
-## 3.1 Backend
+## 3. High-level architecture
 
 ```text
-Go
+User / Browser / API Client
+        |
+        v
+OpenShift Route
+        |
+        v
+OpenShift OAuth Proxy
+        |
+        v
+DevOps Control Plane Go backend
+        |
+        +--> PostgreSQL repository layer
+        |
+        +--> GitLab adapter
+        |
+        +--> Tekton adapter through Kubernetes API
+        |
+        +--> Argo CD adapter
+        |
+        +--> Kubernetes/OpenShift runtime evidence adapter
+        |
+        +--> AuthN/AuthZ middleware and OpenShift group resolver
 ```
-
-Responsabilità:
-
-- API HTTP;
-- orchestrazione workflow;
-- gestione ChangeRequest;
-- integrazione adapter;
-- persistenza PostgreSQL;
-- raccolta evidenze;
-- predisposizione HTML templates.
-
----
-
-## 3.2 Frontend MVP
-
-```text
-Go HTML templates + Bootstrap
-```
-
-La UI completa arriverà dopo la stabilizzazione dei workflow.
-
-Nel primo MVP il backend può esporre pagine minime per:
-
-- health/debug;
-- lista applicazioni;
-- lista change;
-- dettaglio change.
-
-Tuttavia, la priorità resta:
-
-```text
-API e workflow stabili prima di una UI ricca.
-```
-
----
-
-## 3.3 Database
-
-```text
-PostgreSQL
-```
-
-Responsabilità:
-
-- Application snapshot/cache;
-- ChangeRequest;
-- ChangeEvent;
-- Evidence;
-- riferimenti GitLab;
-- riferimenti Tekton;
-- riferimenti Argo CD;
-- audit trail operativo.
-
----
-
-## 3.4 Git integration
-
-```text
-GitLab API
-```
-
-Responsabilità:
-
-- leggere file dal repository;
-- leggere branch e commit;
-- creare branch;
-- aggiornare file;
-- creare commit;
-- aprire merge request;
-- leggere stato merge request.
-
-Nota: il codice sorgente del progetto può essere ospitato su GitHub, ma l’integrazione funzionale MVP verso repository applicativi/GitOps target è GitLab API.
-
----
-
-## 3.5 Argo CD integration
-
-```text
-Argo CD API
-```
-
-Responsabilità:
-
-- lista Application;
-- dettaglio Application;
-- resources;
-- orphaned resources;
-- history;
-- sync;
-- stato operazione;
-- polling fino a `Synced` e `Healthy`.
-
----
-
-## 3.6 Tekton integration
-
-```text
-Kubernetes API diretta
-```
-
-Responsabilità:
-
-- creare PipelineRun;
-- monitorare PipelineRun;
-- leggere TaskRun;
-- raccogliere log;
-- salvare evidenze validazione.
-
----
-
-## 3.7 OpenShift/Kubernetes integration
-
-```text
-Kubernetes API diretta
-```
-
-Responsabilità:
-
-- leggere Deployment;
-- leggere ReplicaSet;
-- leggere Pod;
-- leggere ConfigMap;
-- leggere Service;
-- leggere Route, se disponibile tramite API OpenShift;
-- raccogliere evidenze runtime;
-- eventuale dry-run server-side tramite validation workflow.
-
----
-
-## 4. Architettura logica alto livello
-
-```text
-+-------------------------------------------------------------+
-|                    DevOps Control Plane                     |
-|                                                             |
-|  +--------------------+       +--------------------------+  |
-|  | HTTP API / Web     |       | Workflow Engine          |  |
-|  | Go handlers        |-----> | Change orchestration     |  |
-|  +--------------------+       +--------------------------+  |
-|             |                              |                 |
-|             |                              v                 |
-|             |                 +--------------------------+  |
-|             |                 | Domain Services          |  |
-|             |                 | Application / Change     |  |
-|             |                 +--------------------------+  |
-|             |                              |                 |
-|             v                              v                 |
-|  +-------------------------------------------------------+  |
-|  |                    Adapters Layer                     |  |
-|  |                                                       |  |
-|  |  GitLab  |  Argo CD  |  Kubernetes  |  Tekton         |  |
-|  +-------------------------------------------------------+  |
-|             |                              |                 |
-|             v                              v                 |
-|  +--------------------+       +--------------------------+  |
-|  | PostgreSQL         |       | Evidence Collector       |  |
-|  | Change store       |       | Runtime/validation data  |  |
-|  +--------------------+       +--------------------------+  |
-+-------------------------------------------------------------+
 
 External systems:
 
+```text
 GitLab API
 Argo CD API
 Kubernetes/OpenShift API
 Tekton CRDs
 PostgreSQL
+OpenShift OAuth
+OpenShift groups
+OpenShift image registry
 ```
 
 ---
 
-## 5. Componenti principali
+## 4. Architectural principles
 
-## 5.1 HTTP API Layer
+### 4.1 Git remains the source of desired state
 
-### Responsabilità
+Application workload changes must be represented as Git changes. Runtime imperative commands may be used only for troubleshooting or controlled operational procedures, not as the final workflow state.
 
-- esporre endpoint REST;
-- validare input HTTP;
-- autenticare/autorizzare, quando implementato;
-- inoltrare comandi al Workflow Engine;
-- restituire risposte JSON;
-- predisporre rendering HTML templates.
+### 4.2 Argo CD remains the reconciliation engine
 
-### Esempi endpoint
+The Control Plane checks and interprets Argo CD state. It does not implement its own deployment engine.
+
+### 4.3 Tekton remains the validation engine
+
+The Control Plane creates and observes Tekton `PipelineRun` and `TaskRun` resources through Kubernetes API.
+
+### 4.4 PostgreSQL stores functional history and evidence
+
+GitLab, Tekton and Argo CD provide technical histories. PostgreSQL stores the Control Plane model: ChangeRequests, events, runtime status and evidence.
+
+### 4.5 Security and operability are part of the architecture
+
+OAuth Proxy, backend AuthZ, RBAC, TLS, Secret handling, NetworkPolicy and runbooks are not add-ons. They are part of the architecture baseline.
+
+---
+
+## 5. Component model
+
+## 5.1 OpenShift Route and OAuth Proxy
+
+### Responsibilities
+
+- expose the application through OpenShift Route;
+- authenticate browser/API users through OpenShift OAuth;
+- block anonymous access to UI and API routes;
+- allow unauthenticated access to safe health endpoints;
+- forward trusted identity headers to the backend.
+
+### Current behavior
+
+- anonymous `/api/v1/changes` through Route returns HTTP 403;
+- anonymous `/ui/dashboard` through Route returns HTTP 403;
+- `/readyz` and `/livez` return HTTP 200 when healthy.
+
+---
+
+## 5.2 HTTP API layer
+
+### Responsibilities
+
+- expose versioned REST endpoints under `/api/v1`;
+- validate HTTP input;
+- call application services;
+- translate errors into structured responses;
+- enforce backend AuthZ through middleware;
+- avoid direct low-level integration logic in handlers.
+
+### Core endpoint areas
 
 ```text
-GET  /healthz
 GET  /readyz
-GET  /api/applications
-GET  /api/applications/{name}
-GET  /api/changes
-GET  /api/changes/{id}
-POST /api/changes
-POST /api/changes/{id}/validate
-POST /api/changes/{id}/sync
+GET  /livez
+GET  /api/v1/applications
+GET  /api/v1/applications/{name}
+GET  /api/v1/changes
+GET  /api/v1/changes/{id}
+POST /api/v1/changes
+POST /api/v1/changes/{id}/submit
+POST /api/v1/changes/{id}/approve
+POST /api/v1/changes/{id}/start-execution
+POST /api/v1/changes/{id}/complete-execution
+POST /api/v1/changes/{id}/close
+POST /api/v1/changes/{id}/create-branch
+POST /api/v1/changes/{id}/update-files
+POST /api/v1/changes/{id}/open-merge-request
+POST /api/v1/changes/{id}/merge-request
+POST /api/v1/changes/{id}/validate
+POST /api/v1/changes/{id}/check-validation
+POST /api/v1/changes/{id}/check-deployment
+POST /api/v1/changes/{id}/collect-evidence
+GET  /api/v1/changes/{id}/evidence
+GET  /api/v1/changes/{id}/events
 ```
-
-### Regole
-
-- gli handler HTTP non devono contenere logica GitLab/Argo/Tekton diretta;
-- gli handler chiamano servizi applicativi;
-- gli errori devono essere tradotti in risposte leggibili.
 
 ---
 
-## 5.2 Domain Layer
+## 5.3 Web UI layer
 
-### Responsabilità
+### Responsibilities
 
-Contiene il modello concettuale del sistema:
+- provide server-side rendered pages;
+- expose dashboard, applications and ChangeRequest views;
+- expose evidence and audit event pages;
+- provide server-side technical actions;
+- show requester and runtime status;
+- keep UI labels in English.
+
+### Current UI baseline
+
+- dashboard with KPI counters;
+- recent changes limited to five items;
+- `View all` link to full ChangeRequest list;
+- requester visible in recent changes and `/ui/changes`;
+- ChangeRequest detail with actions, evidence and audit links;
+- UI wrapper for raw Changes API.
+
+---
+
+## 5.4 Domain layer
+
+### Responsibilities
+
+The domain layer contains the conceptual model:
 
 - Application;
 - ChangeRequest;
 - ChangeEvent;
 - Evidence;
-- WorkflowStatus;
-- GitReference;
-- ArgoStatus;
-- TektonValidation;
-- RuntimeEvidence.
+- lifecycle status;
+- runtime status;
+- Git references;
+- Tekton validation results;
+- Argo CD deployment results;
+- Kubernetes/OpenShift evidence summaries.
 
-### Regole
+### Rules
 
-- non dipende da dettagli HTTP GitLab;
-- non dipende da dettagli HTTP Argo CD;
-- non dipende da implementazioni concrete Kubernetes client;
-- deve essere testabile con unit test.
+- domain types do not depend on GitLab HTTP details;
+- domain types do not depend on Argo CD HTTP details;
+- domain types do not depend on concrete Kubernetes clients;
+- domain and service logic must be unit-testable.
 
 ---
 
-## 5.3 Workflow Engine
+## 5.5 Application services
 
-### Responsabilità
+### Responsibilities
 
-Coordina i workflow end-to-end.
+Application services orchestrate business use cases and integration ports.
 
-Esempio workflow `update-replicas`:
+Current service responsibilities include:
+
+- listing and retrieving applications;
+- creating and reading ChangeRequests;
+- lifecycle transitions;
+- technical status updates;
+- GitLab workflow orchestration;
+- Tekton validation orchestration;
+- Argo CD deployment checks;
+- evidence collection;
+- audit event persistence.
+
+---
+
+## 5.6 PostgreSQL repository layer
+
+### Responsibilities
+
+The PostgreSQL layer stores persistent functional state.
+
+Main entities:
+
+- `applications` where used by the baseline;
+- `change_requests`;
+- `change_events`;
+- `evidences`.
+
+### Rules
+
+- timestamps must be preserved;
+- JSON payloads must be sanitized;
+- Secret values must not be persisted;
+- critical state changes must be consistent;
+- backup and restore procedures must protect this data.
+
+---
+
+## 5.7 Evidence collector
+
+### Responsibilities
+
+The evidence collector normalizes and sanitizes evidence from external systems.
+
+Evidence sources:
+
+- Tekton validation status and diagnostics;
+- Argo CD deployment status;
+- Kubernetes/OpenShift Deployment, Pod, Service and Route state;
+- ChangeRequest metadata;
+- GitLab references.
+
+### Rules
+
+- do not store tokens;
+- do not store raw Secret values;
+- include useful summaries;
+- preserve enough payload for audit and troubleshooting;
+- include target environment where available.
+
+---
+
+# 6. Adapter layer
+
+The adapter layer isolates the application/domain logic from external APIs.
+
+## 6.1 GitLab adapter
+
+### Responsibilities
+
+- create branches;
+- update files;
+- open merge requests;
+- merge merge requests;
+- normalize GitLab API errors;
+- return external references to the ChangeService.
+
+### Rules
+
+- GitLab token must never be logged;
+- branch conflicts must be handled clearly;
+- file update failures must be readable;
+- commit and merge references must be recorded;
+- TLS strict mode must be supported.
+
+---
+
+## 6.2 Argo CD adapter
+
+### Responsibilities
+
+- list applications;
+- get application details;
+- read sync and health status;
+- read revision and conditions;
+- check deployment state;
+- preserve warnings such as `OrphanedResourceWarning`.
+
+### Rules
+
+- Argo CD token must never be logged;
+- TLS strict mode must be used;
+- healthy applications with warnings must not be automatically classified as failed;
+- deployment status must be mapped to Control Plane runtime status.
+
+---
+
+## 6.3 Kubernetes/OpenShift adapter
+
+### Responsibilities
+
+- read runtime Deployment state;
+- read Pod status and restart counts;
+- read Service state;
+- read OpenShift Route state;
+- use ServiceAccount token fallback;
+- use ServiceAccount CA where applicable;
+- support runtime evidence collection.
+
+### Rules
+
+- runtime evidence collection is read-only;
+- ServiceAccount permissions must remain least-privilege;
+- static Kubernetes tokens should not be required;
+- Secret values must not be read unless explicitly required and approved.
+
+---
+
+## 6.4 Tekton adapter
+
+### Responsibilities
+
+- create `PipelineRun` resources;
+- read `PipelineRun` status;
+- list associated `TaskRun` resources;
+- collect diagnostics;
+- map Tekton status to validation runtime status.
+
+### Rules
+
+- `PipelineRun` names and labels should include ChangeRequest context;
+- timeout behavior must be explicit;
+- validation evidence must be stored;
+- TaskRun failures must be visible.
+
+---
+
+## 6.5 AuthN/AuthZ components
+
+### Responsibilities
+
+- read trusted user and group headers;
+- resolve OpenShift group membership when enabled;
+- map groups to roles;
+- enforce endpoint/action authorization;
+- fail closed for unknown endpoints or unauthorized actions.
+
+### Current roles
 
 ```text
-Create ChangeRequest
-  -> read Application metadata
-  -> create GitLab branch
-  -> update YAML
-  -> commit or MR
-  -> create Tekton PipelineRun
-  -> wait validation
-  -> sync Argo CD
-  -> wait Synced/Healthy
-  -> collect evidence
-  -> complete ChangeRequest
+viewer
+operator
+approver
+admin
 ```
 
-### Regole
-
-- ogni passaggio crea un evento;
-- ogni fallimento produce stato esplicito;
-- nessun workflow deve restare appeso senza timeout;
-- le operazioni lunghe devono essere asincrone o tracciate con polling.
+Future environment-aware authorization will include target environment and approval policy.
 
 ---
 
-## 5.4 Application Service
+# 7. Go package architecture
 
-### Responsabilità
+Current package layout follows an adapter-based architecture.
 
-Gestisce le informazioni sulle Application Argo CD.
-
-Funzioni:
-
-- lista applicazioni;
-- dettaglio applicazione;
-- resources;
-- orphaned resources;
-- history;
-- correlazione con Git repository/path;
-- update cache PostgreSQL.
-
-### Dipendenze
-
-- Argo CD Adapter;
-- GitLab Adapter, per ultimo commit;
-- PostgreSQL Repository.
-
----
-
-## 5.5 Change Service
-
-### Responsabilità
-
-Gestisce ChangeRequest e ChangeEvent.
-
-Funzioni:
-
-- creare ChangeRequest;
-- aggiornare stato;
-- aggiungere evento;
-- associare Git branch/commit/MR;
-- associare Tekton PipelineRun;
-- associare Argo CD sync result;
-- associare evidenze.
-
-### Dipendenze
-
-- PostgreSQL Repository;
-- Workflow Engine.
-
----
-
-## 5.6 Evidence Service
-
-### Responsabilità
-
-Raccoglie e normalizza evidenze.
-
-Tipi di evidenza iniziali:
-
-- Git diff;
-- Git commit/MR;
-- Tekton PipelineRun status;
-- Tekton TaskRun status;
-- Argo CD Application status;
-- Kubernetes Deployment status;
-- Pod status;
-- ConfigMap status;
-- Route/health check.
-
-### Regole
-
-- non salvare secret;
-- non salvare token;
-- salvare payload JSON quando utile;
-- salvare summary leggibile.
-
----
-
-## 6. Adapter Layer
-
-L’Adapter Layer isola il dominio dai dettagli tecnici delle integrazioni esterne.
-
----
-
-## 6.1 GitLab Adapter
-
-### Responsabilità
-
-Interagisce con GitLab API.
-
-### Operazioni MVP
+Representative structure:
 
 ```text
-GetFile(projectId, ref, path)
-CreateBranch(projectId, branch, ref)
-CommitFiles(projectId, branch, message, actions)
-CreateMergeRequest(projectId, sourceBranch, targetBranch, title, description)
-GetCommit(projectId, sha)
-ListCommits(projectId, ref, path)
-GetMergeRequest(projectId, iid)
+cmd/
+internal/
+  api/
+  app/
+  domain/
+  adapters/
+    argocd/
+    gitlab/
+    kubernetes/
+    tekton/
+    tlsutil/
+  config/
+  database/
+  logging/
+  workflow/
+migrations/
+manifests/
+pipelines/
+scripts/
+docs/
 ```
 
-### Regole
+Package rules:
 
-- token GitLab mai loggato;
-- errori GitLab normalizzati;
-- branch conflict gestito;
-- file not found gestito;
-- commit SHA salvato nella ChangeRequest.
+- `domain` contains core models;
+- `app` orchestrates use cases through interfaces;
+- `adapters` implement concrete integrations;
+- `api` exposes HTTP handlers and UI handlers;
+- `database` encapsulates PostgreSQL access;
+- `config` loads runtime configuration;
+- `scripts` contains operational automation.
 
 ---
 
-## 6.2 Argo CD Adapter
+# 8. Main architectural flows
 
-### Responsabilità
-
-Interagisce con Argo CD API.
-
-### Operazioni MVP
+## 8.1 Application discovery
 
 ```text
-ListApplications()
-GetApplication(name)
-GetApplicationResources(name)
-GetApplicationHistory(name)
-SyncApplication(name)
-GetOperationState(name)
-WaitForSyncedHealthy(name, timeout)
-```
-
-### Regole
-
-- token Argo CD mai loggato;
-- sync operation already in progress gestita;
-- errori AppProject interpretati;
-- stato OutOfSync non sempre equivale a errore applicativo;
-- OrphanedResourceWarning va mostrato come warning, non automaticamente come failure.
-
----
-
-## 6.3 Kubernetes Adapter
-
-### Responsabilità
-
-Interagisce con Kubernetes/OpenShift API.
-
-### Operazioni MVP
-
-```text
-GetDeployment(namespace, name)
-GetPodsByLabel(namespace, selector)
-GetConfigMap(namespace, name)
-GetService(namespace, name)
-GetRoute(namespace, name)
-GetEvents(namespace, selector)
-```
-
-### Regole
-
-- permessi minimi;
-- read-only per evidenze runtime, salvo creazione PipelineRun Tekton;
-- non modificare workload applicativi come stato finale.
-
----
-
-## 6.4 Tekton Adapter
-
-### Responsabilità
-
-Gestisce risorse Tekton tramite Kubernetes API.
-
-### Operazioni MVP
-
-```text
-CreatePipelineRun(namespace, spec)
-GetPipelineRun(namespace, name)
-ListTaskRunsForPipelineRun(namespace, pipelineRunName)
-GetTaskRunLogs(namespace, taskRunName)
-WaitPipelineRun(namespace, name, timeout)
-```
-
-### Regole
-
-- PipelineRun deve includere Change ID in label/annotation;
-- timeout obbligatorio;
-- log raccolti senza secret;
-- stato finale associato a ChangeRequest.
-
----
-
-## 6.5 PostgreSQL Repository Layer
-
-### Responsabilità
-
-Gestisce la persistenza.
-
-Entità principali:
-
-- applications;
-- change_requests;
-- change_events;
-- evidences;
-- integration_snapshots, se necessario.
-
-### Regole
-
-- transazioni per transizioni critiche;
-- timestamp sempre presenti;
-- payload JSONB per dati estensibili;
-- nessun secret persistito.
-
----
-
-## 7. Architettura package Go proposta
-
-Struttura iniziale:
-
-```text
-devops-control-plane/
-├── cmd/
-│   └── devops-control-plane/
-│       └── main.go
-├── internal/
-│   ├── api/
-│   │   ├── router.go
-│   │   ├── health_handlers.go
-│   │   ├── application_handlers.go
-│   │   └── change_handlers.go
-│   ├── app/
-│   │   ├── application_service.go
-│   │   ├── change_service.go
-│   │   └── evidence_service.go
-│   ├── workflow/
-│   │   ├── engine.go
-│   │   ├── update_replicas.go
-│   │   ├── update_app_version.go
-│   │   └── update_configmap.go
-│   ├── domain/
-│   │   ├── application.go
-│   │   ├── change_request.go
-│   │   ├── change_event.go
-│   │   └── evidence.go
-│   ├── adapters/
-│   │   ├── argocd/
-│   │   ├── gitlab/
-│   │   ├── kubernetes/
-│   │   └── tekton/
-│   ├── database/
-│   │   ├── postgres.go
-│   │   └── repositories.go
-│   ├── config/
-│   │   └── config.go
-│   ├── logging/
-│   │   └── logger.go
-│   └── web/
-│       ├── handlers/
-│       ├── templates/
-│       └── static/
-├── migrations/
-├── manifests/
-├── pipelines/
-├── docs/
-└── README.md
-```
-
-### Regole package
-
-- `domain` non importa adapter;
-- `workflow` usa interfacce, non implementazioni concrete;
-- `adapters` implementa interfacce;
-- `api` chiama servizi applicativi;
-- `database` incapsula SQL.
-
----
-
-## 8. Flussi architetturali principali
-
-## 8.1 Flow A - Application discovery
-
-```text
-User/API client
-  -> HTTP API GET /api/applications
-  -> Application Service
-  -> Argo CD Adapter
+User or API client
+  -> OAuth Proxy where accessed through Route
+  -> HTTP API or UI handler
+  -> Application service
+  -> Argo CD adapter
   -> Argo CD API
-  -> normalize Application list
-  -> optional PostgreSQL cache update
-  -> response JSON
-```
-
-### Output logico
-
-```yaml
-- name: demo-go-color-app
-  project: devops-ci-demo
-  syncStatus: Synced
-  healthStatus: Healthy
-  currentRevision: b8e1d6b
+  -> normalized Application view
+  -> JSON response or UI page
 ```
 
 ---
 
-## 8.2 Flow B - Dettaglio Application
+## 8.2 ChangeRequest creation
 
 ```text
-User/API client
-  -> GET /api/applications/{name}
-  -> Application Service
-  -> Argo CD Adapter GetApplication
-  -> Argo CD Adapter Resources
-  -> Argo CD Adapter History
-  -> GitLab Adapter latest commit, se configurato
-  -> merge normalized view
-  -> response JSON
+User or API client
+  -> POST /api/v1/changes
+  -> AuthZ middleware
+  -> ChangeService validation
+  -> PostgreSQL create ChangeRequest
+  -> PostgreSQL create change event
+  -> API response
+  -> UI list and detail visibility
 ```
 
-### Nota
-
-Il sistema deve distinguere:
+Required fields include:
 
 ```text
-Argo CD revision != sempre ultimo commit Git visualizzato
+title
+applicationName
+changeType
+requestedBy
 ```
 
-Esempio: rollback operativo Argo CD può rendere il cluster temporaneamente diverso da `main`.
+`targetEnvironment` currently defaults to `dev` when omitted and will become fail-closed against the environment catalog in a future implementation.
 
 ---
 
-## 8.3 Flow C - Change repliche
+## 8.3 GitLab technical workflow
 
 ```text
-POST /api/changes
-  -> create ChangeRequest
-  -> Workflow Engine update-replicas
-  -> GitLab Adapter create branch
-  -> GitLab Adapter read deployment.yaml
-  -> YAML modifier update spec.replicas
-  -> GitLab Adapter commit or MR
-  -> Tekton Adapter create validation PipelineRun
-  -> wait validation
-  -> Argo CD Adapter sync
-  -> wait Synced/Healthy
-  -> Kubernetes Adapter collect runtime evidence
-  -> Evidence Service persist evidence
-  -> ChangeRequest Completed
+ChangeRequest
+  -> create branch
+  -> update GitOps files
+  -> open merge request
+  -> optionally merge merge request
+  -> store external references
+  -> update runtime status
+  -> create audit events
 ```
 
-### Regola fondamentale
-
-Il Deployment runtime non viene scalato direttamente.
+The runtime cluster is not directly modified as desired state.
 
 ---
 
-## 8.4 Flow D - Change ConfigMap value
+## 8.4 Tekton validation workflow
 
 ```text
-POST /api/changes
-  -> changeType update-configmap-values
-  -> read Application metadata
-  -> verify configmap.yaml exists
-  -> verify kustomization.yaml includes configmap.yaml
-  -> verify AppProject allows ConfigMap, se disponibile
-  -> create GitLab branch
-  -> update configmap.yaml
-  -> commit/MR
-  -> Tekton validation
-  -> Argo CD sync
-  -> runtime evidence
-```
-
-### Rischio noto
-
-Aggiornare una ConfigMap usata come env var non garantisce rollout automatico dei Pod.
-
-Decisione futura da formalizzare in ADR:
-
-```text
-Come forzare/referenziarie rollout quando cambia ConfigMap?
-```
-
-Opzioni possibili:
-
-- annotation checksum nel Pod template;
-- annotation change-id nel Deployment;
-- rollout restart controllato;
-- esplicitare che alcune ConfigMap richiedono nuovo change del Deployment.
-
----
-
-## 8.5 Flow E - Tekton validation
-
-```text
-Workflow Engine
-  -> Tekton Adapter CreatePipelineRun
-  -> Kubernetes API creates PipelineRun
-  -> Tekton creates TaskRuns
-  -> Tekton Adapter watches PipelineRun status
-  -> Tekton Adapter collects TaskRuns/logs
-  -> Evidence Service stores validation result
-```
-
-### Pipeline tasks candidate
-
-```text
-clone git branch
-show diff
-kustomize build
-server-side dry-run
-anti-secret check
-AppProject policy check
-report
+ChangeRequest
+  -> create Tekton PipelineRun
+  -> Tekton clones branch/revision
+  -> Tekton validates manifests and policy checks
+  -> Control Plane checks PipelineRun
+  -> Control Plane lists TaskRuns
+  -> validation evidence is stored
+  -> runtime status becomes ValidationSucceeded or ValidationFailed
 ```
 
 ---
 
-## 8.6 Flow F - Argo CD sync and wait
+## 8.5 Argo CD deployment check workflow
 
 ```text
-Workflow Engine
-  -> Argo CD Adapter SyncApplication
-  -> Argo CD starts operation
-  -> poll operation state
-  -> poll Application sync/health
-  -> if Synced/Healthy: success
-  -> else timeout/failure
-  -> save evidence
+ChangeRequest
+  -> Argo CD adapter reads Application
+  -> sync status and health status are mapped
+  -> runtime status is updated
+  -> warnings are preserved
 ```
 
-### Errori noti da gestire
+Mapping examples:
 
 ```text
-another operation is already in progress
-resource :ConfigMap is not permitted in project devops-ci-demo
-manifest invalid
-Application Degraded
-Application OutOfSync after timeout
+Synced + Healthy       -> DeploymentSyncedHealthy
+OutOfSync              -> DeploymentOutOfSync
+Progressing            -> DeploymentProgressing
+Degraded               -> DeploymentDegraded
+Unknown/other          -> DeploymentUnknown
 ```
 
 ---
 
-## 9. Data flow e persistenza
+## 8.6 Runtime evidence workflow
 
-## 9.1 Dati transienti
-
-Dati usati solo durante workflow:
-
-- token API;
-- HTTP response raw;
-- log completi temporanei;
-- file temporanei YAML;
-- kube client session.
-
-Questi dati non devono essere persistiti se contengono informazioni sensibili.
+```text
+ChangeRequest
+  -> Argo CD state collection
+  -> Kubernetes/OpenShift runtime collection
+  -> Deployment, Pods, Service, Route checks
+  -> diagnostics summary generation
+  -> sanitized evidence persisted in PostgreSQL
+  -> UI evidence rendering
+```
 
 ---
 
-## 9.2 Dati persistenti
+## 8.7 Operability smoke-test workflow
 
-Dati da salvare:
+```text
+Operator
+  -> scripts/operability/health-check.sh
+  -> namespace/workload checks
+  -> route checks
+  -> backend checks through port-forward
+  -> PostgreSQL counts
+  -> NetworkPolicy and RBAC checks
+  -> evidence directory
+```
 
-- Application metadata normalizzati;
-- ChangeRequest;
-- ChangeEvent;
-- branch;
-- commit;
-- MR;
-- PipelineRun;
-- sync result;
-- evidence summary;
-- payload JSONB sanitizzato.
+This workflow is read-only and must not print Secret values.
 
 ---
 
-## 9.3 Dati vietati in persistenza
+# 9. Data flow and persistence
 
-Non salvare:
+## 9.1 Transient data
+
+Transient data should not be persisted if it contains sensitive values.
+
+Examples:
+
+- API tokens;
+- raw HTTP responses containing sensitive headers;
+- temporary YAML files;
+- kube client session data;
+- decoded Secret values.
+
+## 9.2 Persistent data
+
+Persistent data includes:
+
+- ChangeRequest metadata;
+- lifecycle and technical events;
+- GitLab external references;
+- Tekton external references;
+- Argo CD deployment state;
+- sanitized evidence payloads;
+- diagnostics summaries.
+
+## 9.3 Forbidden persistent data
+
+The following must not be persisted:
 
 - GitLab token;
 - Argo CD token;
+- Kubernetes bearer token;
 - kubeconfig;
-- password PostgreSQL;
-- secret Kubernetes;
-- dockerconfig auth;
-- private key;
-- output contenenti credenziali.
+- PostgreSQL password in clear text;
+- Kubernetes Secret values;
+- Docker auth JSON values;
+- private keys.
 
 ---
 
-## 10. Modello di deployment iniziale
+# 10. Deployment architecture on OpenShift
 
-## 10.1 Deployment locale/lab
+## 10.1 Current runtime model
 
-Nel primissimo sviluppo:
-
-```text
-Go process su bastion o workstation
-PostgreSQL locale o container
-accesso Argo CD API tramite route
-accesso GitLab API via rete
-accesso Kubernetes API tramite kubeconfig/token
-```
-
----
-
-## 10.2 Deployment OpenShift target
-
-In OpenShift il sistema sarà eseguito come:
+Current OpenShift deployment baseline:
 
 ```text
 Namespace: devops-control-plane
 Deployment: devops-control-plane
+Application container: devops-control-plane
+Sidecar container: oauth-proxy
 Service: devops-control-plane
 Route: devops-control-plane
-ConfigMap: configurazione non sensibile
-Secret: token e credenziali
-ServiceAccount: devops-control-plane
-Role/RoleBinding: permessi minimi
-PostgreSQL: servizio dedicato o managed
+ConfigMaps: application configuration and trust bundle
+Secrets: application tokens and database URL
+ServiceAccount: devops-control-plane-oauth-proxy
+PostgreSQL: in-cluster deployment with PVC
+NetworkPolicy: restrict PostgreSQL ingress
 ```
 
+## 10.2 Container requirements
+
+- non-privileged runtime;
+- configurable HTTP port;
+- `/readyz` readiness endpoint;
+- `/livez` liveness endpoint;
+- ConfigMap/Secret-driven configuration;
+- no embedded secrets in the image;
+- resource requests and limits for application and OAuth Proxy containers.
+
+## 10.3 Image build and deployment
+
+Images are built with Podman and pushed to the OpenShift registry.
+
+Given bastion space constraints, builds should use temporary storage under `/tmp` rather than `/home`.
+
 ---
 
-## 10.3 Container runtime
-
-Requisiti:
-
-- container non privilegiato;
-- porta HTTP configurabile;
-- readiness probe su `/readyz`;
-- liveness probe su `/healthz`;
-- configurazione tramite env;
-- nessun secret embedded nell’immagine.
-
----
-
-## 11. Security architecture
+# 11. Security architecture
 
 ## 11.1 Trust boundaries
 
 ```text
-User/API client
-  -> DevOps Control Plane
-  -> External APIs GitLab/Argo/Kubernetes
+Browser/API client
+  -> OpenShift Route
+  -> OAuth Proxy
+  -> Go backend
   -> PostgreSQL
+  -> external APIs
 ```
 
-Boundary principali:
+Main trust boundaries:
 
-- ingresso HTTP;
-- accesso database;
-- accesso API esterne;
-- accesso Secret;
-- scrittura evidenze.
-
----
+- public Route;
+- OAuth Proxy to backend;
+- trusted headers;
+- database access;
+- Secret access;
+- external API access;
+- evidence persistence.
 
 ## 11.2 Secrets
 
-Secret richiesti:
+Main Secret keys include:
 
 ```text
 GITLAB_TOKEN
 ARGOCD_AUTH_TOKEN
-DATABASE_URL or DATABASE_PASSWORD
-KUBERNETES_SERVICE_ACCOUNT_TOKEN, se in cluster
+DATABASE_URL
 ```
 
-Regole:
+`KUBERNETES_TOKEN` is not required in the current baseline because Kubernetes/OpenShift access uses ServiceAccount token fallback.
 
-- token mai in Git;
-- token mai in log;
-- token mai in evidence;
-- token montati da Secret Kubernetes/OpenShift;
-- esempi template solo con placeholder.
+Rules:
+
+- no token in Git;
+- no token in logs;
+- no token in evidence;
+- no decoded Secret value in operational outputs;
+- token exposure requires rotation.
+
+## 11.3 RBAC
+
+The runtime ServiceAccount requires least-privilege permissions:
+
+- create and read Tekton PipelineRuns in the target namespace;
+- read TaskRuns;
+- read application runtime resources for evidence;
+- read OpenShift groups through a dedicated cluster binding;
+- no default access to Secrets;
+- no cluster-admin permissions.
+
+## 11.4 TLS and trust bundle
+
+TLS strict mode is required for supported integrations.
+
+The architecture supports an app-dedicated trust bundle mounted into the application container.
 
 ---
 
-## 11.3 RBAC Kubernetes/OpenShift
+# 12. Operability architecture
 
-Il ServiceAccount del DevOps Control Plane deve avere permessi minimi.
+Operability is documented through runbooks and scripts.
 
-Permessi iniziali indicativi:
-
-- create/get/list/watch PipelineRun nel namespace Tekton previsto;
-- get/list/watch TaskRun nel namespace Tekton previsto;
-- get/list/watch Pod/log per evidenze Tekton, dove necessario;
-- get/list Deployment/Pod/Service/ConfigMap/Route nei namespace applicativi autorizzati;
-- nessun cluster-admin.
-
-Il dettaglio sarà formalizzato in:
+Key assets:
 
 ```text
-docs/09-security-rbac.md
+docs/runbooks/operability-health-check.md
+scripts/operability/health-check.sh
+docs/runbooks/postgresql-backup-restore.md
+docs/runbooks/disaster-recovery.md
+docs/runbooks/maintenance-operations.md
+docs/production-readiness-checklist.md
+docs/phase-10-operability-closure.md
 ```
+
+Operability requirements include:
+
+- read-only health checks;
+- sanitized evidence collection;
+- PostgreSQL backup and restore validation;
+- isolated restore tests;
+- DR runbook;
+- maintenance runbook;
+- production readiness checklist.
 
 ---
 
-## 12. Observability architecture
-
-## 12.1 Logging
-
-Log strutturati con campi:
-
-```text
-timestamp
-level
-component
-requestId
-changeId
-applicationName
-operation
-status
-errorCode
-```
-
----
-
-## 12.2 Health/readiness
-
-Endpoint:
-
-```text
-GET /healthz
-GET /readyz
-```
-
-`/healthz` controlla processo vivo.  
-`/readyz` controlla almeno PostgreSQL e configurazione minima.
-
----
-
-## 12.3 Metrics future
-
-Endpoint futuro:
-
-```text
-GET /metrics
-```
-
-Metriche candidate:
-
-- change created;
-- change completed;
-- change failed;
-- workflow duration;
-- GitLab API errors;
-- Argo CD API errors;
-- Tekton validation failures.
-
----
-
-## 13. Error architecture
+# 13. Error architecture
 
 ## 13.1 Error model
 
-Ogni errore applicativo dovrebbe avere:
+Errors should include:
 
 ```yaml
-code: ARGO_OPERATION_IN_PROGRESS
-technicalMessage: another operation is already in progress
-userMessage: Argo CD ha già una operazione in corso sulla Application.
+code: VALIDATION_INVALID_REQUEST
+message: Unable to create ChangeRequest
+technicalMessage: title is required
 recoverable: true
-suggestedAction: Attendere o terminare l’operazione bloccata.
 ```
 
----
+Rules:
 
-## 13.2 Famiglie errori
+- expose technical detail only when safe;
+- do not expose Secret values;
+- include recoverability where useful;
+- persist errors as events when associated with ChangeRequests.
+
+## 13.2 Error families
 
 ```text
+VALIDATION_*
+AUTH_*
 GITLAB_*
-ARGO_*
+ARGOCD_*
 KUBERNETES_*
 TEKTON_*
 DATABASE_*
-VALIDATION_*
-SECURITY_*
 WORKFLOW_*
 ```
 
 ---
 
-## 13.3 Errori noti MVP
+# 14. Multi-developer architecture considerations
 
-```text
-ARGO_OPERATION_IN_PROGRESS
-ARGO_RESOURCE_NOT_PERMITTED
-ARGO_SYNC_FAILED
-GITLAB_FILE_NOT_FOUND
-GITLAB_BRANCH_EXISTS
-GITLAB_COMMIT_FAILED
-TEKTON_PIPELINERUN_FAILED
-KUBE_RESOURCE_NOT_FOUND
-VALIDATION_INVALID_YAML
-VALIDATION_SECRET_DETECTED
-WORKFLOW_CONFLICT_ACTIVE_CHANGE
-```
+The UI and backend must support multiple users creating ChangeRequests.
+
+Current behavior:
+
+- `requestedBy` is stored and displayed;
+- `/ui/changes` shows all ChangeRequests;
+- dashboard recent changes shows only the latest five;
+- ChangeRequest detail remains individually addressable;
+- audit events and evidence remain per ChangeRequest.
+
+This prevents the dashboard from becoming a long unbounded history while preserving the full list.
 
 ---
 
-## 14. Decisioni architetturali da registrare in ADR
+# 15. Multi-environment architecture direction
 
-I seguenti ADR devono essere creati:
+The selected future architecture is:
 
 ```text
-docs/adr/ADR-0001-git-source-of-truth.md
-docs/adr/ADR-0002-argocd-as-gitops-engine.md
-docs/adr/ADR-0003-tekton-validation-engine.md
-docs/adr/ADR-0004-postgresql-change-history.md
-docs/adr/ADR-0005-api-first-before-web-ui.md
-docs/adr/ADR-0006-adapter-based-architecture.md
-docs/adr/ADR-0007-gitlab-api-as-git-provider.md
-docs/adr/ADR-0008-kubernetes-api-for-tekton.md
+Single DevOps Control Plane instance
+Multiple target environments
+Correlated ChangeRequests for promotion
+Environment-aware RBAC/AuthZ
 ```
+
+Canonical environments:
+
+```text
+dev
+staging
+production
+```
+
+Design documents:
+
+```text
+docs/adr/ADR-0011-multi-environment-model.md
+docs/multi-environment-model.md
+docs/environment-configuration-model.md
+docs/change-promotion-model.md
+```
+
+Expected future architecture additions:
+
+- environment catalog loaded from ConfigMap;
+- environment-specific GitLab path mapping;
+- environment-specific Tekton namespace/pipeline mapping;
+- environment-specific Argo CD Application mapping;
+- environment-specific Kubernetes/OpenShift namespace mapping;
+- production-specific AuthZ policy;
+- promotion metadata such as `promotionGroupID` and `promotedFromChangeNumber`.
 
 ---
 
-## 15. Deployment diagram testuale
+# 16. Architectural decisions
+
+Core ADRs include:
 
 ```text
-OpenShift Cluster
-
-Namespace: devops-control-plane
-
-+-----------------------------------------------------+
-| Deployment/devops-control-plane                     |
-|                                                     |
-|  Container: devops-control-plane                    |
-|  Port: 8080                                         |
-|  Env from ConfigMap                                 |
-|  Secrets from Secret                                |
-|  ServiceAccount: devops-control-plane               |
-+-----------------------------------------------------+
-        |
-        v
-+------------------------------+
-| Service/devops-control-plane |
-+------------------------------+
-        |
-        v
-+-----------------------------+
-| Route/devops-control-plane  |
-+-----------------------------+
-
-External dependencies:
-
-- PostgreSQL
-- Argo CD API
-- GitLab API
-- Kubernetes API
-- Tekton CRDs
+ADR-0001 — Git as source of truth
+ADR-0002 — Argo CD as GitOps engine
+ADR-0003 — Tekton as validation engine
+ADR-0004 — PostgreSQL as change history and evidence store
+ADR-0005 — API-first before full Web UI
+ADR-0006 — Adapter-based architecture
+ADR-0007 — GitLab API as Git provider integration
+ADR-0008 — Kubernetes API for Tekton integration
+ADR-0009 — AuthN/AuthZ strategy
+ADR-0010 — OAuth Proxy deployment design
+ADR-0011 — Multi-environment DevOps Control Plane model
 ```
+
+The ADR index must remain aligned with `docs/adr/README.md`.
 
 ---
 
-## 16. Sequence diagram: update-replicas
+# 17. Architecture boundaries and non-goals
 
-```text
-User
-  -> DevOps Control Plane API: POST /api/changes update-replicas
-DevOps Control Plane
-  -> PostgreSQL: create ChangeRequest
-DevOps Control Plane
-  -> Argo CD API: get Application metadata
-DevOps Control Plane
-  -> GitLab API: create branch
-DevOps Control Plane
-  -> GitLab API: read deployment.yaml
-DevOps Control Plane
-  -> DevOps Control Plane: update replicas in YAML
-DevOps Control Plane
-  -> GitLab API: commit or open MR
-DevOps Control Plane
-  -> Kubernetes API: create Tekton PipelineRun
-Tekton
-  -> GitLab: clone branch
-Tekton
-  -> Kubernetes API: dry-run validation
-DevOps Control Plane
-  -> Kubernetes API: watch PipelineRun
-DevOps Control Plane
-  -> Argo CD API: sync Application
-DevOps Control Plane
-  -> Argo CD API: wait Synced/Healthy
-DevOps Control Plane
-  -> Kubernetes API: collect runtime evidence
-DevOps Control Plane
-  -> PostgreSQL: save evidence and complete ChangeRequest
-```
+## 17.1 In scope
 
----
-
-## 17. Sequence diagram: update ConfigMap value
-
-```text
-User
-  -> DevOps Control Plane API: POST /api/changes update-configmap-values
-DevOps Control Plane
-  -> PostgreSQL: create ChangeRequest
-DevOps Control Plane
-  -> Argo CD API: get Application and AppProject metadata
-DevOps Control Plane
-  -> GitLab API: read configmap.yaml
-DevOps Control Plane
-  -> GitLab API: read kustomization.yaml
-DevOps Control Plane
-  -> DevOps Control Plane: validate ConfigMap is allowed
-DevOps Control Plane
-  -> GitLab API: create branch
-DevOps Control Plane
-  -> DevOps Control Plane: modify configmap.yaml
-DevOps Control Plane
-  -> GitLab API: commit or MR
-DevOps Control Plane
-  -> Kubernetes API: create Tekton PipelineRun
-DevOps Control Plane
-  -> Argo CD API: sync Application
-DevOps Control Plane
-  -> Kubernetes API: collect ConfigMap/Deployment/Pod evidence
-DevOps Control Plane
-  -> PostgreSQL: complete ChangeRequest
-```
-
----
-
-## 18. MVP architecture boundaries
-
-## 18.1 In scope
-
-- single backend Go service;
-- PostgreSQL change store;
+- single Go backend service;
+- PostgreSQL-backed ChangeRequest and evidence store;
 - GitLab API adapter;
 - Argo CD API adapter;
-- Kubernetes/Tekton adapter;
-- basic HTML template support;
-- one OpenShift deployment model;
-- one or few configured environments.
+- Kubernetes/OpenShift adapter;
+- Tekton adapter;
+- server-side Web UI;
+- OpenShift deployment with OAuth Proxy;
+- AuthN/AuthZ and group lookup;
+- current dev environment runtime baseline;
+- future multi-environment design.
 
----
+## 17.2 Out of scope for the current baseline
 
-## 18.2 Out of scope for MVP
-
-- microservices architecture;
-- event bus;
-- full UI portal;
-- multi-tenant RBAC enterprise;
-- full policy engine;
-- ITSM integration;
-- multi-provider Git;
+- microservices split;
+- event bus architecture;
+- full enterprise ITSM integration;
+- full environment management UI;
+- full production promotion workflow implementation;
+- complete Git provider abstraction;
 - automatic AppProject generation;
-- automatic production promotion workflow.
+- full policy engine UI;
+- full replacement of Argo CD UI or Tekton Dashboard.
 
 ---
 
-## 19. Implementation priorities from architecture
+# 18. Architecture validation checklist
 
-Ordine raccomandato:
+The architecture is valid when:
 
-1. project skeleton Go;
-2. config loader;
-3. structured logger;
-4. `/healthz` and `/readyz`;
-5. PostgreSQL connection;
-6. initial migrations;
-7. domain models;
-8. Application Service;
-9. Argo CD Adapter read-only;
-10. GitLab Adapter read-only;
-11. ChangeRequest Service;
-12. Workflow Engine base;
-13. update-replicas workflow;
-14. Tekton Adapter;
-15. Argo CD sync integration;
-16. Evidence Service;
-17. minimal HTML pages.
+- Go backend builds and runs;
+- PostgreSQL connectivity works;
+- `/readyz` and `/livez` work;
+- APIs use `/api/v1`;
+- UI pages render through authenticated access;
+- OAuth Proxy protects UI and API routes;
+- backend AuthZ is fail-closed;
+- GitLab, Tekton, Argo CD and Kubernetes integrations are adapter-based;
+- evidence is persisted and sanitized;
+- RBAC is least-privilege;
+- Secrets are not printed;
+- TLS strict mode is enabled where supported;
+- smoke-test script validates the runtime;
+- documentation and ADRs are aligned.
 
 ---
 
-## 20. Architecture validation checklist
+# 19. Key message
 
-Prima di iniziare implementazione estesa, verificare:
+The DevOps Control Plane architecture must remain simple, modular and consistent with GitOps.
 
-- il repository contiene documentazione base;
-- le decisioni principali sono o saranno tracciate in ADR;
-- il backend Go parte localmente;
-- `/healthz` funziona;
-- `/readyz` verifica PostgreSQL;
-- i token sono configurati fuori Git;
-- il data model iniziale è definito;
-- gli adapter hanno interfacce chiare;
-- il primo workflow target è `update-replicas`.
-
----
-
-## 21. Messaggio chiave
-
-L’architettura del DevOps Control Plane deve restare semplice, modulare e coerente con GitOps.
-
-Il valore non è costruire un nuovo orchestratore complesso, ma creare un livello ordinato che renda più sicuro e tracciabile il flusso:
+The value is not building a new deployment engine. The value is providing a safe orchestration, governance, audit and evidence layer for the flow:
 
 ```text
 GitLab change
   -> Tekton validation
-  -> Argo CD sync
-  -> OpenShift runtime
-  -> PostgreSQL evidence/history
+  -> Argo CD deployment check
+  -> OpenShift runtime evidence
+  -> PostgreSQL history
+  -> Web UI visibility
+  -> Operability baseline
 ```
 
-Ogni componente deve avere una responsabilità chiara e ogni workflow deve produrre evidenze utili per operatori, reviewer, platform engineer e auditor.
+Each component has a clear responsibility. Each workflow must produce useful evidence for requesters, operators, approvers, platform engineers, security reviewers, operations engineers and auditors.
+
+---
+
+## 20. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial architecture document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed to align with the current advanced MVP, security, operability, UI, multi-developer and multi-environment baseline. |
