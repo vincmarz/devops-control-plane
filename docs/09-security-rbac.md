@@ -1,105 +1,128 @@
-# DevOps Control Plane - Security and RBAC
+# DevOps Control Plane — Security and RBAC
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-- `docs/05-architecture.md`  
-- `docs/06-argocd-integration.md`  
-- `docs/07-gitlab-integration.md`  
-- `docs/08-tekton-integration.md`  
-**Stato:** Draft iniziale / Security and RBAC
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento definisce il modello iniziale di **sicurezza**, **gestione credenziali** e **RBAC** del progetto **DevOps Control Plane**.
-
-L’obiettivo è descrivere:
-
-- principi di sicurezza del progetto;
-- trust boundary principali;
-- credenziali necessarie;
-- gestione Secret e ConfigMap;
-- permessi minimi per GitLab, Argo CD, Tekton e Kubernetes/OpenShift;
-- ServiceAccount previsti;
-- Role e RoleBinding indicativi;
-- controlli anti-secret;
-- logging sicuro;
-- gestione evidenze senza dati sensibili;
-- raccomandazioni per ambienti lab e futuri ambienti production-like.
-
-Il documento è propedeutico alla creazione dei manifest in `manifests/` e alla definizione delle policy operative del DevOps Control Plane.
+- **Project:** DevOps Control Plane
+- **Document:** 09 — Security and RBAC
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+  - `docs/05-architecture.md`
+  - `docs/06-argocd-integration.md`
+  - `docs/07-gitlab-integration.md`
+  - `docs/08-tekton-integration.md`
+- **Status:** Rewritten in English and refreshed while preserving the original least-privilege and sanitized-evidence security intent
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Principi di sicurezza
+## 1. Purpose
 
-## 2.1 Principio del minimo privilegio
+This document defines the security, credential-handling and RBAC model of the DevOps Control Plane.
 
-Ogni identità usata dal DevOps Control Plane deve avere solo i permessi strettamente necessari.
-
-Regola:
+The original document established the right security spirit from the beginning:
 
 ```text
-Nessun token o ServiceAccount deve essere cluster-admin per impostazione predefinita.
+least privilege
+configuration separated from secrets
+no secrets in Git
+no secrets in logs
+no secrets in evidence
+sanitized evidence
+controlled blast radius
+lab versus stable production-oriented usage clearly separated
 ```
 
-Permessi elevati possono essere usati solo in laboratorio controllato e devono essere rimossi prima di qualsiasi utilizzo stabile.
+This refreshed version preserves that original intent and updates the document to match the current implementation baseline, including:
+
+- OpenShift OAuth Proxy;
+- trusted-header AuthN/AuthZ;
+- OpenShift group lookup;
+- roles `viewer`, `operator`, `approver` and `admin`;
+- RBAC least-privilege baseline;
+- ClusterRoleBinding for OpenShift group lookup;
+- ServiceAccount token fallback for Kubernetes/OpenShift API access;
+- removal of static `KUBERNETES_TOKEN` from the application Secret;
+- dedicated Argo CD account and token;
+- TLS strict mode;
+- application-dedicated trust bundle;
+- GitLab TLS strict mode;
+- PostgreSQL NetworkPolicy;
+- secrets rotation runbook;
+- operability smoke-test security checks;
+- future environment-aware security model for `dev`, `staging` and `production`.
+
+The goal is to ensure that the Control Plane makes GitOps changes safer and more auditable without becoming a new uncontrolled privileged entry point.
 
 ---
 
-## 2.2 Separazione tra configurazione e segreti
+## 2. Security principles
 
-Configurazioni non sensibili:
+## 2.1 Least privilege
 
-- endpoint Argo CD;
-- endpoint GitLab;
-- namespace Tekton;
-- nome Pipeline;
-- default branch;
-- parametri timeout;
-- log level.
+Every identity used by the DevOps Control Plane must have only the permissions required for its specific function.
 
-Queste possono stare in `ConfigMap`.
+Core rule:
 
-Dati sensibili:
+```text
+No token and no ServiceAccount should be cluster-admin by default.
+```
 
-- token GitLab;
-- token Argo CD;
-- password PostgreSQL;
-- stringa di connessione PostgreSQL completa se contiene password;
-- token Kubernetes;
-- chiavi private;
-- credenziali Git per pipeline.
+Elevated permissions may be acceptable only during controlled laboratory work and must not become the stable runtime baseline.
 
-Questi devono stare in `Secret`.
+## 2.2 Configuration and secrets must be separated
 
----
+Non-sensitive configuration belongs in ConfigMaps or plain environment configuration.
 
-## 2.3 Git è pubblico rispetto al modello secret
+Examples:
 
-Il repository Git del progetto non deve mai contenere:
+- Argo CD base URL;
+- GitLab base URL;
+- Tekton namespace;
+- Tekton pipeline name;
+- Kubernetes target namespace;
+- timeout values;
+- log level;
+- AuthN/AuthZ feature flags;
+- supported environment names.
 
-- token;
-- password;
-- kubeconfig reali;
-- certificati privati;
-- chiavi SSH private;
-- dockerconfig reali;
-- secret Kubernetes reali;
-- `.env` con valori sensibili.
+Sensitive values belong in Secrets.
 
-Sono ammessi solo template con placeholder.
+Examples:
 
-Esempio ammesso:
+- GitLab token;
+- Argo CD token;
+- PostgreSQL connection string if it contains credentials;
+- PostgreSQL password;
+- private keys;
+- Git credentials used by pipelines.
+
+## 2.3 Git is untrusted for real secrets
+
+The repository must never contain real credentials.
+
+Forbidden values include:
+
+- tokens;
+- passwords;
+- real kubeconfigs;
+- private certificates;
+- private SSH keys;
+- real Docker auth configuration;
+- real Kubernetes Secrets;
+- `.env` files containing sensitive values.
+
+Only placeholders and templates are allowed.
+
+Example allowed template:
 
 ```yaml
 apiVersion: v1
@@ -111,163 +134,250 @@ stringData:
   ARGOCD_AUTH_TOKEN: "<replace-me>"
 ```
 
----
+## 2.4 Evidence must be useful but sanitized
 
-## 2.4 Evidenze senza segreti
+Evidence is one of the main values of the DevOps Control Plane, but evidence must not become a data leakage channel.
 
-Le evidenze raccolte dal sistema devono essere utili per audit e troubleshooting, ma non devono contenere credenziali.
-
-Regola:
+Core rule:
 
 ```text
 Evidence first, but sanitized evidence.
 ```
 
+## 2.5 Runtime changes must not bypass GitOps
+
+Security also includes preventing uncontrolled runtime drift.
+
+The Control Plane must not use direct runtime mutations as the permanent desired-state mechanism.
+
 ---
 
 ## 3. Trust boundaries
 
-## 3.1 Boundary principali
+## 3.1 Current trust boundaries
+
+Current request and integration path:
 
 ```text
-User / API Client
-   -> DevOps Control Plane HTTP API
-   -> PostgreSQL
-   -> GitLab API
-   -> Argo CD API
-   -> Kubernetes/OpenShift API
-   -> Tekton CRDs
+Browser / API Client
+  -> OpenShift Route
+  -> OpenShift OAuth Proxy
+  -> DevOps Control Plane Go backend
+  -> PostgreSQL
+  -> GitLab API
+  -> Argo CD API
+  -> Kubernetes/OpenShift API
+  -> Tekton CRDs
 ```
 
-Ogni attraversamento boundary deve essere controllato tramite:
+Each trust boundary must enforce:
 
-- autenticazione;
-- autorizzazione;
-- timeout;
-- logging sicuro;
-- gestione errori;
-- masking dei dati sensibili.
+- authentication where required;
+- authorization where required;
+- timeout handling;
+- safe logging;
+- error normalization;
+- masking or exclusion of sensitive values.
+
+## 3.2 HTTP ingress boundary
+
+The current stable baseline uses OpenShift OAuth Proxy in front of the Go backend.
+
+Rules:
+
+- anonymous API and UI access through the Route must be denied;
+- health endpoints must remain reachable without authentication;
+- trusted identity headers are accepted only from the OAuth Proxy boundary;
+- backend AuthZ remains authoritative for actions and endpoints.
+
+Current behavior:
+
+```text
+GET /readyz through Route -> HTTP 200 when ready
+GET /livez through Route  -> HTTP 200 when live
+GET /api/v1/changes anonymous through Route -> HTTP 403
+GET /ui/dashboard anonymous through Route -> HTTP 403
+```
+
+## 3.3 External API boundary
+
+Every external adapter must:
+
+- read tokens from Secrets;
+- avoid printing tokens;
+- use explicit timeouts;
+- normalize errors;
+- avoid returning raw sensitive payloads to clients;
+- avoid persisting credentials in PostgreSQL.
 
 ---
 
-## 3.2 Boundary HTTP ingresso
+## 4. Authentication and authorization model
 
-Nel primo MVP, l’autenticazione utente applicativa può essere semplificata o demandata a meccanismi esterni.
+## 4.1 OpenShift OAuth Proxy
 
-Tuttavia, l’architettura deve prevedere in futuro:
+OpenShift OAuth Proxy authenticates users at the Route boundary and forwards trusted identity headers to the backend.
 
-- autenticazione via OpenShift OAuth / reverse proxy;
-- ruoli applicativi;
-- autorizzazione per change type;
-- audit utente reale.
+Expected trusted headers include:
 
-Per MVP/lab, il campo `requestedBy` può essere passato dal client o impostato staticamente, ma deve essere considerato non affidabile finché non esiste autenticazione reale.
+```text
+X-Forwarded-User
+X-Forwarded-Groups
+```
+
+The exact header names are configurable.
+
+## 4.2 Backend AuthN/AuthZ
+
+The backend reads trusted headers and enforces authorization.
+
+Current roles:
+
+```text
+viewer
+operator
+approver
+admin
+```
+
+Rules:
+
+- unknown users must not receive implicit privileges;
+- users without mapped groups must be rejected;
+- unclassified endpoints must fail closed;
+- health endpoints are public by explicit policy;
+- API and UI business endpoints require authorization.
+
+## 4.3 OpenShift group lookup
+
+The backend can resolve group membership through the OpenShift API when group headers are not sufficient or not present.
+
+This requires a dedicated cluster-scoped permission to read OpenShift groups.
+
+Current baseline includes a dedicated ClusterRoleBinding for group lookup.
+
+## 4.4 Environment-aware AuthZ direction
+
+Future multi-environment support must evaluate authorization with environment context.
+
+Future dimensions:
+
+```text
+actor
+role
+action
+targetEnvironment
+approvalPolicy
+```
+
+Expected direction:
+
+```text
+dev:
+  operators can execute standard guarded workflows
+
+staging:
+  operators can propose and validate
+  approvers are required for controlled execution or promotion
+
+production:
+  operators can propose only
+  production approvers or admins are required for approval and execution
+```
+
+Production workflows must remain disabled until environment-aware AuthZ and production guardrails are implemented and validated.
 
 ---
 
-## 3.3 Boundary verso API esterne
+## 5. Required credentials
 
-Ogni adapter esterno deve:
+## 5.1 GitLab
 
-- usare token da Secret;
-- non stampare token nei log;
-- usare timeout;
-- normalizzare errori;
-- non ritornare payload sensibili al client;
-- non salvare credenziali in PostgreSQL.
-
----
-
-## 4. Credenziali richieste
-
-## 4.1 GitLab
-
-Variabile sensibile:
+Sensitive variable:
 
 ```text
 GITLAB_TOKEN
 ```
 
-Uso:
+Usage:
 
-- leggere repository;
-- leggere file;
-- creare branch;
-- creare commit;
-- aprire merge request;
-- leggere stato merge request.
+- read repositories;
+- read files;
+- create branches;
+- update files;
+- create commits;
+- open merge requests;
+- merge merge requests where policy allows;
+- read merge request state.
 
-Raccomandazione:
+Recommendation:
 
-- per lab può essere usato token tecnico controllato;
-- per uso stabile preferire Project Access Token, Group Access Token o service account/bot dedicato;
-- evitare Personal Access Token nominali in uso stabile;
-- usare scope e ruolo minimi compatibili.
+- use a Project Access Token when a single project is sufficient;
+- use a Group Access Token when multiple repositories in a group are required;
+- use a controlled service account or bot user where appropriate;
+- avoid personal access tokens for stable usage;
+- use the minimum privileges compatible with the workflow.
 
----
+## 5.2 Argo CD
 
-## 4.2 Argo CD
-
-Variabile sensibile:
+Sensitive variable:
 
 ```text
 ARGOCD_AUTH_TOKEN
 ```
 
-Uso:
+Usage:
 
-- listare Application;
-- leggere dettaglio Application;
-- leggere resources/history;
-- lanciare sync;
-- leggere stato operation.
+- list allowed Applications;
+- get Application details;
+- read resources and history where needed;
+- check deployment status;
+- collect Argo CD evidence.
 
-Raccomandazione:
+Current stable pattern:
 
-- usare account/token dedicato;
-- limitare accesso ad Application/progetti richiesti, se possibile;
-- evitare token admin globali come configurazione stabile.
+```text
+dedicated Argo CD account for DevOps Control Plane
+minimum required permissions
+API token stored in OpenShift Secret
+```
 
----
+Avoid global admin tokens as stable runtime configuration.
 
-## 4.3 PostgreSQL
+## 5.3 PostgreSQL
 
-Variabili sensibili possibili:
+Sensitive configuration:
 
 ```text
 DATABASE_URL
 DATABASE_PASSWORD
 ```
 
-Regola:
+If `DATABASE_URL` contains user/password, it must be treated as sensitive and stored in Secret.
 
-Se `DATABASE_URL` contiene user/password, deve essere considerata sensibile e stare in Secret.
+## 5.4 Kubernetes/OpenShift
 
----
+When the DevOps Control Plane runs in OpenShift, Kubernetes/OpenShift API access uses the mounted ServiceAccount token and CA.
 
-## 4.4 Kubernetes/OpenShift
-
-Quando DevOps Control Plane gira dentro OpenShift, l’accesso Kubernetes avviene tramite ServiceAccount token montato automaticamente nel Pod.
-
-Quando gira fuori cluster, per sviluppo/lab:
+Current baseline:
 
 ```text
-KUBECONFIG
+KUBERNETES_TOKEN is not required in the application Secret
+ServiceAccount token fallback is used
+ServiceAccount CA is used where applicable
 ```
 
-Regola:
-
-- non salvare kubeconfig nel repository;
-- non includere kubeconfig nelle evidenze;
-- preferire in-cluster ServiceAccount nel deployment target.
+For local development only, a `KUBECONFIG` may be used, but it must never be committed or included in evidence.
 
 ---
 
-## 5. ConfigMap e Secret previsti
+## 6. ConfigMaps and Secrets
 
-## 5.1 ConfigMap applicativa
+## 6.1 Application ConfigMap
 
-Esempio concettuale:
+Non-sensitive configuration may be stored in a ConfigMap.
+
+Example:
 
 ```yaml
 apiVersion: v1
@@ -280,18 +390,18 @@ data:
   LOG_LEVEL: "info"
   ARGOCD_BASE_URL: "https://openshift-gitops-server-openshift-gitops.apps.example.local"
   GITLAB_BASE_URL: "https://gitlab.example.local"
-  TEKTON_NAMESPACE: "devops-control-plane"
-  TEKTON_PIPELINE_NAME: "validate-gitops-change"
-  TEKTON_SERVICE_ACCOUNT: "pipeline"
-  TEKTON_TIMEOUT_SECONDS: "900"
-  TEKTON_POLL_INTERVAL_SECONDS: "5"
+  TEKTON_NAMESPACE: "devops-ci-demo"
+  TEKTON_PIPELINE_NAME: "validate-gitops"
+  KUBERNETES_NAMESPACE: "devops-ci-demo"
+  AUTH_ENABLED: "true"
+  AUTH_OPENSHIFT_GROUP_LOOKUP_ENABLED: "true"
 ```
 
----
+## 6.2 Application Secret
 
-## 5.2 Secret applicativo
+Sensitive values must be stored in Secret.
 
-Esempio template con placeholder:
+Example template with placeholders only:
 
 ```yaml
 apiVersion: v1
@@ -306,416 +416,192 @@ stringData:
   DATABASE_URL: "postgres://devops_cp:<replace-me>@postgresql:5432/devops_control_plane?sslmode=disable"
 ```
 
-### Regola
+Real values must be applied through a secure operational procedure outside Git.
 
-Questo file, se commitato, deve essere un template. I valori reali devono essere applicati tramite procedura sicura fuori Git.
+## 6.3 Trust bundle ConfigMap
 
----
+TLS strict mode can require an application-dedicated trust bundle.
 
-## 6. ServiceAccount previsti
-
-## 6.1 ServiceAccount applicativo
-
-Nome proposto:
+Current baseline uses:
 
 ```text
-devops-control-plane
+ConfigMap: dcp-app-trust-bundle
+Mount: /etc/dcp-trust/ca-bundle.crt
 ```
 
-Namespace:
+This supports strict TLS for integrations such as Argo CD and GitLab without modifying OpenShift cluster-wide trust configuration.
+
+---
+
+## 7. ServiceAccounts
+
+## 7.1 Runtime ServiceAccount
+
+Current runtime uses a ServiceAccount associated with the OAuth Proxy deployment baseline.
+
+The runtime ServiceAccount is responsible for:
+
+- running the backend and proxy deployment;
+- creating Tekton `PipelineRun` resources where authorized;
+- reading Tekton `PipelineRun` and `TaskRun` resources;
+- reading runtime resources required for evidence;
+- reading OpenShift group membership through the dedicated group reader permission.
+
+## 7.2 PipelineRun ServiceAccount
+
+The Tekton PipelineRun ServiceAccount is responsible for executing validation tasks.
+
+It should have only the permissions required for validation:
+
+- clone repository using configured credentials;
+- validate manifests;
+- perform dry-run checks if required;
+- avoid broad access to Secrets or cluster-wide resources.
+
+---
+
+## 8. RBAC baseline
+
+## 8.1 Tekton runtime permissions
+
+The runtime ServiceAccount must have least-privilege access to the configured Tekton namespace.
+
+Required permissions include:
 
 ```text
-devops-control-plane
+create/get/list PipelineRun
+get/list TaskRun
 ```
 
-Responsabilità:
+The exact namespace is currently `devops-ci-demo` for the lab baseline and should become environment-aware in future phases.
 
-- eseguire il backend Go;
-- leggere risorse runtime autorizzate;
-- creare e monitorare PipelineRun Tekton;
-- raccogliere evidenze.
+## 8.2 Runtime evidence permissions
 
----
+For runtime evidence, the ServiceAccount requires read-only access to authorized application namespaces.
 
-## 6.2 ServiceAccount Tekton Pipeline
-
-Nome proposto:
+Typical resources:
 
 ```text
-pipeline
+Deployments
+Pods
+Services
+Routes
 ```
 
-oppure:
+Rules:
 
-```text
-devops-control-plane-pipeline
-```
+- read-only access where possible;
+- no default access to Secrets;
+- no cluster-admin;
+- namespace-specific RoleBindings preferred.
 
-Responsabilità:
+## 8.3 OpenShift group lookup permissions
 
-- eseguire le Task della pipeline `validate-gitops-change`;
-- clonare repository;
-- eseguire validazioni YAML/Kustomize;
-- eseguire dry-run server-side;
-- accedere solo alle risorse minime necessarie.
+The backend group resolver requires permission to read OpenShift groups.
+
+This is cluster-scoped by nature and must remain limited to the minimum resource and verbs required.
+
+## 8.4 PostgreSQL NetworkPolicy
+
+PostgreSQL ingress must be restricted.
+
+Current baseline includes a NetworkPolicy allowing PostgreSQL ingress only from DevOps Control Plane pods on TCP 5432.
+
+This reduces namespace blast radius without introducing a broad deny-all policy before a dedicated network policy design phase.
 
 ---
 
-## 7. RBAC DevOps Control Plane - namespace applicativo
+## 9. GitLab authorization model
 
-## 7.1 Permessi nel namespace `devops-control-plane`
+The GitLab token must allow only the operations required by the workflow.
 
-Il backend deve poter gestire risorse Tekton nel namespace dedicato.
+Minimum capabilities:
 
-Permessi minimi indicativi:
+- read repository;
+- read files;
+- create branch;
+- update files or create commits;
+- open merge request;
+- merge merge request where policy allows;
+- read merge request state.
 
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: devops-control-plane-tekton-runner
-  namespace: devops-control-plane
-rules:
-  - apiGroups:
-      - tekton.dev
-    resources:
-      - pipelineruns
-    verbs:
-      - create
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - tekton.dev
-    resources:
-      - taskruns
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - pods/log
-    verbs:
-      - get
-```
+Preferred token order:
 
-RoleBinding:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: devops-control-plane-tekton-runner
-  namespace: devops-control-plane
-subjects:
-  - kind: ServiceAccount
-    name: devops-control-plane
-    namespace: devops-control-plane
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: devops-control-plane-tekton-runner
-```
-
----
-
-## 8. RBAC runtime evidence sui namespace applicativi
-
-## 8.1 Permessi read-only namespace target
-
-Per raccogliere evidenze runtime, DevOps Control Plane deve leggere risorse in namespace applicativi autorizzati, ad esempio:
-
-```text
-devops-ci-demo
-```
-
-Permessi minimi indicativi:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: devops-control-plane-runtime-reader
-  namespace: devops-ci-demo
-rules:
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-      - replicasets
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-      - services
-      - configmaps
-      - events
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - route.openshift.io
-    resources:
-      - routes
-    verbs:
-      - get
-      - list
-      - watch
-```
-
-RoleBinding nel namespace target:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: devops-control-plane-runtime-reader
-  namespace: devops-ci-demo
-subjects:
-  - kind: ServiceAccount
-    name: devops-control-plane
-    namespace: devops-control-plane
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: devops-control-plane-runtime-reader
-```
-
-### Nota
-
-Il RoleBinding cross-namespace è ammesso perché il subject punta al ServiceAccount del namespace `devops-control-plane`, mentre il RoleBinding vive nel namespace target.
-
----
-
-## 9. RBAC pipeline validation
-
-## 9.1 Permessi della PipelineRun
-
-La pipeline `validate-gitops-change` potrebbe dover eseguire:
-
-```bash
-oc apply --dry-run=server
-```
-
-Per farlo, il ServiceAccount della PipelineRun deve avere permessi sufficienti a validare le risorse target.
-
-### Approccio consigliato MVP
-
-Separare due livelli:
-
-1. ServiceAccount backend: crea e monitora PipelineRun.
-2. ServiceAccount pipeline: esegue le task di validazione.
-
----
-
-## 9.2 Permessi dry-run nel namespace target
-
-Permessi indicativi per la pipeline nel namespace applicativo:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: devops-control-plane-validation-dry-run
-  namespace: devops-ci-demo
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - services
-      - configmaps
-    verbs:
-      - get
-      - list
-      - create
-      - patch
-      - update
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-    verbs:
-      - get
-      - list
-      - create
-      - patch
-      - update
-  - apiGroups:
-      - route.openshift.io
-    resources:
-      - routes
-    verbs:
-      - get
-      - list
-      - create
-      - patch
-      - update
-```
-
-### Nota di sicurezza
-
-Anche se l’operazione è `--dry-run=server`, Kubernetes RBAC può richiedere permessi simili all’operazione reale. Per questo motivo questi permessi devono essere valutati con attenzione e limitati ai namespace autorizzati.
-
----
-
-## 9.3 RoleBinding pipeline
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: devops-control-plane-validation-dry-run
-  namespace: devops-ci-demo
-subjects:
-  - kind: ServiceAccount
-    name: pipeline
-    namespace: devops-control-plane
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: devops-control-plane-validation-dry-run
-```
+1. Project Access Token;
+2. Group Access Token;
+3. controlled bot or service account token;
+4. Personal Access Token only for development or lab.
 
 ---
 
 ## 10. Argo CD authorization model
 
-## 10.1 Token Argo CD
+The Argo CD token must allow only required Application operations.
 
-Il token Argo CD deve consentire:
+Expected capabilities:
 
-- list Application autorizzate;
-- get Application;
-- get resources/history;
-- sync Application autorizzate.
+- list allowed Applications;
+- get allowed Application details;
+- read Application status and conditions;
+- read resources and history where required;
+- perform deployment checks.
 
-### Regola
-
-Non usare token admin globale in modo stabile.
-
----
-
-## 10.2 AppProject governance
-
-DevOps Control Plane deve rispettare gli AppProject.
-
-Esempio:
-
-```yaml
-namespaceResourceWhitelist:
-  - group: ""
-    kind: Service
-  - group: ""
-    kind: ConfigMap
-  - group: apps
-    kind: Deployment
-  - group: route.openshift.io
-    kind: Route
-```
-
-Se una risorsa non è autorizzata, il sistema deve segnalare:
-
-```text
-ARGO_RESOURCE_NOT_PERMITTED
-```
-
-E suggerire la correzione del manifest AppProject.
+If future sync operations are enabled through the Control Plane, sync permission must be granted only to the required Applications and environments.
 
 ---
 
-## 11. GitLab authorization model
+## 11. PostgreSQL security
 
-## 11.1 Permessi GitLab minimi
+## 11.1 Dedicated database user
 
-Il token GitLab deve potere:
-
-- leggere repository;
-- leggere file;
-- leggere commit;
-- creare branch;
-- creare commit;
-- aprire merge request;
-- leggere stato merge request.
-
----
-
-## 11.2 Raccomandazione token
-
-Ordine preferibile:
-
-1. Project Access Token per singolo progetto;
-2. Group Access Token per gruppo di repository;
-3. service account/bot user controllato;
-4. Personal Access Token solo per sviluppo/lab.
-
----
-
-## 12. PostgreSQL security
-
-## 12.1 Utente database dedicato
-
-Creare un utente dedicato:
+Use a dedicated database user, for example:
 
 ```text
 devops_cp
 ```
 
-Evita usare superuser PostgreSQL.
+Avoid running the application as PostgreSQL superuser.
 
----
+## 11.2 Minimum database permissions
 
-## 12.2 Permessi DB minimi
+The application user should have permissions only on the DevOps Control Plane database/schema.
 
-L’utente applicativo deve avere permessi solo sul database/schema del DevOps Control Plane.
-
-Esempio concettuale:
+Example conceptual setup:
 
 ```sql
 CREATE USER devops_cp WITH PASSWORD '<replace-me>';
 CREATE DATABASE devops_control_plane OWNER devops_cp;
 ```
 
-In ambienti più strutturati, separare owner schema e application user può essere valutato successivamente.
+More advanced separation between schema owner and application user can be introduced later.
+
+## 11.3 Backup and restore protection
+
+PostgreSQL backups contain ChangeRequests, events and evidence.
+
+Backup artifacts must be protected and checksummed. Restore tests must be performed in isolated namespaces or safe targets.
 
 ---
 
-## 13. Logging sicuro
+## 12. Secure logging
 
-## 13.1 Dati vietati nei log
+## 12.1 Forbidden log content
 
-Non loggare:
+Do not log:
 
-- token GitLab;
-- token Argo CD;
-- password DB;
+- GitLab token;
+- Argo CD token;
+- PostgreSQL password;
+- Kubernetes bearer token;
 - kubeconfig;
-- Secret Kubernetes;
-- header Authorization;
-- contenuto completo di `.dockerconfigjson`;
-- chiavi private.
+- Kubernetes Secret values;
+- Authorization headers;
+- Docker auth JSON;
+- private keys.
 
----
+## 12.2 Masking examples
 
-## 13.2 Masking
-
-Se serve loggare configurazioni, mascherare valori sensibili.
-
-Esempio:
+If configuration needs to be logged, sensitive values must be masked.
 
 ```text
 GITLAB_TOKEN=****
@@ -725,75 +611,74 @@ DATABASE_URL=postgres://devops_cp:****@postgresql:5432/devops_control_plane
 
 ---
 
-## 14. Evidence sanitization
+## 13. Evidence sanitization
 
-## 14.1 Dati ammessi nelle evidenze
+## 13.1 Allowed evidence content
 
-- nome Application;
+Evidence can include:
+
+- Application name;
 - namespace;
-- stato Argo CD;
-- commit SHA;
-- MR URL;
-- PipelineRun name;
+- target environment;
+- Argo CD sync and health status;
+- Git commit SHA;
+- merge request URL;
+- Tekton PipelineRun name;
 - TaskRun status;
 - Deployment status;
 - Pod status;
-- ConfigMap keys non sensibili;
-- errori tecnici sanitizzati.
+- Service and Route status;
+- sanitized technical errors.
 
----
+## 13.2 Forbidden evidence content
 
-## 14.2 Dati vietati nelle evidenze
+Evidence must not include:
 
-- token;
-- password;
-- secret values;
+- tokens;
+- passwords;
+- Secret values;
 - kubeconfig;
-- private key;
+- private keys;
 - raw Secret YAML;
-- docker auth JSON;
-- header Authorization.
+- Docker auth JSON;
+- Authorization headers.
 
 ---
 
-## 15. Anti-secret check
+## 14. Anti-secret validation
 
-## 15.1 Pattern minimi
+## 14.1 Minimum detection patterns
 
-Il controllo anti-secret deve cercare almeno:
+The validation pipeline should detect common suspicious patterns such as:
 
 ```text
 token
 password
 secret
-auth
+client_secret
+authToken
+secret_key
+private_key
 PRIVATE KEY
 BEGIN RSA
-ghp_
-github_pat_
-AKIA
-ASIA
+AWS access key patterns
+bearer
+authorization
 .dockerconfigjson
 config.json
 ```
 
----
+## 14.2 Action on detection
 
-## 15.2 Azione in caso di match
+If suspicious content is detected, validation must fail or require explicit review according to policy.
 
-Per MVP:
-
-```text
-bloccare validazione o richiedere review esplicita
-```
-
-Stato suggerito:
+Recommended runtime status:
 
 ```text
 ValidationFailed
 ```
 
-Codice errore:
+Recommended error family:
 
 ```text
 VALIDATION_SECRET_DETECTED
@@ -801,151 +686,174 @@ VALIDATION_SECRET_DETECTED
 
 ---
 
-## 16. Namespace e blast radius
+## 15. Namespace and blast radius
 
-## 16.1 Namespace dedicato
+## 15.1 Dedicated namespace
 
-Usare namespace dedicato:
+Use a dedicated namespace:
 
 ```text
 devops-control-plane
 ```
 
-Vantaggi:
+Benefits:
 
-- separazione logica;
-- RBAC più chiaro;
-- Secret isolati;
-- PipelineRun isolate;
-- PVC/workspace dedicati.
+- clearer separation;
+- isolated Secrets;
+- explicit RBAC;
+- dedicated deployment and service;
+- simpler NetworkPolicy model.
 
----
+## 15.2 Authorized application namespaces
 
-## 16.2 Namespace applicativi autorizzati
+The Control Plane must operate only on explicitly authorized target namespaces.
 
-DevOps Control Plane deve poter operare solo sui namespace esplicitamente autorizzati.
-
-Esempio MVP:
+Current lab namespace:
 
 ```text
 devops-ci-demo
 ```
 
-Nel futuro, questa autorizzazione potrà essere modellata in PostgreSQL o ConfigMap.
+Future environment-aware configuration will map environments to namespaces.
 
 ---
 
-## 17. File da versionare e file da non versionare
+## 16. Versioned and non-versioned files
 
-## 17.1 Versionabili
+## 16.1 Versioned files
 
-- manifest template;
-- ConfigMap non sensibili;
-- Secret template con placeholder;
-- Role/RoleBinding;
-- ServiceAccount;
-- Pipeline e Task Tekton;
-- documentazione;
-- codice Go;
-- migrations SQL.
+Allowed in Git:
+
+- manifest templates;
+- non-sensitive ConfigMaps;
+- Secret templates with placeholders;
+- ServiceAccounts;
+- Roles and RoleBindings;
+- NetworkPolicies;
+- Tekton pipelines;
+- documentation;
+- Go code;
+- SQL migrations.
+
+## 16.2 Non-versioned files
+
+Not allowed in Git:
+
+- real `.env` files;
+- tokens;
+- passwords;
+- private keys;
+- kubeconfigs;
+- real Secrets;
+- private certificates;
+- evidence containing sensitive values.
 
 ---
 
-## 17.2 Non versionabili
+## 17. Threat model
 
-- `.env` reale;
-- token;
-- password;
-- private key;
-- kubeconfig;
-- Secret reali;
-- certificati privati;
-- output evidence contenente dati sensibili.
-
----
-
-## 18. Threat model MVP
-
-## 18.1 Minacce principali
-
-| Minaccia | Impatto | Mitigazione |
+| Threat | Impact | Mitigation |
 |---|---|---|
-| Token GitLab esposto in Git | Accesso repository | Secret, `.gitignore`, anti-secret check |
-| Token Argo CD esposto nei log | Deploy non autorizzati | masking log, no token logging |
-| ServiceAccount troppo privilegiata | Impatto cluster ampio | RBAC minimo per namespace |
-| Evidence con Secret | Data leakage | sanitizzazione evidence |
-| Pipeline con permessi eccessivi | Modifica runtime non controllata | ServiceAccount dedicato e limitato |
-| Drift GitOps | Stato non auditabile | blocco modifiche runtime permanenti |
-| Branch/commit non tracciato | Audit incompleto | Change ID in branch e commit |
+| GitLab token committed to Git | Repository compromise | Secret storage, `.gitignore`, anti-secret validation |
+| Argo CD token printed in logs | Unauthorized application access | masking, no token logging, token rotation |
+| Overprivileged ServiceAccount | Broad cluster impact | least-privilege RBAC, namespace RoleBindings |
+| Evidence contains Secret values | Data leakage | evidence sanitization |
+| PipelineRun has excessive permissions | Runtime mutation risk | dedicated PipelineRun ServiceAccount |
+| GitOps drift is hidden | Non-auditable runtime state | Argo CD status and evidence |
+| Change branch not correlated | Poor audit trail | ChangeRequest number in branch/events |
+| Anonymous UI/API access | Unauthorized access | OAuth Proxy and backend AuthZ |
+| Stale token after exposure | Unauthorized access | documented rotation procedure |
+| Production action by dev-only role | Production impact | future environment-aware AuthZ |
 
 ---
 
-## 19. Checklist sicurezza MVP
+## 18. Security validation checklist
 
-Prima di considerare pronta una milestone:
+Before a milestone is considered stable:
 
-- `.env` è in `.gitignore`;
-- nessun token è presente in Git;
-- Secret reali non sono commitati;
-- token non compaiono nei log;
-- evidence non contiene secret;
-- ServiceAccount non è cluster-admin;
-- Role/RoleBinding sono namespace-scoped dove possibile;
-- GitLab token ha privilegi minimi;
-- Argo CD token non è admin globale, se possibile;
-- PipelineRun usa ServiceAccount dedicato;
-- anti-secret check è previsto nel workflow;
-- i timeout sono configurati;
-- errori 401/403 sono gestiti senza leak.
+- `.env` is ignored by Git;
+- no token is present in Git;
+- real Secrets are not committed;
+- tokens do not appear in logs;
+- evidence does not contain Secret values;
+- ServiceAccount is not cluster-admin;
+- RoleBindings are namespace-scoped where possible;
+- GitLab token has minimum required privileges;
+- Argo CD token is dedicated and not global admin where possible;
+- Kubernetes static token is not required in the current runtime baseline;
+- PipelineRun uses a controlled ServiceAccount;
+- anti-secret validation is active;
+- timeouts are configured;
+- HTTP 401/403 errors are handled without leaks;
+- OAuth Proxy protects UI and API routes;
+- backend AuthZ is fail-closed;
+- OpenShift group lookup can be validated;
+- NetworkPolicy for PostgreSQL is present;
+- TLS strict mode is enabled where supported.
 
 ---
 
-## 20. Roadmap sicurezza post-MVP
+## 19. Security roadmap
 
-Possibili evoluzioni:
+Possible future improvements:
 
-- autenticazione utenti tramite OpenShift OAuth;
-- RBAC applicativo interno;
-- mapping utenti reali -> ChangeRequest;
-- approvazioni per change ad alto impatto;
-- integrazione con Vault o secret manager;
-- rotazione token automatizzata;
-- policy engine con OPA/Kyverno;
+- richer environment-aware AuthZ;
+- production-specific approver groups;
+- dual approval for production changes;
+- integration with Vault or other Secret managers;
+- automated token rotation;
+- policy engine integration with OPA, Kyverno or similar tools;
 - audit export;
-- firma commit;
-- verifica firma commit;
-- scanning secret più avanzato;
-- integrazione SIEM.
+- commit signing;
+- signature verification;
+- advanced secret scanning;
+- SIEM integration;
+- more explicit deny-all NetworkPolicy design.
 
 ---
 
-## 21. Relazione con altri documenti
+## 20. Relationship with other documents
 
-Questo documento alimenta:
+This document informs and is informed by:
 
 - `manifests/serviceaccount.yaml`;
 - `manifests/role.yaml`;
 - `manifests/rolebinding.yaml`;
 - `manifests/configmap.yaml`;
 - `manifests/secret-template.yaml`;
-- `pipelines/validate-gitops-change.yaml`;
-- `docs/10-data-model.md`, per campi sensibili da evitare;
-- `docs/11-change-workflows.md`, per gli step di validazione sicurezza;
-- `docs/12-evidence-model.md`, per sanitizzazione evidence;
-- ADR sulle scelte security più rilevanti.
+- `manifests/networkpolicies/postgresql-ingress-from-devops-control-plane.yaml`;
+- `pipelines/validate-gitops.yaml`;
+- `docs/04-non-functional-requirements.md`;
+- `docs/05-architecture.md`;
+- `docs/07-gitlab-integration.md`;
+- `docs/08-tekton-integration.md`;
+- `docs/runbooks/secrets-rotation.md`;
+- `docs/runbooks/authn-authz.md`;
+- `docs/adr/ADR-0009-authn-authz-strategy.md`;
+- `docs/adr/ADR-0010-oauth-proxy-deployment-design.md`;
+- `docs/adr/ADR-0011-multi-environment-model.md`.
 
 ---
 
-## 22. Messaggio chiave
+## 21. Key message
 
-La sicurezza del DevOps Control Plane deve essere progettata fin dal primo MVP.
+Security must be designed into the DevOps Control Plane from the first MVP onward.
 
-Il sistema orchestra GitLab, Argo CD, Tekton e OpenShift: quindi un errore nella gestione dei permessi può avere impatto significativo.
+The Control Plane orchestrates GitLab, Tekton, Argo CD and OpenShift. A mistake in credentials, RBAC or evidence handling can have significant operational impact.
 
-Regola fondamentale:
+The core rule remains:
 
 ```text
 Least privilege, no secrets in Git, no secrets in logs, no secrets in evidence.
 ```
 
-Il DevOps Control Plane deve rendere i change più sicuri e tracciabili, non introdurre un nuovo punto di rischio non governato.
+The DevOps Control Plane must make GitOps changes safer and more traceable, not introduce a new ungoverned risk surface.
+
+---
+
+## 22. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial security and RBAC document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original least-privilege and sanitized-evidence security intent and aligning it with OAuth Proxy, AuthN/AuthZ, RBAC, TLS, NetworkPolicy and environment-aware security direction. |
