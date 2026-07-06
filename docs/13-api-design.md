@@ -1,49 +1,66 @@
-# DevOps Control Plane - API Design
+# DevOps Control Plane — API Design
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-- `docs/05-architecture.md`  
-- `docs/06-argocd-integration.md`  
-- `docs/07-gitlab-integration.md`  
-- `docs/08-tekton-integration.md`  
-- `docs/09-security-rbac.md`  
-- `docs/10-data-model.md`  
-- `docs/11-change-workflows.md`  
-- `docs/12-evidence-model.md`  
-**Stato:** Draft iniziale / API Design
+## Document metadata
+
+- **Project:** DevOps Control Plane
+- **Document:** 13 — API Design
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+  - `docs/05-architecture.md`
+  - `docs/06-argocd-integration.md`
+  - `docs/07-gitlab-integration.md`
+  - `docs/08-tekton-integration.md`
+  - `docs/09-security-rbac.md`
+  - `docs/10-data-model.md`
+  - `docs/11-change-workflows.md`
+  - `docs/12-evidence-model.md`
+- **Status:** Rewritten in English and refreshed while preserving the original API-first and workflow-driven intent
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 1. Scopo del documento
+## 1. Purpose
 
-Questo documento definisce il **design iniziale delle API HTTP/REST** del progetto **DevOps Control Plane**.
+This document defines the HTTP/REST API design of the DevOps Control Plane.
 
-L’obiettivo è descrivere:
+The original document established the initial API spirit of the project:
 
-- convenzioni API;
-- endpoint MVP;
-- request e response JSON;
-- codici HTTP;
-- modello errori;
-- mapping tra API, workflow e database;
-- endpoint per Application Argo CD;
-- endpoint per ChangeRequest;
-- endpoint per GitLab evidence;
-- endpoint per Tekton validation;
-- endpoint per Argo CD sync;
-- endpoint per runtime evidence;
-- endpoint health/readiness;
-- requisiti di sicurezza e sanitizzazione.
+```text
+API-first
+JSON as primary format
+consistent responses
+versioned API paths
+no secrets in API responses
+workflow-driven endpoints
+alignment with data model, workflows and evidence
+```
 
-Questo documento guiderà l’implementazione del backend Go e deve rimanere allineato a:
+This refreshed version preserves that original intent and aligns the API documentation with the current advanced MVP baseline, including:
+
+- canonical `/api/v1` endpoints;
+- public `/readyz` and `/livez` health endpoints;
+- ChangeRequest lifecycle actions;
+- explicit technical workflow actions;
+- GitLab branch, file update, merge request and merge workflow;
+- Tekton validation and validation check workflow;
+- Argo CD deployment check workflow;
+- deployment evidence collection;
+- evidence retrieval endpoints;
+- OpenShift OAuth Proxy and backend AuthZ behavior;
+- server-side Web UI relationship;
+- multi-developer visibility;
+- future multi-environment direction for `dev`, `staging` and `production`.
+
+The API design guides the Go backend implementation and must remain aligned with:
 
 - `docs/10-data-model.md`;
 - `docs/11-change-workflows.md`;
@@ -51,40 +68,38 @@ Questo documento guiderà l’implementazione del backend Go e deve rimanere all
 
 ---
 
-## 2. Principi API
+## 2. API principles
 
-## 2.1 API-first, UI later
+## 2.1 API-first, UI-aligned
 
-Il progetto parte con un backend Go e API HTTP stabili.
+The original principle was API-first before a complete UI. That principle remains valid.
 
-La UI HTML con Bootstrap potrà usare queste stesse API, ma non deve guidare prematuramente le scelte architetturali.
+The current baseline also includes a server-side Web UI. The UI must remain aligned with backend APIs and service workflows; it must not bypass backend validation or authorization.
 
-Principio:
+Principle:
 
 ```text
-Workflow e API stabili prima della UI completa.
+Stable workflows and APIs first. UI actions are thin, server-side entry points into the same backend workflows.
 ```
 
----
+## 2.2 JSON as primary application format
 
-## 2.2 JSON come formato primario
+Application APIs use JSON.
 
-Le API applicative devono usare JSON.
-
-Header attesi:
+Expected headers:
 
 ```http
 Content-Type: application/json
 Accept: application/json
 ```
 
----
+HTML endpoints under `/ui` are separate server-side rendered UI routes.
 
-## 2.3 Risposte consistenti
+## 2.3 Consistent response envelope
 
-Tutte le risposte API dovrebbero avere una struttura prevedibile.
+API responses should be predictable.
 
-Per risposta singola:
+Single object response:
 
 ```json
 {
@@ -94,7 +109,7 @@ Per risposta singola:
 }
 ```
 
-Per lista:
+List response:
 
 ```json
 {
@@ -108,80 +123,82 @@ Per lista:
 }
 ```
 
-Per errore:
+Error response:
 
 ```json
 {
   "data": null,
   "meta": {},
   "error": {
-    "code": "ARGO_OPERATION_IN_PROGRESS",
-    "message": "Argo CD ha già una operazione in corso sulla Application.",
-    "technicalMessage": "another operation is already in progress",
-    "suggestedAction": "Attendere il completamento dell'operazione oppure verificarla manualmente.",
+    "code": "VALIDATION_INVALID_REQUEST",
+    "message": "Unable to create ChangeRequest",
+    "technicalMessage": "title is required",
+    "suggestedAction": "Provide the required title field.",
     "recoverable": true
   }
 }
 ```
 
+The current implementation may return a subset of optional fields. The target design remains the consistent envelope above.
+
+## 2.4 No secrets in API responses
+
+APIs must never return:
+
+- GitLab tokens;
+- Argo CD tokens;
+- PostgreSQL passwords;
+- Kubernetes bearer tokens;
+- kubeconfigs;
+- raw Kubernetes Secrets;
+- Authorization headers;
+- private keys;
+- unredacted sensitive values.
+
+## 2.5 Explicit workflow steps before full automation
+
+The original design included a possible future automatic workflow endpoint. The current design prefers explicit step-by-step technical actions because they are easier to validate, explain and audit.
+
+Future full automation can be added only after the step-by-step workflows are stable and governed.
+
 ---
 
-## 2.4 Nessun secret nelle API
+## 3. API versioning
 
-Le API non devono mai restituire:
-
-- token GitLab;
-- token Argo CD;
-- password PostgreSQL;
-- kubeconfig;
-- Secret Kubernetes raw;
-- header Authorization;
-- valori sensibili non redatti.
-
----
-
-## 3. Versioning API
-
-Per MVP, usare prefisso:
+The canonical API prefix is:
 
 ```text
 /api/v1
 ```
 
-Esempio:
+Examples:
 
 ```text
 GET /api/v1/applications
 GET /api/v1/changes
+POST /api/v1/changes/{id}/validate
 ```
 
-Per semplicità durante il lab, può essere supportato anche alias senza versione:
-
-```text
-/api/applications
-/api/changes
-```
-
-Raccomandazione:
-
-```text
-Implementare /api/v1 come canonical path.
-```
+Legacy references without `/api/v1` should be treated as historical and updated during documentation migration.
 
 ---
 
-## 4. Health e readiness
+## 4. Health endpoints
 
-## 4.1 GET /healthz
+Health endpoints are intentionally outside `/api/v1`.
 
-### Scopo
+They must remain reachable through the Route without authentication, while business API and UI routes remain protected.
 
-Verifica che il processo sia vivo.
+## 4.1 `GET /livez`
+
+### Purpose
+
+Checks that the process is alive.
 
 ### Request
 
 ```http
-GET /healthz
+GET /livez
 ```
 
 ### Response 200
@@ -189,27 +206,26 @@ GET /healthz
 ```json
 {
   "status": "ok",
-  "service": "devops-control-plane",
-  "timestamp": "2026-06-25T15:00:00+02:00"
+  "service": "devops-control-plane"
 }
 ```
 
-### Note
+### Rules
 
-`/healthz` non deve dipendere da sistemi esterni complessi.
+- Must be safe for unauthenticated access.
+- Must not expose sensitive configuration.
+- Should not depend on deep external integrations.
 
----
+## 4.2 `GET /readyz`
 
-## 4.2 GET /readyz
+### Purpose
 
-### Scopo
+Checks that the service is ready to receive traffic.
 
-Verifica che il servizio sia pronto a ricevere traffico.
+Minimum checks:
 
-Controlli minimi:
-
-- configurazione caricata;
-- connessione PostgreSQL disponibile.
+- configuration loaded;
+- PostgreSQL connectivity available.
 
 ### Request
 
@@ -243,15 +259,67 @@ GET /readyz
 
 ---
 
-## 5. Applications API
+## 5. Authentication and authorization behavior
 
-## 5.1 GET /api/v1/applications
+## 5.1 Route-level authentication
 
-### Scopo
+The OpenShift Route is protected by OpenShift OAuth Proxy.
 
-Restituisce la lista delle Application Argo CD visibili al DevOps Control Plane.
+Expected behavior:
 
-### Query params MVP
+```text
+GET /readyz anonymous -> 200 when healthy
+GET /livez anonymous  -> 200 when healthy
+GET /api/v1/changes anonymous through Route -> 403
+GET /ui/dashboard anonymous through Route -> 403
+```
+
+## 5.2 Backend authorization
+
+Backend AuthZ is authoritative.
+
+The backend reads trusted identity headers from the OAuth Proxy boundary and can resolve OpenShift group membership.
+
+Current roles:
+
+```text
+viewer
+operator
+approver
+admin
+```
+
+Rules:
+
+- unknown users are denied;
+- unknown endpoints fail closed;
+- actions require role-specific permission;
+- health endpoints are explicitly public.
+
+## 5.3 Authorization-aware APIs
+
+Technical actions such as validation, approval, merge request merge and evidence collection must be checked by backend AuthZ.
+
+Future environment-aware AuthZ will also evaluate:
+
+```text
+targetEnvironment
+action
+role
+approvalPolicy
+```
+
+---
+
+## 6. Applications API
+
+## 6.1 `GET /api/v1/applications`
+
+### Purpose
+
+Returns the list of Argo CD Applications visible to the DevOps Control Plane.
+
+### Query parameters
 
 ```text
 project
@@ -265,7 +333,7 @@ offset
 ### Request
 
 ```http
-GET /api/v1/applications?project=devops-ci-demo&limit=50&offset=0
+GET /api/v1/applications?limit=50&offset=0
 ```
 
 ### Response 200
@@ -276,14 +344,14 @@ GET /api/v1/applications?project=devops-ci-demo&limit=50&offset=0
     {
       "name": "demo-go-color-app",
       "argocdNamespace": "openshift-gitops",
-      "project": "devops-ci-demo",
+      "project": "default",
       "targetNamespace": "devops-ci-demo",
       "repoUrl": "https://gitlab.example.local/group/demo-app-gitops.git",
       "targetRevision": "main",
       "path": "apps/demo-go-color-app",
       "syncStatus": "Synced",
       "healthStatus": "Healthy",
-      "currentRevision": "b8e1d6b"
+      "currentRevision": "<revision>"
     }
   ],
   "meta": {
@@ -297,16 +365,14 @@ GET /api/v1/applications?project=devops-ci-demo&limit=50&offset=0
 
 ### Mapping
 
-- Argo CD Adapter: `ListApplications`;
-- tabella opzionale: `applications`.
+- Argo CD adapter;
+- optional `applications` cache.
 
----
+## 6.2 `GET /api/v1/applications/{name}`
 
-## 5.2 GET /api/v1/applications/{name}
+### Purpose
 
-### Scopo
-
-Restituisce dettaglio operativo di una Application.
+Returns operational details for an Application.
 
 ### Request
 
@@ -321,11 +387,10 @@ GET /api/v1/applications/demo-go-color-app
   "data": {
     "name": "demo-go-color-app",
     "argocdNamespace": "openshift-gitops",
-    "project": "devops-ci-demo",
-    "syncPolicy": "Automated",
+    "project": "default",
     "syncStatus": "Synced",
     "healthStatus": "Healthy",
-    "currentRevision": "b8e1d6b",
+    "currentRevision": "<revision>",
     "source": {
       "repoUrl": "https://gitlab.example.local/group/demo-app-gitops.git",
       "targetRevision": "main",
@@ -335,116 +400,58 @@ GET /api/v1/applications/demo-go-color-app
       "server": "https://kubernetes.default.svc",
       "namespace": "devops-ci-demo"
     },
-    "conditions": []
+    "conditions": [
+      {
+        "type": "OrphanedResourceWarning",
+        "message": "Application has 5 orphaned resources"
+      }
+    ]
   },
   "meta": {},
   "error": null
 }
 ```
 
-### Errori
+### Error examples
 
-- `ARGO_APPLICATION_NOT_FOUND`;
-- `ARGO_GET_FAILED`;
-- `ARGO_AUTH_FAILED`.
-
----
-
-## 5.3 GET /api/v1/applications/{name}/resources
-
-### Scopo
-
-Restituisce risorse gestite e orphaned resources.
-
-### Request
-
-```http
-GET /api/v1/applications/demo-go-color-app/resources
+```text
+ARGOCD_APPLICATION_NOT_FOUND
+ARGOCD_GET_FAILED
+ARGOCD_AUTH_FAILED
 ```
 
-### Response 200
+## 6.3 Optional application subresources
 
-```json
-{
-  "data": [
-    {
-      "group": "apps",
-      "kind": "Deployment",
-      "namespace": "devops-ci-demo",
-      "name": "demo-go-color-app",
-      "status": "Synced",
-      "health": "Healthy",
-      "orphaned": false
-    },
-    {
-      "group": "image.openshift.io",
-      "kind": "ImageStream",
-      "namespace": "devops-ci-demo",
-      "name": "demo-go-color-app",
-      "status": null,
-      "health": null,
-      "orphaned": true
-    }
-  ],
-  "meta": {
-    "count": 2
-  },
-  "error": null
-}
+The following endpoints are design targets and may be implemented incrementally:
+
+```text
+GET /api/v1/applications/{name}/resources
+GET /api/v1/applications/{name}/history
+GET /api/v1/applications/{name}/runtime
 ```
 
 ---
 
-## 5.4 GET /api/v1/applications/{name}/history
+## 7. Changes API
 
-### Scopo
+## 7.1 `GET /api/v1/changes`
 
-Restituisce history Argo CD della Application.
+### Purpose
 
-### Response 200
+Returns the list of ChangeRequests.
 
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "revision": "4d6dfd4",
-      "deployedAt": "2026-06-24T18:00:00+02:00",
-      "sourcePath": "apps/demo-go-color-app"
-    }
-  ],
-  "meta": {
-    "count": 1
-  },
-  "error": null
-}
-```
-
----
-
-## 6. Changes API
-
-## 6.1 GET /api/v1/changes
-
-### Scopo
-
-Restituisce lista ChangeRequest.
-
-### Query params
+### Query parameters
 
 ```text
 applicationName
 status
+runtimeStatus
 changeType
+targetEnvironment
+requestedBy
 limit
 offset
 sort
-```
-
-### Request
-
-```http
-GET /api/v1/changes?applicationName=demo-go-color-app&limit=50
 ```
 
 ### Response 200
@@ -454,13 +461,16 @@ GET /api/v1/changes?applicationName=demo-go-color-app&limit=50
   "data": [
     {
       "id": "1d871b5c-8a7a-4c11-9420-d2bc070b4a12",
-      "changeNumber": "CHG-2026-0001",
+      "changeNumber": "CHG-2026-0006",
+      "title": "Multi-developer dashboard validation",
       "applicationName": "demo-go-color-app",
-      "changeType": "update-replicas",
-      "status": "Completed",
-      "requestedBy": "vmarzario",
-      "createdAt": "2026-06-25T15:00:00+02:00",
-      "completedAt": "2026-06-25T15:20:00+02:00"
+      "targetEnvironment": "dev",
+      "changeType": "standard",
+      "status": "draft",
+      "runtimeStatus": "EvidenceCollected",
+      "requestedBy": "developer-e",
+      "createdAt": "2026-07-03T12:00:00+02:00",
+      "completedAt": null
     }
   ],
   "meta": {
@@ -472,26 +482,30 @@ GET /api/v1/changes?applicationName=demo-go-color-app&limit=50
 }
 ```
 
----
+### Notes
 
-## 6.2 POST /api/v1/changes
+- `/ui/changes` uses similar data to show the full list.
+- Dashboard recent changes shows only the latest five items.
+- `requestedBy` must be visible for multi-developer readability.
 
-### Scopo
+## 7.2 `POST /api/v1/changes`
 
-Crea una nuova ChangeRequest.
+### Purpose
 
-### Request update-replicas
+Creates a new ChangeRequest.
+
+### Request
 
 ```json
 {
+  "title": "Multi-developer dashboard validation",
   "applicationName": "demo-go-color-app",
-  "changeType": "update-replicas",
-  "requestedBy": "vmarzario",
-  "description": "Scale demo-go-color-app from 2 to 3 replicas",
-  "payload": {
-    "deploymentName": "demo-go-color-app",
-    "replicas": 3
-  }
+  "targetEnvironment": "dev",
+  "changeType": "standard",
+  "riskLevel": "medium",
+  "requestedBy": "developer-a",
+  "description": "Create a controlled ChangeRequest for dashboard validation",
+  "payload": {}
 }
 ```
 
@@ -501,36 +515,43 @@ Crea una nuova ChangeRequest.
 {
   "data": {
     "id": "1d871b5c-8a7a-4c11-9420-d2bc070b4a12",
-    "changeNumber": "CHG-2026-0001",
+    "changeNumber": "CHG-2026-0006",
     "applicationName": "demo-go-color-app",
-    "changeType": "update-replicas",
-    "status": "Created"
+    "targetEnvironment": "dev",
+    "changeType": "standard",
+    "status": "draft",
+    "runtimeStatus": "Created"
   },
   "meta": {},
   "error": null
 }
 ```
 
-### Validazioni
+### Validation rules
 
-- `applicationName` obbligatorio;
-- `changeType` obbligatorio;
-- `payload` coerente con il change type;
-- nessun change concorrente incompatibile.
+Required or expected fields:
 
-### Errori
+- `title`;
+- `applicationName`;
+- `changeType`;
+- `requestedBy`;
+- `targetEnvironment`, defaulted to `dev` where needed for compatibility.
 
-- `VALIDATION_INVALID_REQUEST`;
-- `WORKFLOW_CONFLICT_ACTIVE_CHANGE`;
-- `ARGO_APPLICATION_NOT_FOUND`.
+Future environment validation must reject unknown or disabled environments fail-closed.
 
----
+### Error examples
 
-## 6.3 GET /api/v1/changes/{id}
+```text
+VALIDATION_INVALID_REQUEST
+WORKFLOW_CONFLICT_ACTIVE_CHANGE
+AUTH_FORBIDDEN
+```
 
-### Scopo
+## 7.3 `GET /api/v1/changes/{id}`
 
-Restituisce dettaglio ChangeRequest con timeline ed evidenze sintetiche.
+### Purpose
+
+Returns ChangeRequest details, including status and useful references.
 
 ### Response 200
 
@@ -538,47 +559,29 @@ Restituisce dettaglio ChangeRequest con timeline ed evidenze sintetiche.
 {
   "data": {
     "id": "1d871b5c-8a7a-4c11-9420-d2bc070b4a12",
-    "changeNumber": "CHG-2026-0001",
+    "changeNumber": "CHG-2026-0006",
+    "title": "Multi-developer dashboard validation",
     "applicationName": "demo-go-color-app",
-    "changeType": "update-replicas",
-    "status": "Completed",
-    "requestedBy": "vmarzario",
-    "description": "Scale demo-go-color-app from 2 to 3 replicas",
-    "git": {
-      "provider": "gitlab",
-      "sourceBranch": "change/CHG-2026-0001-update-replicas",
-      "targetBranch": "main",
-      "commitShortSha": "b8e1d6b",
-      "mergeRequestUrl": "https://gitlab.example.local/group/repo/-/merge_requests/42"
-    },
-    "tekton": {
-      "pipelineRunName": "validate-gitops-change-chg-2026-0001-abcde",
-      "status": "Succeeded"
-    },
-    "argocd": {
-      "syncStatus": "Synced",
-      "healthStatus": "Healthy",
-      "syncRevision": "b8e1d6b"
-    },
-    "runtime": {
-      "namespace": "devops-ci-demo",
-      "status": "Ready"
-    },
-    "createdAt": "2026-06-25T15:00:00+02:00",
-    "completedAt": "2026-06-25T15:20:00+02:00"
+    "targetEnvironment": "dev",
+    "changeType": "standard",
+    "riskLevel": "medium",
+    "status": "draft",
+    "runtimeStatus": "EvidenceCollected",
+    "requestedBy": "developer-e",
+    "description": "Create a controlled ChangeRequest for dashboard validation",
+    "createdAt": "2026-07-03T12:00:00+02:00",
+    "completedAt": null
   },
   "meta": {},
   "error": null
 }
 ```
 
----
+## 7.4 `GET /api/v1/changes/{id}/events`
 
-## 6.4 GET /api/v1/changes/{id}/events
+### Purpose
 
-### Scopo
-
-Restituisce timeline completa della ChangeRequest.
+Returns the ChangeRequest timeline.
 
 ### Response 200
 
@@ -586,20 +589,23 @@ Restituisce timeline completa della ChangeRequest.
 {
   "data": [
     {
-      "eventType": "Created",
+      "eventType": "change_created",
       "previousStatus": null,
-      "newStatus": "Created",
+      "newStatus": "draft",
       "message": "ChangeRequest created",
       "source": "workflow",
-      "createdAt": "2026-06-25T15:00:00+02:00"
+      "createdAt": "2026-07-03T12:00:00+02:00"
     },
     {
-      "eventType": "ValidationSucceeded",
+      "eventType": "technical_step_completed",
       "previousStatus": "ValidationRunning",
       "newStatus": "ValidationSucceeded",
       "message": "Tekton validation succeeded",
       "source": "tekton",
-      "createdAt": "2026-06-25T15:05:00+02:00"
+      "payload": {
+        "step": "ValidationSucceeded"
+      },
+      "createdAt": "2026-07-03T12:05:00+02:00"
     }
   ],
   "meta": {
@@ -611,80 +617,78 @@ Restituisce timeline completa della ChangeRequest.
 
 ---
 
-## 7. Change Workflow Action API
+## 8. Lifecycle action API
 
-## 7.1 POST /api/v1/changes/{id}/run
+Lifecycle endpoints move the ChangeRequest through its business/process lifecycle.
 
-### Scopo
-
-Avvia workflow automatico end-to-end.
-
-### Nota MVP
-
-Endpoint utile, ma implementazione consigliata dopo gli step espliciti.
-
-### Request
-
-```json
-{
-  "mode": "auto",
-  "dryRun": false
-}
+```text
+POST /api/v1/changes/{id}/submit
+POST /api/v1/changes/{id}/approve
+POST /api/v1/changes/{id}/start-execution
+POST /api/v1/changes/{id}/complete-execution
+POST /api/v1/changes/{id}/close
 ```
 
-### Response 202
+### Response example
 
 ```json
 {
   "data": {
-    "changeNumber": "CHG-2026-0001",
-    "status": "BranchCreated",
-    "message": "Workflow started"
+    "changeNumber": "CHG-2026-0006",
+    "status": "submitted",
+    "runtimeStatus": "EvidenceCollected"
   },
   "meta": {},
   "error": null
 }
 ```
 
+Rules:
+
+- lifecycle status and runtime status must remain separate;
+- invalid transitions must fail with clear errors;
+- authorization is required for protected transitions such as approve.
+
 ---
 
-## 7.2 POST /api/v1/changes/{id}/create-branch
+## 9. Technical workflow action API
 
-### Scopo
+Technical workflow endpoints execute or check individual technical steps.
 
-Crea branch GitLab per la ChangeRequest.
+## 9.1 `POST /api/v1/changes/{id}/create-branch`
+
+### Purpose
+
+Creates a GitLab branch for the ChangeRequest.
 
 ### Response 200
 
 ```json
 {
   "data": {
-    "sourceBranch": "change/CHG-2026-0001-update-replicas",
-    "status": "BranchCreated"
+    "sourceBranch": "change/CHG-2026-0006",
+    "runtimeStatus": "BranchCreated"
   },
   "meta": {},
   "error": null
 }
 ```
 
----
+## 9.2 `POST /api/v1/changes/{id}/update-files`
 
-## 7.3 POST /api/v1/changes/{id}/update-files
+### Purpose
 
-### Scopo
-
-Applica modifiche ai file GitOps e crea commit.
+Updates GitOps files and creates a commit.
 
 ### Response 200
 
 ```json
 {
   "data": {
-    "status": "CommitCreated",
-    "commitSha": "b8e1d6b2fc88b41909f87d505739bc855de41516",
-    "commitShortSha": "b8e1d6b",
+    "runtimeStatus": "CommitCreated",
+    "commitSha": "<sha>",
     "filesChanged": [
-      "apps/demo-go-color-app/deployment.yaml"
+      "manifests/chg-2026-0006-control-plane.yaml"
     ]
   },
   "meta": {},
@@ -692,64 +696,18 @@ Applica modifiche ai file GitOps e crea commit.
 }
 ```
 
----
+## 9.3 `POST /api/v1/changes/{id}/open-merge-request`
 
-## 7.4 POST /api/v1/changes/{id}/validate
+### Purpose
 
-### Scopo
-
-Crea e monitora una PipelineRun Tekton di validazione.
-
-### Request
-
-```json
-{
-  "wait": true,
-  "timeoutSeconds": 900
-}
-```
+Opens a GitLab merge request.
 
 ### Response 200
 
 ```json
 {
   "data": {
-    "status": "ValidationSucceeded",
-    "pipelineRunName": "validate-gitops-change-chg-2026-0001-abcde",
-    "tektonStatus": "Succeeded"
-  },
-  "meta": {},
-  "error": null
-}
-```
-
-### Response 202 se asincrono
-
-```json
-{
-  "data": {
-    "status": "ValidationRunning",
-    "pipelineRunName": "validate-gitops-change-chg-2026-0001-abcde"
-  },
-  "meta": {},
-  "error": null
-}
-```
-
----
-
-## 7.5 POST /api/v1/changes/{id}/open-merge-request
-
-### Scopo
-
-Apre Merge Request GitLab.
-
-### Response 200
-
-```json
-{
-  "data": {
-    "status": "MergeRequestOpened",
+    "runtimeStatus": "MergeRequestOpened",
     "mergeRequestIid": 42,
     "mergeRequestUrl": "https://gitlab.example.local/group/repo/-/merge_requests/42"
   },
@@ -758,271 +716,109 @@ Apre Merge Request GitLab.
 }
 ```
 
----
+## 9.4 `POST /api/v1/changes/{id}/merge-request`
 
-## 7.6 POST /api/v1/changes/{id}/sync
+### Purpose
 
-### Scopo
-
-Lancia sync Argo CD per la Application collegata alla ChangeRequest.
-
-### Request
-
-```json
-{
-  "wait": true,
-  "timeoutSeconds": 600
-}
-```
+Merges the GitLab merge request where workflow policy and AuthZ allow it.
 
 ### Response 200
 
 ```json
 {
   "data": {
-    "status": "SyncSucceeded",
+    "runtimeStatus": "MergeRequestMerged",
+    "mergeRequestIid": 42,
+    "mergeCommitSha": "<sha>"
+  },
+  "meta": {},
+  "error": null
+}
+```
+
+## 9.5 `POST /api/v1/changes/{id}/validate`
+
+### Purpose
+
+Creates a Tekton `PipelineRun` for GitOps validation.
+
+### Response 202
+
+```json
+{
+  "data": {
+    "runtimeStatus": "ValidationRunning",
+    "pipelineRunName": "devops-cp-validate-chg-2026-0006-xxxxx"
+  },
+  "meta": {},
+  "error": null
+}
+```
+
+## 9.6 `POST /api/v1/changes/{id}/check-validation`
+
+### Purpose
+
+Checks Tekton validation result and collects diagnostics when terminal.
+
+### Response 200 success
+
+```json
+{
+  "data": {
+    "runtimeStatus": "ValidationSucceeded",
+    "pipelineRunName": "devops-cp-validate-chg-2026-0006-xxxxx",
+    "status": "Succeeded",
+    "diagnostics": {
+      "failedTaskCount": 0,
+      "failedTasks": [],
+      "summary": "Tekton validation succeeded"
+    }
+  },
+  "meta": {},
+  "error": null
+}
+```
+
+### Response 200 failure
+
+```json
+{
+  "data": {
+    "runtimeStatus": "ValidationFailed",
+    "pipelineRunName": "devops-cp-validate-chg-2026-0001-xxxxx",
+    "status": "Failed",
+    "diagnostics": {
+      "failedTaskCount": 1,
+      "failedTasks": ["clone-repository"],
+      "summary": "Tekton validation failed in task clone-repository"
+    }
+  },
+  "meta": {},
+  "error": null
+}
+```
+
+## 9.7 `POST /api/v1/changes/{id}/check-deployment`
+
+### Purpose
+
+Checks Argo CD deployment state and maps sync/health to runtime status.
+
+### Response 200
+
+```json
+{
+  "data": {
+    "runtimeStatus": "DeploymentSyncedHealthy",
     "application": "demo-go-color-app",
     "syncStatus": "Synced",
     "healthStatus": "Healthy",
-    "revision": "b8e1d6b"
-  },
-  "meta": {},
-  "error": null
-}
-```
-
----
-
-## 7.7 POST /api/v1/changes/{id}/collect-evidence
-
-### Scopo
-
-Raccoglie evidenze runtime e workflow.
-
-### Response 200
-
-```json
-{
-  "data": {
-    "status": "EvidenceCollected",
-    "evidencesCreated": 4
-  },
-  "meta": {},
-  "error": null
-}
-```
-
----
-
-## 8. Evidence API
-
-## 8.1 GET /api/v1/changes/{id}/evidence
-
-### Scopo
-
-Restituisce tutte le evidenze associate a una ChangeRequest.
-
-### Response 200
-
-```json
-{
-  "data": [
-    {
-      "id": "c77ce0b7-e24f-4095-9c9f-7b4cf3eb42b0",
-      "evidenceType": "gitlab",
-      "name": "gitlab-commit-CHG-2026-0001",
-      "summary": "GitLab commit b8e1d6b created on branch change/CHG-2026-0001-update-replicas",
-      "sanitized": true,
-      "createdAt": "2026-06-25T15:01:00+02:00"
-    }
-  ],
-  "meta": {
-    "count": 1
-  },
-  "error": null
-}
-```
-
----
-
-## 8.2 GET /api/v1/changes/{id}/evidence/{type}
-
-### Scopo
-
-Restituisce evidenze filtrate per tipo.
-
-Tipi supportati:
-
-```text
-gitlab
-tekton
-argocd
-runtime
-security
-workflow-summary
-error-summary
-```
-
-### Request
-
-```http
-GET /api/v1/changes/CHG-2026-0001/evidence/argocd
-```
-
----
-
-## 9. Validation API
-
-## 9.1 GET /api/v1/changes/{id}/validation
-
-### Scopo
-
-Restituisce stato validazione Tekton della ChangeRequest.
-
-### Response 200
-
-```json
-{
-  "data": {
-    "provider": "tekton",
-    "namespace": "devops-control-plane",
-    "pipelineRunName": "validate-gitops-change-chg-2026-0001-abcde",
-    "status": "Succeeded",
-    "startedAt": "2026-06-25T15:00:00+02:00",
-    "completedAt": "2026-06-25T15:03:00+02:00"
-  },
-  "meta": {},
-  "error": null
-}
-```
-
----
-
-## 9.2 GET /api/v1/changes/{id}/validation/taskruns
-
-### Scopo
-
-Restituisce TaskRun collegate alla PipelineRun di validazione.
-
----
-
-## 9.3 GET /api/v1/changes/{id}/validation/logs
-
-### Scopo
-
-Restituisce excerpt log sanitizzati.
-
-### Regole
-
-- limitare dimensione;
-- redigere secret;
-- non esporre token;
-- indicare se il log è troncato.
-
----
-
-## 10. Git metadata API
-
-## 10.1 GET /api/v1/applications/{name}/git/commits
-
-### Scopo
-
-Restituisce commit Git rilevanti per Application/path.
-
-### Query params
-
-```text
-limit
-ref
-path
-```
-
----
-
-## 10.2 GET /api/v1/changes/{id}/git
-
-### Scopo
-
-Restituisce Git metadata della ChangeRequest.
-
-### Response 200
-
-```json
-{
-  "data": {
-    "provider": "gitlab",
-    "projectId": "12345",
-    "repoUrl": "https://gitlab.example.local/group/demo-app-gitops.git",
-    "sourceBranch": "change/CHG-2026-0001-update-replicas",
-    "targetBranch": "main",
-    "commitSha": "b8e1d6b2fc88b41909f87d505739bc855de41516",
-    "mergeRequestIid": 42,
-    "mergeRequestUrl": "https://gitlab.example.local/group/repo/-/merge_requests/42"
-  },
-  "meta": {},
-  "error": null
-}
-```
-
----
-
-## 11. Sync API
-
-## 11.1 POST /api/v1/applications/{name}/sync
-
-### Scopo
-
-Lancia sync Argo CD diretta sulla Application.
-
-### Nota
-
-Questo endpoint va usato con cautela: per change completi è preferibile usare `/changes/{id}/sync`, in modo da mantenere correlazione con ChangeRequest.
-
-### Request
-
-```json
-{
-  "wait": true,
-  "timeoutSeconds": 600
-}
-```
-
----
-
-## 11.2 GET /api/v1/applications/{name}/operation
-
-### Scopo
-
-Restituisce operation state Argo CD corrente.
-
----
-
-## 12. Runtime API
-
-## 12.1 GET /api/v1/applications/{name}/runtime
-
-### Scopo
-
-Restituisce stato runtime OpenShift/Kubernetes normalizzato.
-
-### Response 200
-
-```json
-{
-  "data": {
-    "namespace": "devops-ci-demo",
-    "deployment": {
-      "name": "demo-go-color-app",
-      "desiredReplicas": 3,
-      "readyReplicas": 3,
-      "availableReplicas": 3
-    },
-    "pods": [
+    "revision": "<revision>",
+    "conditions": [
       {
-        "name": "demo-go-color-app-abcde",
-        "phase": "Running",
-        "ready": true,
-        "restartCount": 0
+        "type": "OrphanedResourceWarning",
+        "message": "Application has 5 orphaned resources"
       }
     ]
   },
@@ -1031,31 +827,119 @@ Restituisce stato runtime OpenShift/Kubernetes normalizzato.
 }
 ```
 
+## 9.8 `POST /api/v1/changes/{id}/collect-evidence`
+
+### Purpose
+
+Collects deployment evidence from Argo CD and Kubernetes/OpenShift.
+
+### Response 202
+
+```json
+{
+  "data": {
+    "runtimeStatus": "EvidenceCollected",
+    "evidenceType": "deployment",
+    "summary": "Post-deployment evidence for demo-go-color-app"
+  },
+  "meta": {},
+  "error": null
+}
+```
+
 ---
 
-## 13. Error model API
+## 10. Evidence API
 
-## 13.1 HTTP status mapping
+## 10.1 `GET /api/v1/changes/{id}/evidence`
 
-| HTTP | Uso |
+### Purpose
+
+Returns all evidence associated with a ChangeRequest.
+
+### Response 200
+
+```json
+{
+  "data": [
+    {
+      "id": "c77ce0b7-e24f-4095-9c9f-7b4cf3eb42b0",
+      "evidenceType": "validation",
+      "name": "tekton-validation-evidence",
+      "summary": "Tekton validation succeeded",
+      "sanitized": true,
+      "createdAt": "2026-07-03T12:05:00+02:00"
+    },
+    {
+      "id": "ed7b8be4-f3d5-46c6-b4bb-dc7445d6a9c9",
+      "evidenceType": "deployment",
+      "name": "deployment-evidence",
+      "summary": "Post-deployment evidence for demo-go-color-app",
+      "sanitized": true,
+      "createdAt": "2026-07-03T12:10:00+02:00"
+    }
+  ],
+  "meta": {
+    "count": 2
+  },
+  "error": null
+}
+```
+
+## 10.2 `GET /api/v1/changes/{id}/evidence/validation`
+
+### Purpose
+
+Returns validation evidence for a ChangeRequest.
+
+## 10.3 `GET /api/v1/changes/{id}/evidence/deployment`
+
+### Purpose
+
+Returns deployment evidence for a ChangeRequest.
+
+Evidence payloads must be sanitized.
+
+---
+
+## 11. Optional Git, validation and runtime query APIs
+
+The following endpoints are useful design targets but can be implemented incrementally:
+
+```text
+GET /api/v1/changes/{id}/git
+GET /api/v1/changes/{id}/validation
+GET /api/v1/changes/{id}/validation/taskruns
+GET /api/v1/changes/{id}/validation/logs
+GET /api/v1/applications/{name}/runtime
+GET /api/v1/applications/{name}/git/commits
+```
+
+When implemented, these endpoints must follow the same security and response rules.
+
+---
+
+## 12. Error model
+
+## 12.1 HTTP status mapping
+
+| HTTP | Usage |
 |---|---|
-| 200 | Operazione riuscita |
-| 201 | Risorsa creata |
-| 202 | Operazione asincrona avviata |
-| 400 | Request non valida |
-| 401 | Non autenticato |
-| 403 | Non autorizzato |
-| 404 | Risorsa non trovata |
-| 409 | Conflitto workflow o branch |
-| 422 | Validazione fallita |
-| 500 | Errore interno |
-| 502 | Errore gateway verso API esterna |
-| 503 | Servizio non pronto |
-| 504 | Timeout verso API esterna |
+| 200 | Operation succeeded or current state returned |
+| 201 | Resource created |
+| 202 | Asynchronous operation accepted or technical action started |
+| 400 | Invalid request |
+| 401 | Not authenticated |
+| 403 | Not authorized |
+| 404 | Resource not found |
+| 409 | Workflow or external-resource conflict |
+| 422 | Validation failed or invalid lifecycle transition |
+| 500 | Internal error |
+| 502 | External API error |
+| 503 | Service not ready |
+| 504 | External timeout |
 
----
-
-## 13.2 Error response standard
+## 12.2 Standard error response
 
 ```json
 {
@@ -1065,216 +949,314 @@ Restituisce stato runtime OpenShift/Kubernetes normalizzato.
   },
   "error": {
     "code": "GITLAB_FILE_NOT_FOUND",
-    "message": "Il file GitOps richiesto non esiste nel repository o nel branch indicato.",
+    "message": "The requested GitOps file does not exist in the repository or branch.",
     "technicalMessage": "404 File Not Found",
-    "suggestedAction": "Verificare projectId, branch e path del file.",
+    "suggestedAction": "Verify project ID, branch and file path.",
     "recoverable": true
   }
 }
 ```
 
----
-
-## 13.3 Error codes principali
+## 12.3 Main error codes
 
 ```text
 VALIDATION_INVALID_REQUEST
+VALIDATION_SECRET_DETECTED
+AUTH_UNAUTHENTICATED
+AUTH_FORBIDDEN
 WORKFLOW_CONFLICT_ACTIVE_CHANGE
 GITLAB_FILE_NOT_FOUND
 GITLAB_BRANCH_EXISTS
 GITLAB_COMMIT_FAILED
-ARGO_APPLICATION_NOT_FOUND
-ARGO_OPERATION_IN_PROGRESS
-ARGO_RESOURCE_NOT_PERMITTED
-ARGO_SYNC_FAILED
+GITLAB_MR_CREATE_FAILED
+GITLAB_MR_MERGE_FAILED
+ARGOCD_APPLICATION_NOT_FOUND
+ARGOCD_OPERATION_IN_PROGRESS
+ARGOCD_RESOURCE_NOT_PERMITTED
+ARGOCD_SYNC_FAILED
 TEKTON_PIPELINERUN_FAILED
 TEKTON_PIPELINERUN_TIMEOUT
 KUBERNETES_RUNTIME_NOT_READY
-SECURITY_SECRET_DETECTED
 DATABASE_ERROR
 ```
 
 ---
 
-## 14. Sicurezza API
+## 13. Pagination, sorting and filtering
 
-## 14.1 MVP
+## 13.1 Pagination
 
-Nel primo MVP/lab:
-
-- non esporre API pubblicamente;
-- usare rete controllata;
-- non loggare token;
-- non restituire secret;
-- validare input;
-- usare timeout;
-- usare RBAC OpenShift per il backend.
-
----
-
-## 14.2 Futuro
-
-Evoluzioni:
-
-- autenticazione OpenShift OAuth;
-- autorizzazione per ruolo;
-- mapping utente reale;
-- audit user action;
-- rate limiting;
-- CSRF protection per UI HTML;
-- session management.
-
----
-
-## 15. Pagination e sorting
-
-## 15.1 Pagination
-
-Parametri standard:
+Standard parameters:
 
 ```text
 limit
 offset
 ```
 
-Default consigliati:
+Recommended defaults:
 
 ```text
 limit=50
 offset=0
 ```
 
-Massimo consigliato:
+Recommended maximum:
 
 ```text
 limit=200
 ```
 
----
+## 13.2 Sorting
 
-## 15.2 Sorting
-
-Parametro:
+Parameter:
 
 ```text
 sort
 ```
 
-Esempi:
+Examples:
 
 ```text
 sort=createdAt:desc
 sort=name:asc
 ```
 
+## 13.3 Filtering
+
+Supported filters should be added incrementally based on actual UI and operational needs.
+
+Common filters:
+
+```text
+applicationName
+targetEnvironment
+status
+runtimeStatus
+requestedBy
+changeType
+```
+
 ---
 
-## 16. Request ID e correlation
+## 14. Request ID and correlation
 
-Ogni richiesta dovrebbe avere un `requestId`.
+Every request should have a request ID.
 
-Se il client non lo fornisce, il backend lo genera.
-
-Header opzionale:
+Optional client header:
 
 ```http
 X-Request-ID: req-123
 ```
 
-Il `requestId` deve comparire in:
+If the client does not provide one, the backend may generate one.
 
-- log;
-- error response;
-- eventuali eventi diagnostici.
+The request ID should appear in:
+
+- logs;
+- error responses;
+- optional diagnostic events.
 
 ---
 
-## 17. API implementation order MVP
+## 15. API security requirements
 
-Ordine consigliato:
+- Do not expose tokens.
+- Do not expose Secret values.
+- Do not expose raw kubeconfig.
+- Sanitize evidence payloads.
+- Enforce backend AuthZ.
+- Keep health endpoints public only by explicit policy.
+- Deny unknown or unclassified endpoints fail-closed.
+- Use timeouts for external calls.
+- Return safe technical messages only.
+- Keep UI actions mapped to backend-authorized actions.
 
-1. `GET /healthz`;
+---
+
+## 16. Web UI relationship
+
+The Web UI is server-side rendered and complements the API.
+
+Current UI routes include:
+
+```text
+/
+/ui
+/ui/dashboard
+/ui/changes
+/ui/changes/{id}
+/ui/changes-api
+```
+
+UI action handlers call backend services and should remain aligned with the API technical actions.
+
+The UI must not bypass:
+
+- validation;
+- workflow rules;
+- AuthZ;
+- evidence sanitization.
+
+---
+
+## 17. Multi-developer API behavior
+
+The API must support multi-developer visibility.
+
+Requirements:
+
+- `requestedBy` is included in ChangeRequest responses;
+- `/api/v1/changes` returns the full list subject to filtering/pagination;
+- dashboard can use recent changes limited to five items;
+- full history remains available;
+- evidence and events remain associated with the specific ChangeRequest.
+
+---
+
+## 18. Multi-environment API direction
+
+Future environment-aware API behavior must include `targetEnvironment` consistently.
+
+Canonical environments:
+
+```text
+dev
+staging
+production
+```
+
+Future request and response objects should include:
+
+```text
+targetEnvironment
+promotionGroupID
+promotedFromChangeNumber
+```
+
+Future environment-aware APIs should:
+
+- reject unknown environments fail-closed;
+- disable production until guardrails are implemented;
+- enforce environment-specific AuthZ;
+- resolve GitLab, Tekton, Argo CD and Kubernetes context from environment configuration.
+
+---
+
+## 19. Implementation order
+
+Recommended implementation order, updated to current baseline:
+
+1. `GET /livez`;
 2. `GET /readyz`;
-3. `GET /api/v1/applications`;
-4. `GET /api/v1/applications/{name}`;
-5. `GET /api/v1/applications/{name}/resources`;
-6. `GET /api/v1/changes`;
-7. `POST /api/v1/changes`;
-8. `GET /api/v1/changes/{id}`;
-9. `GET /api/v1/changes/{id}/events`;
-10. `POST /api/v1/changes/{id}/create-branch`;
-11. `POST /api/v1/changes/{id}/update-files`;
-12. `POST /api/v1/changes/{id}/validate`;
-13. `POST /api/v1/changes/{id}/sync`;
-14. `POST /api/v1/changes/{id}/collect-evidence`;
-15. `GET /api/v1/changes/{id}/evidence`.
+3. `GET /api/v1/changes`;
+4. `POST /api/v1/changes`;
+5. `GET /api/v1/changes/{id}`;
+6. lifecycle action endpoints;
+7. GitLab technical action endpoints;
+8. Tekton validation endpoints;
+9. Argo CD deployment check endpoint;
+10. evidence collection endpoint;
+11. evidence read endpoints;
+12. Application read endpoints;
+13. optional runtime and diagnostic endpoints;
+14. OpenAPI specification.
 
 ---
 
-## 18. Mapping package Go
+## 20. Go package mapping
 
-Package suggeriti:
+Representative package mapping:
 
 ```text
 internal/api/router.go
 internal/api/health_handlers.go
 internal/api/application_handlers.go
 internal/api/change_handlers.go
-internal/api/evidence_handlers.go
-internal/api/validation_handlers.go
-internal/api/runtime_handlers.go
+internal/api/ui_handlers.go
 internal/api/errors.go
 internal/api/response.go
 ```
 
----
+Service and integration logic lives outside handlers:
 
-## 19. Checklist API MVP
+```text
+internal/app/
+internal/domain/
+internal/adapters/
+internal/database/
+internal/config/
+```
 
-Le API MVP sono considerate pronte quando:
-
-- health/readiness funzionano;
-- error response è consistente;
-- lista Application funziona;
-- creazione ChangeRequest funziona;
-- dettaglio ChangeRequest mostra Git/Tekton/Argo/evidence;
-- workflow step-by-step è invocabile;
-- evidenze sono consultabili;
-- input invalidi producono 400/422;
-- conflitti producono 409;
-- token e secret non sono mai restituiti;
-- ogni chiamata ha logging con requestId.
+Handlers should orchestrate request parsing, AuthZ context and service calls, not low-level external API operations.
 
 ---
 
-## 20. Relazione con altri documenti
+## 21. API readiness checklist
 
-Questo documento alimenta:
+The API baseline is ready when:
+
+- `/livez` and `/readyz` work;
+- `/api/v1` is the canonical API prefix;
+- response envelope is consistent;
+- error response is consistent;
+- ChangeRequest creation works;
+- ChangeRequest list and detail work;
+- lifecycle actions are available;
+- technical workflow steps are invokable;
+- validation and deployment checks are observable;
+- evidence is retrievable;
+- input validation returns clear errors;
+- authorization failures return 403;
+- tokens and secrets are never returned;
+- request logging is safe;
+- UI actions map to backend services;
+- documentation and implementation remain aligned.
+
+---
+
+## 22. Relationship with other documents
+
+This document informs and is informed by:
 
 - `internal/api/`;
 - `internal/app/`;
-- `internal/workflow/`;
+- `internal/domain/`;
+- `docs/10-data-model.md`;
 - `docs/11-change-workflows.md`;
 - `docs/12-evidence-model.md`;
-- `docs/10-data-model.md`;
+- `docs/09-security-rbac.md`;
+- `docs/environment-configuration-model.md`;
+- `docs/change-promotion-model.md`;
 - future OpenAPI specification.
 
 ---
 
-## 21. Messaggio chiave
+## 23. Key message
 
-Le API del DevOps Control Plane devono rendere il workflow GitOps chiaro e controllabile.
+The API must make the GitOps workflow clear, controllable and safe.
 
-Ogni API deve aiutare a vedere o avanzare uno step:
+Each API should help users or the UI see or advance one step:
 
 ```text
 Application discovery
 Change creation
+Lifecycle transition
 Git change
 Tekton validation
-Argo CD sync
-Runtime validation
+Argo CD deployment check
+Runtime evidence collection
 Evidence review
 ```
 
-Il design deve restare semplice, coerente, sicuro e facilmente spiegabile anche a chi sta imparando GitOps, Tekton e Argo CD.
+The design must remain simple, consistent, secure and explainable to people learning GitOps, Tekton, Argo CD and OpenShift.
+
+This preserves the original API-first spirit of the project while aligning the endpoints with the current advanced MVP baseline.
+
+---
+
+## 24. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial API design document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original API-first, JSON-first and workflow-driven API intent and aligning it with the current `/api/v1`, AuthZ, UI, validation, deployment and evidence baseline. |
