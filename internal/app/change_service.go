@@ -200,6 +200,9 @@ func (s *ChangeService) Create(ctx context.Context, req domain.CreateChangeReque
 	if req.TargetEnvironment == "" {
 		req.TargetEnvironment = "dev"
 	}
+	if !isAllowedTargetEnvironment(req.TargetEnvironment) {
+		return domain.ChangeRequest{}, errors.New("targetEnvironment must be one of: dev")
+	}
 	if req.RiskLevel == "" {
 		req.RiskLevel = domain.RiskMedium
 	}
@@ -869,6 +872,15 @@ func (s *ChangeService) MarkStep(ctx context.Context, idOrNumber string, status 
 		return nil, errors.New("workflow step status is required")
 	}
 	return s.store.MarkStep(ctx, idOrNumber, status)
+}
+
+func isAllowedTargetEnvironment(value string) bool {
+	switch value {
+	case "dev":
+		return true
+	default:
+		return false
+	}
 }
 
 func isAllowedRiskLevel(riskLevel string) bool {
