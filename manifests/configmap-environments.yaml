@@ -10,6 +10,7 @@ data:
         enabled: true
         category: development
         description: Current active development environment.
+        clusterName: ocp-dev
         kubernetesNamespace: devops-ci-demo
         tektonNamespace: devops-ci-demo
         argocdApplicationName: demo-go-color-app
@@ -22,6 +23,7 @@ data:
         enabled: false
         category: preproduction
         description: Future controlled staging environment. Not enabled yet.
+        clusterName: ocp-staging
         kubernetesNamespace: ""
         tektonNamespace: ""
         argocdApplicationName: ""
@@ -34,6 +36,7 @@ data:
         enabled: false
         category: production
         description: Future production environment. Not enabled yet.
+        clusterName: ocp-production
         kubernetesNamespace: ""
         tektonNamespace: ""
         argocdApplicationName: ""

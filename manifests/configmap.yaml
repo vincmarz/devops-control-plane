@@ -47,6 +47,9 @@ data:
   # Environment Catalog runtime loading. File is mounted from devops-control-plane-environments ConfigMap.
   ENVIRONMENT_CATALOG_FILE: "/etc/dcp-environments/environments.yaml"
 
+  # Cluster Registry runtime loading. File is mounted from devops-control-plane-clusters ConfigMap.
+  CLUSTER_REGISTRY_FILE: "/etc/dcp-clusters/clusters.yaml"
+
   # AuthN/AuthZ. Enabled behind OpenShift OAuth Proxy.
   AUTH_ENABLED: "true"
   AUTH_HEADER_USER: "X-Forwarded-User"

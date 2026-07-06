@@ -17,6 +17,7 @@ type EnvironmentDefinition struct {
 	Enabled               bool   `yaml:"enabled"`
 	Category              string `yaml:"category"`
 	Description           string `yaml:"description"`
+	ClusterName           string `yaml:"clusterName"`
 	KubernetesNamespace   string `yaml:"kubernetesNamespace"`
 	TektonNamespace       string `yaml:"tektonNamespace"`
 	ArgoCDApplicationName string `yaml:"argocdApplicationName"`
@@ -47,9 +48,39 @@ func DefaultEnvironmentCatalog() EnvironmentCatalog {
 
 func DefaultEnvironmentCatalogFallback() EnvironmentCatalog {
 	return NewEnvironmentCatalog([]EnvironmentDefinition{
-		{Name: "dev", DisplayName: "Development", Enabled: true, Category: "development", Description: "Current active development environment.", KubernetesNamespace: "devops-ci-demo", TektonNamespace: "devops-ci-demo", ArgoCDApplicationName: "demo-go-color-app", GitTargetBranch: "main", AllowTechnicalActions: true, AllowPromotionSource: true, AllowPromotionTarget: false},
-		{Name: "staging", DisplayName: "Staging", Enabled: false, Category: "preproduction", Description: "Future controlled staging environment. Not enabled yet.", AllowPromotionTarget: true},
-		{Name: "production", DisplayName: "Production", Enabled: false, Category: "production", Description: "Future production environment. Not enabled yet.", AllowPromotionTarget: true},
+		{
+			Name:                  "dev",
+			DisplayName:           "Development",
+			Enabled:               true,
+			Category:              "development",
+			Description:           "Current active development environment.",
+			ClusterName:           "ocp-dev",
+			KubernetesNamespace:   "devops-ci-demo",
+			TektonNamespace:       "devops-ci-demo",
+			ArgoCDApplicationName: "demo-go-color-app",
+			GitTargetBranch:       "main",
+			AllowTechnicalActions: true,
+			AllowPromotionSource:  true,
+			AllowPromotionTarget:  false,
+		},
+		{
+			Name:                 "staging",
+			DisplayName:          "Staging",
+			Enabled:              false,
+			Category:             "preproduction",
+			Description:          "Future controlled staging environment. Not enabled yet.",
+			ClusterName:          "ocp-staging",
+			AllowPromotionTarget: true,
+		},
+		{
+			Name:                 "production",
+			DisplayName:          "Production",
+			Enabled:              false,
+			Category:             "production",
+			Description:          "Future production environment. Not enabled yet.",
+			ClusterName:          "ocp-production",
+			AllowPromotionTarget: true,
+		},
 	}, "dev")
 }
 
@@ -85,7 +116,10 @@ func ParseEnvironmentCatalogYAML(content []byte) (EnvironmentCatalog, error) {
 }
 
 func NewEnvironmentCatalog(definitions []EnvironmentDefinition, defaultEnvironment string) EnvironmentCatalog {
-	catalog := EnvironmentCatalog{defaultEnvironment: normalizeEnvironmentName(defaultEnvironment), environments: map[string]EnvironmentDefinition{}}
+	catalog := EnvironmentCatalog{
+		defaultEnvironment: normalizeEnvironmentName(defaultEnvironment),
+		environments:       map[string]EnvironmentDefinition{},
+	}
 
 	for _, definition := range definitions {
 		name := normalizeEnvironmentName(definition.Name)
@@ -93,6 +127,7 @@ func NewEnvironmentCatalog(definitions []EnvironmentDefinition, defaultEnvironme
 			continue
 		}
 		definition.Name = name
+		definition.ClusterName = normalizeClusterName(definition.ClusterName)
 		catalog.environments[name] = definition
 	}
 

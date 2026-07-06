@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devops-control-plane-clusters
+  namespace: devops-control-plane
+data:
+  clusters.yaml: |
+    clusters:
+      - name: ocp-dev
+        displayName: OpenShift Development
+        enabled: true
+        apiURL: https://api.ocp4.mim.lan:6443
+        caConfigMapRef: dcp-cluster-ocp-dev-ca
+        tokenSecretRef: dcp-cluster-ocp-dev-token
+        defaultNamespace: devops-ci-demo
+        allowedNamespaces:
+          - devops-ci-demo
+        description: Current OpenShift cluster used as the active dev environment.
+      - name: ocp-staging
+        displayName: OpenShift Staging
+        enabled: false
+        apiURL: ""
+        caConfigMapRef: dcp-cluster-ocp-staging-ca
+        tokenSecretRef: dcp-cluster-ocp-staging-token
+        defaultNamespace: devops-ci-staging
+        allowedNamespaces:
+          - devops-ci-staging
+        description: Future staging/collaudo OpenShift cluster. Not connected yet.
+      - name: ocp-production
+        displayName: OpenShift Production
+        enabled: false
+        apiURL: ""
+        caConfigMapRef: dcp-cluster-ocp-production-ca
+        tokenSecretRef: dcp-cluster-ocp-production-token
+        defaultNamespace: devops-ci-production
+        allowedNamespaces:
+          - devops-ci-production
+        description: Future production OpenShift cluster. Disabled until production gates are approved.

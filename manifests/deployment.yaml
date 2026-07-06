@@ -33,6 +33,9 @@ spec:
             - name: dcp-environments
               mountPath: /etc/dcp-environments
               readOnly: true
+            - name: dcp-clusters
+              mountPath: /etc/dcp-clusters
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /healthz
@@ -75,3 +78,9 @@ spec:
             items:
               - key: environments.yaml
                 path: environments.yaml
+        - name: dcp-clusters
+          configMap:
+            name: devops-control-plane-clusters
+            items:
+              - key: clusters.yaml
+                path: clusters.yaml
