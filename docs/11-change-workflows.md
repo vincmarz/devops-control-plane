@@ -1,62 +1,78 @@
-# DevOps Control Plane - Change Workflows
+# DevOps Control Plane — Change Workflows
 
-**Versione:** 0.1  
-**Data:** 2026-06-25  
-**Owner iniziale:** Vincenzo Marzario  
-**Repository:** `https://github.com/vincmarz/devops-control-plane`  
-**Documenti precedenti:**  
-- `docs/00-vision.md`  
-- `docs/01-scope-mvp.md`  
-- `docs/02-personas-use-cases.md`  
-- `docs/03-functional-requirements.md`  
-- `docs/04-non-functional-requirements.md`  
-- `docs/05-architecture.md`  
-- `docs/06-argocd-integration.md`  
-- `docs/07-gitlab-integration.md`  
-- `docs/08-tekton-integration.md`  
-- `docs/09-security-rbac.md`  
-- `docs/10-data-model.md`  
-**Stato:** Draft iniziale / Change Workflows
+## Document metadata
 
----
-
-## 1. Scopo del documento
-
-Questo documento descrive i **workflow operativi** del progetto **DevOps Control Plane**.
-
-L’obiettivo è definire, in modo ripetibile e implementabile:
-
-- il ciclo di vita di una ChangeRequest;
-- gli stati del workflow;
-- le transizioni ammesse;
-- i workflow MVP;
-- gli errori gestiti;
-- le evidenze da raccogliere;
-- i punti di integrazione con GitLab, Tekton, Argo CD e OpenShift;
-- le policy di sicurezza e governance applicate durante il change;
-- i criteri di completamento o fallimento.
-
-Questo documento è pensato sia per guidare l’implementazione backend sia per diventare una guida didattica per operatori e colleghi meno esperti.
+- **Project:** DevOps Control Plane
+- **Document:** 11 — Change Workflows
+- **Version:** 0.2
+- **Date:** 2026-07-06
+- **Owner:** Vincenzo Marzario
+- **Repository:** `https://github.com/vincmarz/devops-control-plane`
+- **Previous documents:**
+  - `docs/00-vision.md`
+  - `docs/01-scope-mvp.md`
+  - `docs/02-personas-use-cases.md`
+  - `docs/03-functional-requirements.md`
+  - `docs/04-non-functional-requirements.md`
+  - `docs/05-architecture.md`
+  - `docs/06-argocd-integration.md`
+  - `docs/07-gitlab-integration.md`
+  - `docs/08-tekton-integration.md`
+  - `docs/09-security-rbac.md`
+  - `docs/10-data-model.md`
+- **Status:** Rewritten in English and refreshed while preserving the original GitOps workflow intent
+- **Language:** English
+- **Policy reference:** `docs/documentation-language-policy.md`
 
 ---
 
-## 2. Principio fondamentale
+## 1. Purpose
 
-Il DevOps Control Plane non modifica direttamente il runtime come stato finale permanente.
+This document describes the operational workflows of the DevOps Control Plane.
 
-Ogni change applicativo deve passare da Git.
+The original document was designed both as an implementation guide and as an educational guide for operators and onboarding readers. This refreshed version preserves that spirit while aligning the workflow model with the current advanced MVP baseline.
+
+The document defines:
+
+- the ChangeRequest lifecycle;
+- runtime workflow states;
+- allowed transitions;
+- current implemented workflows;
+- originally planned MVP workflows and their evolution;
+- error handling rules;
+- evidence collection expectations;
+- integration points with GitLab, Tekton, Argo CD and OpenShift;
+- security and governance checkpoints;
+- completion and failure criteria;
+- future multi-environment promotion direction.
+
+The key objective remains unchanged:
 
 ```text
-Richiesta change
-  -> GitLab branch / commit / MR
+Make GitOps changes guided, repeatable, validated, auditable and understandable.
+```
+
+---
+
+## 2. Fundamental principle
+
+The DevOps Control Plane must not modify runtime resources directly as the permanent desired state.
+
+Every application change must pass through Git.
+
+The original workflow spirit remains:
+
+```text
+Change request
+  -> GitLab branch / commit / merge request
   -> Tekton validation
-  -> Argo CD sync
+  -> Argo CD deployment state
   -> OpenShift runtime validation
   -> Evidence
   -> Change history
 ```
 
-Comandi come:
+Commands such as the following are not the permanent product workflow:
 
 ```bash
 oc edit deployment
@@ -65,15 +81,138 @@ oc set env deployment
 oc scale deployment
 ```
 
-non devono essere il workflow permanente del prodotto.
-
-Possono essere usati solo per troubleshooting manuale o emergenze operative esplicitamente documentate.
+These commands may be used only for manual troubleshooting or explicitly documented emergency operations.
 
 ---
 
-## 3. Tipi di workflow MVP
+## 3. Current workflow model
 
-I workflow MVP iniziali sono:
+The current implementation separates two concepts that were initially mixed in the first MVP state model:
+
+```text
+lifecycle status = business/process lifecycle
+runtime status   = technical execution state
+```
+
+This separation is important because a technical step can complete without changing the business lifecycle state.
+
+Example:
+
+```text
+lifecycle status = draft
+runtime status   = EvidenceCollected
+```
+
+This means that technical evidence has been collected, but the business lifecycle has not necessarily been closed.
+
+---
+
+## 4. ChangeRequest lifecycle
+
+## 4.1 Lifecycle states
+
+Current lifecycle states:
+
+```text
+draft
+submitted
+approved
+executing
+executed
+closed
+```
+
+These states describe the process view of a ChangeRequest.
+
+## 4.2 Lifecycle transitions
+
+Typical lifecycle path:
+
+```text
+draft
+  -> submitted
+  -> approved
+  -> executing
+  -> executed
+  -> closed
+```
+
+Each transition must create a `change_events` record.
+
+## 4.3 Lifecycle endpoint model
+
+Current lifecycle endpoints include:
+
+```text
+POST /api/v1/changes/{id}/submit
+POST /api/v1/changes/{id}/approve
+POST /api/v1/changes/{id}/start-execution
+POST /api/v1/changes/{id}/complete-execution
+POST /api/v1/changes/{id}/close
+```
+
+Lifecycle transitions are subject to backend AuthZ.
+
+---
+
+## 5. Runtime status model
+
+Runtime status describes technical execution progress.
+
+Current and expected runtime statuses include:
+
+```text
+BranchCreated
+CommitCreated
+MergeRequestOpened
+MergeRequestMerged
+ValidationRunning
+ValidationSucceeded
+ValidationFailed
+DeploymentSyncedHealthy
+DeploymentProgressing
+DeploymentOutOfSync
+DeploymentDegraded
+DeploymentUnknown
+EvidenceCollected
+```
+
+Runtime status is updated by technical workflow actions such as:
+
+- GitLab branch creation;
+- GitOps file update;
+- merge request opening;
+- merge request merge;
+- Tekton validation;
+- Argo CD deployment check;
+- runtime evidence collection.
+
+Runtime status changes must create auditable events.
+
+---
+
+## 6. Workflow types
+
+## 6.1 Currently implemented technical workflows
+
+Current implemented technical workflows include:
+
+```text
+create ChangeRequest
+create GitLab branch
+update GitOps files
+open GitLab merge request
+merge GitLab merge request
+run Tekton validation
+check Tekton validation
+check Argo CD deployment
+collect deployment evidence
+view ChangeRequest history and evidence
+```
+
+## 6.2 Original MVP workflow types
+
+The original MVP workflow types remain useful as conceptual workflow families:
 
 ```text
 WF-001 update-replicas
@@ -85,409 +224,349 @@ WF-006 sync-only
 WF-007 collect-evidence-only
 ```
 
-Priorità implementativa consigliata:
+Current implementation does not need every business workflow to be fully automated before the technical building blocks are stable.
 
-1. `update-replicas`;
-2. `validate-only`;
-3. `sync-only`;
-4. `collect-evidence-only`;
-5. `update-app-version`;
-6. `update-page-color`;
-7. `update-configmap-values`.
+The current architecture intentionally exposes explicit technical steps first, because explicit steps are easier to validate, debug and explain.
 
 ---
 
-## 4. Modello stati ChangeRequest
+## 7. GitLab technical workflow
 
-## 4.1 Stati principali
+## 7.1 Purpose
+
+The GitLab workflow represents the GitOps change as a branch, file update, commit and merge request.
+
+This preserves the core GitOps rule:
 
 ```text
-Draft
-Created
+Git is the source of desired state.
+```
+
+## 7.2 Flow
+
+```text
+ChangeRequest
+  -> create branch
+  -> update GitOps files
+  -> open merge request
+  -> merge request where authorized
+  -> record GitLab references
+  -> update runtime status
+  -> create audit events
+```
+
+## 7.3 Current endpoints
+
+```text
+POST /api/v1/changes/{id}/create-branch
+POST /api/v1/changes/{id}/update-files
+POST /api/v1/changes/{id}/open-merge-request
+POST /api/v1/changes/{id}/merge-request
+```
+
+## 7.4 Expected events and runtime statuses
+
+Typical runtime statuses:
+
+```text
 BranchCreated
-FilesRead
-FilesUpdated
 CommitCreated
 MergeRequestOpened
-WaitingForMerge
-Merged
-ValidationRequested
-ValidationRunning
-ValidationSucceeded
-ValidationFailed
-SyncRequested
-SyncRunning
-SyncSucceeded
-SyncFailed
-EvidenceCollectionRunning
-EvidenceCollected
-Completed
-Failed
-Cancelled
+MergeRequestMerged
 ```
+
+Typical event payload should include safe references such as:
+
+- branch name;
+- GitLab project ID;
+- commit SHA where available;
+- merge request IID;
+- merge request URL;
+- target branch;
+- target environment.
+
+## 7.5 Security rules
+
+- Do not log GitLab token values.
+- Do not store GitLab token values in PostgreSQL.
+- Do not include token values in evidence.
+- Git changes must be reviewed through merge request where policy requires it.
+- Direct commit remains a lab/bootstrap exception, not the preferred governance model.
 
 ---
 
-## 4.2 Stati finali
+## 8. Tekton validation workflow
 
-Stati finali:
+## 8.1 Purpose
+
+Tekton validation verifies that the GitOps change is technically acceptable before the workflow proceeds.
+
+Tekton answers the question:
 
 ```text
-Completed
-Failed
-Cancelled
+Is this GitOps change technically safe enough to continue?
 ```
 
-Una ChangeRequest in stato finale non deve più avanzare automaticamente.
-
-Eventuali retry devono creare:
-
-- una nuova ChangeRequest; oppure
-- un evento di retry esplicitamente tracciato, se il modello lo permetterà in futuro.
-
----
-
-## 4.3 Stati non finali critici
-
-Stati da monitorare con timeout o verifica periodica:
+## 8.2 Flow
 
 ```text
-ValidationRunning
-WaitingForMerge
-SyncRunning
-EvidenceCollectionRunning
+ChangeRequest
+  -> POST /api/v1/changes/{id}/validate
+  -> create Tekton PipelineRun
+  -> runtime status becomes ValidationRunning
+  -> POST /api/v1/changes/{id}/check-validation
+  -> read PipelineRun status
+  -> collect TaskRun diagnostics
+  -> persist validation evidence
+  -> runtime status becomes ValidationSucceeded or ValidationFailed
 ```
 
-Regola:
+## 8.3 Current endpoints
 
 ```text
-Nessuna ChangeRequest deve restare indefinitamente in uno stato intermedio senza timeout o azione richiesta.
+POST /api/v1/changes/{id}/validate
+POST /api/v1/changes/{id}/check-validation
+GET  /api/v1/changes/{id}/evidence/validation
 ```
 
----
-
-## 5. Transizioni principali
-
-## 5.1 Transizioni nominali end-to-end
+## 8.4 Validation outcomes
 
 ```text
-Created
-  -> BranchCreated
-  -> FilesRead
-  -> FilesUpdated
-  -> CommitCreated
-  -> ValidationRequested
-  -> ValidationRunning
-  -> ValidationSucceeded
-  -> MergeRequestOpened
-  -> WaitingForMerge
-  -> Merged
-  -> SyncRequested
-  -> SyncRunning
-  -> SyncSucceeded
-  -> EvidenceCollectionRunning
-  -> EvidenceCollected
-  -> Completed
+Tekton Succeeded=True    -> ValidationSucceeded
+Tekton Succeeded=False   -> ValidationFailed
+Tekton Succeeded=Unknown -> ValidationRunning
 ```
+
+## 8.5 Failure handling
+
+If validation fails:
+
+- runtime status becomes `ValidationFailed`;
+- `check-validation` returns diagnostics;
+- failed TaskRuns are identified;
+- validation evidence is stored;
+- the workflow must not automatically continue to deployment state as if validation succeeded.
 
 ---
 
-## 5.2 Transizioni con commit diretto
+## 9. Argo CD deployment check workflow
 
-Nel lab iniziale può essere supportato un flusso semplificato:
+## 9.1 Purpose
+
+The Control Plane checks Argo CD deployment state after Git workflow and validation steps.
+
+The current baseline focuses on deployment state checks rather than a broad automatic sync orchestration model.
+
+## 9.2 Flow
 
 ```text
-Created
-  -> BranchCreated
-  -> FilesUpdated
-  -> CommitCreated
-  -> ValidationRequested
-  -> ValidationSucceeded
-  -> SyncRequested
-  -> SyncSucceeded
-  -> EvidenceCollected
-  -> Completed
+ChangeRequest
+  -> POST /api/v1/changes/{id}/check-deployment
+  -> read Argo CD Application
+  -> map sync and health status
+  -> update runtime status
+  -> create technical event
 ```
 
-Nota:
-
-Questo flusso è più veloce, ma meno adatto alla governance enterprise perché salta la review tramite MR.
-
----
-
-## 5.3 Transizioni di fallimento
-
-Qualunque stato operativo può transitare a `Failed` se l’errore è non recuperabile.
-
-Esempi:
+## 9.3 Runtime status mapping
 
 ```text
-BranchCreated -> Failed
-ValidationRunning -> ValidationFailed
-SyncRunning -> SyncFailed
-EvidenceCollectionRunning -> Failed oppure Completed con warning
+Synced + Healthy       -> DeploymentSyncedHealthy
+OutOfSync              -> DeploymentOutOfSync
+Progressing            -> DeploymentProgressing
+Degraded               -> DeploymentDegraded
+Unknown/other          -> DeploymentUnknown
 ```
 
-Regola:
+## 9.4 Warning handling
 
-- `ValidationFailed` non deve procedere automaticamente a sync;
-- `SyncFailed` non deve diventare `Completed`;
-- failure deve sempre generare `change_events` con `error_code` e messaggio leggibile.
+Warnings such as `OrphanedResourceWarning` must be preserved and shown as warnings.
 
----
-
-## 6. Workflow WF-001 - update-replicas
-
-## 6.1 Scopo
-
-Modificare il numero di repliche di un Deployment tramite GitOps.
-
-Il workflow deve modificare `spec.replicas` nel file GitOps, non scalare direttamente il Deployment runtime.
+A `Synced` and `Healthy` application with an orphaned resource warning should not automatically be marked as failed.
 
 ---
 
-## 6.2 Input
+## 10. Runtime evidence workflow
+
+## 10.1 Purpose
+
+Runtime evidence verifies the actual OpenShift state after the GitOps workflow and deployment state checks.
+
+## 10.2 Flow
+
+```text
+ChangeRequest
+  -> POST /api/v1/changes/{id}/collect-evidence
+  -> collect Argo CD state
+  -> collect Kubernetes/OpenShift runtime state
+  -> build diagnostics summary
+  -> persist deployment evidence
+  -> runtime status becomes EvidenceCollected
+```
+
+## 10.3 Current endpoint
+
+```text
+POST /api/v1/changes/{id}/collect-evidence
+GET  /api/v1/changes/{id}/evidence/deployment
+```
+
+## 10.4 Evidence scope
+
+Deployment evidence may include:
+
+- ChangeRequest metadata;
+- application name;
+- target environment;
+- Argo CD sync and health status;
+- Argo CD revision and warnings;
+- Deployment readiness;
+- Pod readiness;
+- restart counts;
+- Service availability;
+- Route availability;
+- diagnostics summary.
+
+Evidence must be sanitized.
+
+---
+
+## 11. End-to-end technical workflow baseline
+
+A current end-to-end technical workflow can be represented as:
+
+```text
+Create ChangeRequest
+  -> create GitLab branch
+  -> update GitOps files
+  -> open merge request
+  -> run Tekton validation
+  -> check Tekton validation
+  -> merge merge request where authorized
+  -> check Argo CD deployment
+  -> collect deployment evidence
+  -> review events and evidence in UI
+```
+
+This flow is intentionally explicit. It keeps each step observable and easier to validate.
+
+---
+
+## 12. WF-001 — update-replicas
+
+## 12.1 Purpose
+
+Modify the number of replicas through GitOps.
+
+The workflow must update `spec.replicas` in Git, not scale the runtime Deployment directly.
+
+## 12.2 Input
 
 ```yaml
 applicationName: demo-go-color-app
+targetEnvironment: dev
 changeType: update-replicas
 requestedBy: vmarzario
-description: "Scale demo-go-color-app from 2 to 3 replicas"
+description: Scale demo-go-color-app from 2 to 3 replicas
 payload:
   deploymentName: demo-go-color-app
   replicas: 3
 ```
 
----
-
-## 6.3 Validazioni input
-
-- `applicationName` obbligatorio;
-- `changeType=update-replicas`;
-- `replicas` deve essere intero;
-- `replicas >= 0`;
-- `deploymentName` opzionale se deducibile dalla Application;
-- Application deve essere nota o recuperabile da Argo CD;
-- repository GitLab deve essere configurato;
-- path GitOps deve essere noto.
-
----
-
-## 6.4 Flusso dettagliato
+## 12.3 Detailed flow
 
 ```text
-1. Create ChangeRequest
-2. Resolve Application metadata da Argo CD
-3. Resolve repository GitLab e path GitOps
-4. Check conflitti con change attivi
-5. Create branch GitLab
-6. Read deployment.yaml
-7. Parse YAML
-8. Find Deployment target
-9. Update spec.replicas
-10. Generate diff summary
-11. Anti-secret check sui file modificati
-12. Commit files su branch
-13. Create Tekton PipelineRun validation
-14. Wait validation
-15. Open Merge Request oppure commit diretto secondo modalità
-16. Wait merge oppure conferma merge
-17. Trigger Argo CD sync
-18. Wait Synced/Healthy
-19. Collect runtime evidence
-20. Mark Completed
+1. Create ChangeRequest.
+2. Resolve Application metadata.
+3. Resolve GitLab repository and GitOps path.
+4. Check active conflicting changes.
+5. Create GitLab branch.
+6. Read deployment manifest.
+7. Update spec.replicas.
+8. Generate reviewable diff.
+9. Run anti-secret guardrails.
+10. Commit files to branch.
+11. Run Tekton validation.
+12. Open merge request.
+13. Merge where authorized.
+14. Check Argo CD deployment state.
+15. Collect runtime evidence.
+16. Review final history and evidence.
 ```
 
----
+## 12.4 Success criteria
 
-## 6.5 Eventi attesi
+The workflow is successful when:
 
-```text
-Created
-GitRepositoryResolved
-GitBranchCreated
-GitFileRead
-GitFilesUpdated
-GitCommitCreated
-ValidationRequested
-ValidationRunning
-ValidationSucceeded
-GitMergeRequestOpened
-GitMergeRequestMerged
-SyncRequested
-SyncRunning
-SyncSucceeded
-EvidenceCollected
-Completed
-```
+- GitOps file is updated;
+- commit or merge request represents the change;
+- Tekton validation succeeds;
+- merge or target branch update is approved according to policy;
+- Argo CD reports an acceptable deployment state;
+- runtime evidence is collected;
+- evidence is persisted.
 
----
+## 12.5 Failure examples
 
-## 6.6 Evidence richieste
-
-- branch GitLab;
-- commit SHA;
-- MR URL, se presente;
-- diff summary;
-- Tekton PipelineRun;
-- TaskRun summary;
-- Argo CD sync revision;
-- Deployment status;
-- Pod status;
-- numero repliche desiderato/osservato.
-
-Esempio evidence runtime:
-
-```json
-{
-  "deployment": "demo-go-color-app",
-  "desiredReplicas": 3,
-  "readyReplicas": 3,
-  "availableReplicas": 3
-}
-```
-
----
-
-## 6.7 Criteri di successo
-
-Il workflow è `Completed` quando:
-
-- file GitOps aggiornato;
-- commit creato;
-- validazione Tekton riuscita;
-- MR mergiata o commit approvato;
-- Argo CD `Synced`;
-- Argo CD `Healthy`;
-- Deployment runtime ha repliche attese;
-- evidenze salvate.
-
----
-
-## 6.8 Errori gestiti
-
-| Errore | Stato | Codice |
+| Failure | Runtime status | Error family |
 |---|---|---|
-| Application non trovata | Failed | ARGO_APPLICATION_NOT_FOUND |
-| File deployment non trovato | Failed | GITLAB_FILE_NOT_FOUND |
-| Branch già esistente | Failed | GITLAB_BRANCH_EXISTS |
-| YAML non valido | ValidationFailed | VALIDATION_INVALID_YAML |
-| Tekton fallisce | ValidationFailed | TEKTON_PIPELINERUN_FAILED |
-| Sync Argo CD fallisce | SyncFailed | ARGO_SYNC_FAILED |
-| Runtime non raggiunge repliche | SyncFailed | KUBERNETES_RUNTIME_NOT_READY |
+| Application not found | failure event | ARGOCD_* |
+| GitOps file not found | failure event | GITLAB_* |
+| Branch already exists | failure event | GITLAB_* |
+| YAML invalid | ValidationFailed | VALIDATION_* |
+| Tekton fails | ValidationFailed | TEKTON_* |
+| Deployment degraded | DeploymentDegraded | ARGOCD_* |
+| Runtime not ready | deployment/evidence failure | KUBERNETES_* |
 
 ---
 
-## 7. Workflow WF-002 - update-app-version
+## 13. WF-002 — update-app-version
 
-## 7.1 Scopo
+## 13.1 Purpose
 
-Aggiornare il valore applicativo `APP_VERSION` tramite GitOps.
+Update the application value `APP_VERSION` through GitOps.
 
-Il valore può essere definito:
+The value can be defined:
 
-1. inline nel Deployment;
-2. in una ConfigMap referenziata dal Deployment.
+1. inline in the Deployment;
+2. in a ConfigMap referenced by the Deployment.
 
-Modalità preferita:
+Preferred model:
 
 ```text
 ConfigMap-managed APP_VERSION
 ```
 
----
+## 13.2 Important rollout note
 
-## 7.2 Input
+If `APP_VERSION` is consumed as an environment variable from a ConfigMap, existing Pods do not automatically receive the new value until Pods are recreated.
 
-```yaml
-applicationName: demo-go-color-app
-changeType: update-app-version
-requestedBy: vmarzario
-description: "Update demo app version"
-payload:
-  APP_VERSION: v3-green
-```
+Future strategies:
 
----
+- ConfigMap checksum annotation in the Pod template;
+- ChangeRequest annotation in the Deployment;
+- controlled rollout restart;
+- separate Deployment change.
 
-## 7.3 Flusso dettagliato
-
-```text
-1. Create ChangeRequest
-2. Resolve Application metadata
-3. Read Deployment manifest
-4. Detect APP_VERSION source
-5. If APP_VERSION inline: update deployment.yaml
-6. If APP_VERSION in ConfigMap: read and update configmap.yaml
-7. Verify kustomization.yaml includes modified file
-8. Generate diff
-9. Anti-secret check
-10. Commit files
-11. Tekton validation
-12. Merge/commit approved
-13. Argo CD sync
-14. Wait Synced/Healthy
-15. Runtime evidence
-16. Completed
-```
+This decision should be formalized before enabling production-grade workflows.
 
 ---
 
-## 7.4 Regola ConfigMap e rollout
+## 14. WF-003 — update-page-color
 
-Se `APP_VERSION` è usata come env var da ConfigMap, i Pod già esistenti non acquisiscono automaticamente il nuovo valore finché non vengono ricreati.
+## 14.1 Purpose
 
-Possibili strategie future:
+Update `PAGE_COLOR` through GitOps.
 
-- annotation checksum ConfigMap nel Pod template;
-- annotation Change ID nel Deployment;
-- rollout restart controllato;
-- change separato sul Deployment.
+## 14.2 Input validation
 
-Decisione da formalizzare in ADR dedicato.
-
----
-
-## 7.5 Criteri di successo
-
-- valore aggiornato nel file corretto;
-- Tekton validation succeeded;
-- Argo CD Synced/Healthy;
-- runtime espone o riflette nuova versione, se verificabile;
-- evidenze salvate.
-
----
-
-## 8. Workflow WF-003 - update-page-color
-
-## 8.1 Scopo
-
-Aggiornare il valore applicativo `PAGE_COLOR` tramite GitOps.
-
----
-
-## 8.2 Input
-
-```yaml
-applicationName: demo-go-color-app
-changeType: update-page-color
-requestedBy: vmarzario
-description: "Update page color"
-payload:
-  PAGE_COLOR: "#28A745"
-```
-
----
-
-## 8.3 Validazioni input
-
-`PAGE_COLOR` deve rispettare il formato:
+`PAGE_COLOR` must match:
 
 ```text
 #[0-9A-Fa-f]{6}
 ```
 
-Esempi validi:
+Valid examples:
 
 ```text
 #1E90FF
@@ -495,7 +574,7 @@ Esempi validi:
 #FF0000
 ```
 
-Esempi non validi:
+Invalid examples:
 
 ```text
 blue
@@ -504,267 +583,156 @@ blue
 #123
 ```
 
----
+## 14.3 Evidence
 
-## 8.4 Flusso dettagliato
-
-```text
-1. Create ChangeRequest
-2. Validate PAGE_COLOR
-3. Resolve Application metadata
-4. Detect PAGE_COLOR source
-5. Update Deployment or ConfigMap manifest
-6. Verify kustomization.yaml
-7. Generate diff
-8. Anti-secret check
-9. Commit files
-10. Tekton validation
-11. Merge/commit approved
-12. Argo CD sync
-13. Wait Synced/Healthy
-14. Optional HTTP evidence su Route
-15. Completed
-```
-
----
-
-## 8.5 Evidence opzionale HTTP
-
-Se la Application espone una Route, il sistema può raccogliere:
+If the application exposes a safe Route endpoint, the system may collect:
 
 - HTTP status code;
-- `/healthz` response;
-- pagina applicativa se endpoint non sensibile;
-- valore colore esposto, se verificabile.
+- health endpoint status;
+- safe page output if non-sensitive;
+- observed value if safely exposed.
 
 ---
 
-## 9. Workflow WF-004 - update-configmap-values
+## 15. WF-004 — update-configmap-values
 
-## 9.1 Scopo
+## 15.1 Purpose
 
-Modificare una o più chiavi in una ConfigMap gestita via GitOps.
+Modify one or more keys in a ConfigMap managed through GitOps.
 
----
+## 15.2 Validation rules
 
-## 9.2 Input
+- ConfigMap must exist in the repository.
+- ConfigMap must be included in `kustomization.yaml` where applicable.
+- AppProject must allow `ConfigMap` where required.
+- Values must not contain secrets.
+- `PAGE_COLOR`, if present, must match the expected hex format.
+- Key creation policy must be explicit.
 
-```yaml
-applicationName: demo-go-color-app
-changeType: update-configmap-values
-requestedBy: vmarzario
-description: "Update application configuration"
-payload:
-  configMapName: demo-go-color-app-config
-  values:
-    APP_VERSION: v3-green
-    PAGE_COLOR: "#28A745"
-```
+## 15.3 Specific failure examples
 
----
-
-## 9.3 Validazioni
-
-- ConfigMap deve esistere nel repository;
-- ConfigMap deve essere inclusa in `kustomization.yaml`, se applicabile;
-- AppProject deve consentire `ConfigMap`;
-- valori non devono contenere secret;
-- `PAGE_COLOR`, se presente, deve rispettare formato esadecimale;
-- chiavi richieste devono essere presenti o policy deve consentire creazione chiavi.
-
----
-
-## 9.4 Flusso dettagliato
-
-```text
-1. Create ChangeRequest
-2. Resolve Application metadata
-3. Read configmap.yaml
-4. Read kustomization.yaml
-5. Verify ConfigMap is included in Kustomize
-6. Optional: verify AppProject allows ConfigMap
-7. Update values
-8. Generate diff
-9. Anti-secret check
-10. Commit files
-11. Tekton validation
-12. Merge/commit approved
-13. Argo CD sync
-14. Wait Synced/Healthy
-15. Collect ConfigMap runtime evidence
-16. Collect Deployment/Pod evidence
-17. Completed
-```
-
----
-
-## 9.5 Errori specifici
-
-| Errore | Stato | Codice |
+| Failure | Runtime status | Error family |
 |---|---|---|
-| configmap.yaml mancante | Failed | GITLAB_FILE_NOT_FOUND |
-| ConfigMap non inclusa in Kustomize | ValidationFailed | VALIDATION_KUSTOMIZE_RESOURCE_MISSING |
-| ConfigMap non permessa da AppProject | SyncFailed | ARGO_RESOURCE_NOT_PERMITTED |
-| Possibile secret nei valori | ValidationFailed | VALIDATION_SECRET_DETECTED |
-| Pod non aggiornati | Completed con warning oppure SyncFailed | KUBERNETES_RUNTIME_NOT_UPDATED |
+| ConfigMap file missing | failure event | GITLAB_* |
+| ConfigMap not included in Kustomize | ValidationFailed | VALIDATION_* |
+| ConfigMap not allowed by AppProject | DeploymentOutOfSync or failure event | ARGOCD_* |
+| Possible secret in values | ValidationFailed | VALIDATION_SECRET_DETECTED |
+| Pods not refreshed | warning or failure based on policy | KUBERNETES_* |
 
 ---
 
-## 10. Workflow WF-005 - validate-only
+## 16. WF-005 — validate-only
 
-## 10.1 Scopo
+## 16.1 Purpose
 
-Eseguire validazione Tekton su branch o commit senza avviare sync Argo CD.
+Run Tekton validation on a branch or revision without proceeding to deployment state checks.
 
-Utile per:
+Useful for:
 
-- verifiche preventive;
-- review MR;
-- test workflow;
-- troubleshooting manifest.
+- preventive validation;
+- merge request review;
+- workflow testing;
+- manifest troubleshooting.
 
----
-
-## 10.2 Input
-
-```yaml
-applicationName: demo-go-color-app
-changeType: validate-only
-payload:
-  repoUrl: https://gitlab.example.local/group/demo-app-gitops.git
-  revision: change/CHG-2026-0001-update-replicas
-  path: apps/demo-go-color-app
-```
-
----
-
-## 10.3 Flusso
+## 16.2 Flow
 
 ```text
-1. Create ChangeRequest or validation record
-2. Resolve Git metadata
-3. Create Tekton PipelineRun
-4. Wait validation
-5. Collect Tekton evidence
-6. Completed or ValidationFailed
+1. Create ChangeRequest or validation-oriented record.
+2. Resolve Git metadata.
+3. Create Tekton PipelineRun.
+4. Check validation result.
+5. Collect Tekton evidence.
+6. End with ValidationSucceeded or ValidationFailed.
 ```
 
 ---
 
-## 11. Workflow WF-006 - sync-only
+## 17. WF-006 — deployment-check-only
 
-## 11.1 Scopo
+## 17.1 Purpose
 
-Lanciare sync Argo CD senza creare nuovo commit Git.
+Check Argo CD deployment state without creating a new Git change.
 
-Utile quando:
+This replaces the older generic `sync-only` idea as the safer current baseline.
 
-- Git è già aggiornato;
-- Argo CD è OutOfSync;
-- MR è stata mergiata manualmente;
-- si vuole riconciliare lo stato.
+Useful when:
 
----
+- Git is already updated;
+- a merge request was merged manually;
+- the operator needs to verify Argo CD status;
+- a runtime state check is needed before evidence collection.
 
-## 11.2 Precondizioni
-
-- Application esiste;
-- repository Git è già nello stato desiderato;
-- non ci sono validation failure note;
-- non esiste operation Argo CD già in corso.
-
----
-
-## 11.3 Flusso
+## 17.2 Flow
 
 ```text
-1. Create ChangeRequest sync-only
-2. Read Argo CD Application
-3. If operation in progress: fail or wait
-4. Sync Application
-5. Wait Synced/Healthy
-6. Collect evidence
-7. Completed
+1. Create or select ChangeRequest.
+2. Read Argo CD Application.
+3. Map sync and health status.
+4. Update runtime status.
+5. Record event.
 ```
 
 ---
 
-## 11.4 Errori noti
+## 18. WF-007 — collect-evidence-only
 
-```text
-ARGO_OPERATION_IN_PROGRESS
-ARGO_SYNC_FAILED
-ARGO_RESOURCE_NOT_PERMITTED
-ARGO_APPLICATION_DEGRADED
-ARGO_APPLICATION_OUTOFSYNC_TIMEOUT
-```
+## 18.1 Purpose
 
----
+Collect evidence for an Application or ChangeRequest without modifying Git and without triggering deployment actions.
 
-## 12. Workflow WF-007 - collect-evidence-only
-
-## 12.1 Scopo
-
-Raccogliere evidenze di una Application senza modificare Git o lanciare sync.
-
-Utile per:
+Useful for:
 
 - audit;
 - troubleshooting;
-- verifica post-change;
-- baseline runtime.
+- post-change verification;
+- runtime baseline capture.
 
----
-
-## 12.2 Flusso
+## 18.2 Flow
 
 ```text
-1. Create evidence collection request
-2. Read Argo CD status
-3. Read resources/orphaned resources
-4. Read Deployment/Pod/Service/Route
-5. Optional health check HTTP
-6. Save evidence
-7. Completed
+1. Select ChangeRequest.
+2. Read Argo CD status.
+3. Read Kubernetes/OpenShift runtime resources.
+4. Build diagnostics.
+5. Save sanitized evidence.
+6. Runtime status becomes EvidenceCollected where applicable.
 ```
 
 ---
 
-## 13. Gestione conflitti
+## 19. Conflict handling
 
-## 13.1 Change concorrenti
+## 19.1 Active conflicting changes
 
-Il sistema deve evitare workflow concorrenti pericolosi sulla stessa Application o sullo stesso file.
+The system should avoid unsafe concurrent workflows on the same application, target environment or GitOps path.
 
-Regola MVP:
+Initial rule:
 
 ```text
-Bloccare una nuova ChangeRequest se esiste già una ChangeRequest attiva sulla stessa Application e stesso file target.
+Block or warn when an active ChangeRequest targets the same application, environment and file path.
 ```
 
----
-
-## 13.2 Esempio conflitto
+## 19.2 Example
 
 Change A:
 
 ```text
-update-configmap-values su apps/demo-go-color-app/configmap.yaml
+update-configmap-values on apps/demo-go-color-app/configmap.yaml in dev
 ```
 
 Change B:
 
 ```text
-update-page-color su apps/demo-go-color-app/configmap.yaml
+update-page-color on apps/demo-go-color-app/configmap.yaml in dev
 ```
 
-Azione consigliata:
+Recommended action:
 
 ```text
-Bloccare Change B fino a completamento o cancellazione di Change A.
+Block Change B until Change A is completed, cancelled or explicitly superseded.
 ```
 
-Codice errore:
+Recommended error family:
 
 ```text
 WORKFLOW_CONFLICT_ACTIVE_CHANGE
@@ -772,256 +740,318 @@ WORKFLOW_CONFLICT_ACTIVE_CHANGE
 
 ---
 
-## 14. Gestione rollback
+## 20. Rollback handling
 
-## 14.1 Principio
+## 20.1 Principle
 
-Rollback definitivo deve preferibilmente passare da Git.
+Definitive rollback should preferably pass through Git.
 
 ```text
-git revert / revert MR
+git revert or revert merge request
   -> merge
-  -> Argo CD sync
+  -> Argo CD deployment state
+  -> OpenShift runtime evidence
 ```
 
----
+## 20.2 Operational Argo CD rollback
 
-## 14.2 Rollback Argo CD operativo
+An operational Argo CD rollback can move the cluster to a previous revision, but it does not modify Git.
 
-Rollback Argo CD può riportare il cluster a una revision precedente, ma non modifica Git.
-
-Il sistema deve spiegare che può risultare:
+The system must explain that this can result in:
 
 ```text
 OutOfSync from main
 Healthy
 ```
 
-Significato:
+Meaning:
 
 ```text
-runtime sano ma non allineato al target Git corrente.
+runtime is healthy but not aligned with the current Git target branch
+```
+
+## 20.3 Future rollback workflow
+
+Future workflow:
+
+```text
+rollback-git-revert
+  -> create revert branch
+  -> open revert merge request
+  -> validate with Tekton
+  -> merge
+  -> check Argo CD deployment
+  -> collect rollback evidence
 ```
 
 ---
 
-## 14.3 Roadmap rollback
+## 21. Evidence collection standard
 
-MVP:
+## 21.1 Evidence for a completed technical workflow
 
-- mostrare rollback hint;
-- mostrare commit/MR da revertire;
-- non implementare rollback automatico complesso.
-
-Futuro:
-
-- workflow `rollback-git-revert`;
-- creazione automatica MR di revert;
-- sync post-revert;
-- evidence rollback.
-
----
-
-## 15. Evidence collection standard
-
-## 15.1 Evidence minime per change completo
-
-Ogni change completato deve avere:
+A completed technical workflow should have:
 
 - ChangeRequest summary;
-- GitLab branch/commit/MR;
-- diff summary;
-- Tekton PipelineRun status;
-- Tekton TaskRun summary;
-- Argo CD sync/health/revision;
-- Kubernetes runtime status;
-- errori o warning;
-- timestamp.
+- GitLab branch, commit or merge request;
+- validation PipelineRun;
+- TaskRun diagnostics;
+- Argo CD sync and health state;
+- Kubernetes/OpenShift runtime status;
+- warnings;
+- timestamps;
+- sanitized payloads.
 
----
+## 21.2 Evidence for failed workflows
 
-## 15.2 Evidence minime in caso di fallimento
+A failed workflow should preserve:
 
-Ogni change fallito deve avere:
-
-- fase fallita;
+- failed phase;
 - error code;
-- messaggio tecnico;
-- messaggio operativo;
+- technical message where safe;
+- operational message;
 - suggested action;
-- stato ultimo osservato;
-- log essenziale sanitizzato.
+- last observed state;
+- sanitized logs or diagnostics;
+- partial evidence when useful.
 
 ---
 
-## 16. Error handling standard
+## 22. Error handling standard
 
-## 16.1 Struttura errore workflow
+## 22.1 Normalized workflow error
+
+Example:
 
 ```json
 {
-  "code": "ARGO_OPERATION_IN_PROGRESS",
+  "code": "ARGOCD_OPERATION_IN_PROGRESS",
   "technicalMessage": "another operation is already in progress",
-  "userMessage": "Argo CD ha già una operazione in corso sulla Application.",
-  "suggestedAction": "Attendere il completamento dell'operazione oppure verificarla manualmente.",
+  "message": "Argo CD already has an operation in progress for the Application.",
+  "suggestedAction": "Wait for the operation to complete or inspect it manually.",
   "recoverable": true
 }
 ```
 
----
+## 22.2 Rules
 
-## 16.2 Regole
-
-- ogni errore deve avere `error_code`;
-- ogni errore deve creare `change_events`;
-- non loggare token;
-- non salvare secret;
-- non perdere lo stato precedente;
-- non lasciare workflow appesi.
+- every workflow error must have an error code;
+- every ChangeRequest-related error must create an event where applicable;
+- tokens must not be logged;
+- secrets must not be stored;
+- previous status must not be lost;
+- workflows must not remain indefinitely stuck.
 
 ---
 
-## 17. Timeout
+## 23. Timeout behavior
 
-## 17.1 Timeout consigliati MVP
+## 23.1 Recommended timeouts
 
 ```text
 GitLab API call: 30s
 Argo CD API call: 30s
 Tekton PipelineRun: 900s
-Argo CD sync wait: 600s
-Runtime readiness wait: 300s
+Deployment check: 600s
+Runtime readiness check: 300s
 HTTP health check: 10s
 ```
 
----
+## 23.2 Timeout rules
 
-## 17.2 Timeout behavior
+When timeout occurs:
 
-Se scatta timeout:
-
-- aggiornare stato;
-- registrare evento;
-- salvare stato ultimo osservato;
-- salvare evidence parziale;
-- proporre azione manuale.
+- update runtime status or record an error event;
+- save last observed state;
+- save partial evidence where useful;
+- propose manual action;
+- avoid automatic unsafe continuation.
 
 ---
 
-## 18. API orchestration mapping
+## 24. UI and API orchestration mapping
 
-## 18.1 Create change
+## 24.1 Create change
 
 ```text
-POST /api/changes
+POST /api/v1/changes
 ```
 
-Crea ChangeRequest in stato `Created`.
+Creates a ChangeRequest.
+
+## 24.2 Lifecycle actions
+
+```text
+POST /api/v1/changes/{id}/submit
+POST /api/v1/changes/{id}/approve
+POST /api/v1/changes/{id}/start-execution
+POST /api/v1/changes/{id}/complete-execution
+POST /api/v1/changes/{id}/close
+```
+
+## 24.3 Technical actions
+
+```text
+POST /api/v1/changes/{id}/create-branch
+POST /api/v1/changes/{id}/update-files
+POST /api/v1/changes/{id}/open-merge-request
+POST /api/v1/changes/{id}/merge-request
+POST /api/v1/changes/{id}/validate
+POST /api/v1/changes/{id}/check-validation
+POST /api/v1/changes/{id}/check-deployment
+POST /api/v1/changes/{id}/collect-evidence
+```
+
+## 24.4 Full automation endpoint
+
+A future endpoint may orchestrate multiple technical steps:
+
+```text
+POST /api/v1/changes/{id}/run
+```
+
+The current recommended model remains explicit step-by-step execution, because step-by-step execution is easier to validate, explain and audit.
 
 ---
 
-## 18.2 Execute workflow step-by-step
+## 25. Educational workflow view
 
-Endpoint possibili:
-
-```text
-POST /api/changes/{id}/create-branch
-POST /api/changes/{id}/update-files
-POST /api/changes/{id}/validate
-POST /api/changes/{id}/open-merge-request
-POST /api/changes/{id}/sync
-POST /api/changes/{id}/collect-evidence
-```
-
----
-
-## 18.3 Execute workflow automatico
-
-Endpoint futuro:
+Every workflow should show:
 
 ```text
-POST /api/changes/{id}/run
+current step
+tool being used
+why the step exists
+files or resources involved
+evidence produced
+final or current status
 ```
 
-Nota:
-
-Per MVP è consigliabile implementare prima step espliciti, più facili da validare e da spiegare ai newbie.
-
----
-
-## 19. Workflow didattico per newbie
-
-Ogni workflow dovrebbe mostrare:
-
-```text
-Step corrente
-Strumento usato
-Perché serve
-File coinvolti
-Evidenza prodotta
-Stato finale
-```
-
-Esempio:
+Example:
 
 ```text
 Step: Tekton validation
-Strumento: OpenShift Pipelines / Tekton
-Perché: validare i manifest prima della sync Argo CD
-File: apps/demo-go-color-app/deployment.yaml
-Evidenza: PipelineRun validate-gitops-change-chg-2026-0001 succeeded
+Tool: OpenShift Pipelines / Tekton
+Purpose: validate GitOps manifests before deployment checks
+Files: apps/demo-go-color-app/deployment.yaml
+Evidence: PipelineRun devops-cp-validate-chg-2026-0006 succeeded
 ```
 
----
-
-## 20. Checklist workflow MVP
-
-Un workflow MVP è considerato pronto quando:
-
-- crea ChangeRequest;
-- crea eventi per ogni step;
-- modifica Git e non runtime diretto;
-- crea branch/commit/MR;
-- esegue validazione Tekton;
-- blocca sync se validazione fallisce;
-- lancia sync Argo CD solo se consentito;
-- attende Synced/Healthy;
-- raccoglie evidenze;
-- salva stato finale;
-- gestisce timeout;
-- non salva secret;
-- produce messaggi comprensibili.
+This preserves the original goal of making the system useful for both experienced operators and less experienced readers.
 
 ---
 
-## 21. Relazione con altri documenti
+## 26. Multi-developer behavior
 
-Questo documento alimenta:
+When multiple developers create ChangeRequests:
+
+- `requestedBy` must be visible;
+- dashboard recent changes shows the latest five changes;
+- `/ui/changes` shows the full list;
+- each ChangeRequest keeps its own event and evidence history;
+- audit remains per ChangeRequest.
+
+This avoids hiding older changes while keeping the dashboard readable.
+
+---
+
+## 27. Multi-environment promotion direction
+
+Future workflows will support environment-aware promotion.
+
+Canonical environment flow:
+
+```text
+dev -> staging -> production
+```
+
+Recommended future promotion workflow:
+
+```text
+Change in dev
+  -> validation and evidence
+  -> related ChangeRequest for staging
+  -> staging validation and evidence
+  -> related ChangeRequest for production
+  -> production approval
+  -> production validation and evidence
+```
+
+Future metadata:
+
+```text
+promotionGroupID
+promotedFromChangeNumber
+```
+
+Production workflows must remain disabled until production guardrails, approval policy and environment-aware AuthZ are implemented.
+
+---
+
+## 28. Workflow readiness checklist
+
+A workflow is ready when:
+
+- it creates or uses a ChangeRequest;
+- it creates events for each significant step;
+- it modifies Git, not runtime desired state;
+- it records GitLab branch, commit or merge request references;
+- it runs Tekton validation where required;
+- it blocks deployment progression on validation failure;
+- it checks Argo CD deployment state;
+- it collects sanitized evidence;
+- it saves runtime status;
+- it handles timeout;
+- it never stores secrets;
+- it produces understandable messages;
+- it is authorized by backend AuthZ.
+
+---
+
+## 29. Relationship with other documents
+
+This document informs and is informed by:
 
 - `docs/13-api-design.md`;
 - `docs/12-evidence-model.md`;
-- `internal/workflow/`;
+- `docs/10-data-model.md`;
+- `docs/07-gitlab-integration.md`;
+- `docs/08-tekton-integration.md`;
+- `docs/06-argocd-integration.md`;
+- `docs/09-security-rbac.md`;
+- `docs/environment-configuration-model.md`;
+- `docs/change-promotion-model.md`;
 - `internal/app/change_service.go`;
 - `internal/adapters/gitlab/`;
 - `internal/adapters/argocd/`;
-- `internal/adapters/tekton/`;
-- `migrations/000001_init.up.sql`;
-- ADR sui workflow e sulle scelte di governance.
+- `internal/adapters/tekton/`.
 
 ---
 
-## 22. Messaggio chiave
+## 30. Key message
 
-I workflow sono il cuore del DevOps Control Plane.
+Workflows are the heart of the DevOps Control Plane.
 
-Il prodotto deve aiutare l’operatore a fare la cosa giusta:
+The product must help the operator do the right thing:
 
 ```text
-modificare Git
-validare con Tekton
-sincronizzare con Argo CD
-verificare OpenShift
-salvare evidenze
+modify Git
+validate with Tekton
+check deployment with Argo CD
+verify OpenShift runtime
+save evidence
+preserve history
 ```
 
-Non deve diventare un sistema che nasconde il GitOps, ma un sistema che lo rende più chiaro, guidato, ripetibile e auditabile.
+The Control Plane must not hide GitOps. The Control Plane must make GitOps clearer, more guided, more repeatable and more auditable.
+
+This preserves the original spirit of the project while aligning the workflow model with the current advanced MVP baseline.
+
+---
+
+## 31. Revision history
+
+| Date | Version | Description |
+|---|---:|---|
+| 2026-06-25 | 0.1 | Initial change workflows document in Italian. |
+| 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original GitOps-first workflow and educational intent and aligning it with the current lifecycle/runtime status, GitLab, Tekton, Argo CD, evidence and multi-environment baseline. |
