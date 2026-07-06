@@ -1,12 +1,29 @@
 package api
 
 import (
+	"context"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 )
+
+func TestAuthenticatedUsernameFromContext(t *testing.T) {
+	ctx := context.WithValue(context.Background(), identityContextKey, authIdentity{Username: " auth-user@example.test "})
+
+	username, ok := authenticatedUsernameFromContext(ctx)
+	if !ok {
+		t.Fatal("expected authenticated username to be present")
+	}
+	if username != "auth-user@example.test" {
+		t.Fatalf("unexpected username: %q", username)
+	}
+
+	if username, ok := authenticatedUsernameFromContext(context.Background()); ok || username != "" {
+		t.Fatalf("expected missing authenticated username, got username=%q ok=%v", username, ok)
+	}
+}
 
 func TestAuthMiddlewareDisabledAllowsRequest(t *testing.T) {
 	t.Setenv("AUTH_ENABLED", "false")

@@ -25,6 +25,15 @@ func (h *Handler) createChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if getBoolEnv("AUTH_ENABLED", false) {
+		username, ok := authenticatedUsernameFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, APIError{Code: "AUTH_UNAUTHENTICATED", Message: "Unable to resolve authenticated requester", TechnicalMessage: "authenticated identity is missing from request context", Recoverable: true}, nil)
+			return
+		}
+		req.RequestedBy = username
+	}
+
 	change, err := h.deps.Services.Changes.Create(r.Context(), req)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "VALIDATION_INVALID_REQUEST", Message: "Unable to create ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)

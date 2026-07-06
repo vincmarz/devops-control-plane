@@ -24,6 +24,20 @@ type authIdentity struct {
 	Source   string
 }
 
+func authenticatedUsernameFromContext(ctx context.Context) (string, bool) {
+	identity, ok := ctx.Value(identityContextKey).(authIdentity)
+	if !ok {
+		return "", false
+	}
+
+	username := strings.TrimSpace(identity.Username)
+	if username == "" {
+		return "", false
+	}
+
+	return username, true
+}
+
 func withAuthMiddleware(next http.Handler) http.Handler {
 	if !getBoolEnv("AUTH_ENABLED", false) {
 		return next
