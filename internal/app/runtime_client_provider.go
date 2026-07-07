@@ -25,8 +25,10 @@ type RuntimeClientProvider struct {
 // RuntimeClientProviderSelection is the result of selecting a runtime provider
 // for a resolved TechnicalRuntimeTarget.
 type RuntimeClientProviderSelection struct {
-	Target   TechnicalRuntimeTarget
-	Provider RuntimeClientProvider
+	Target               TechnicalRuntimeTarget
+	Provider             RuntimeClientProvider
+	SecretRefsConfigured bool
+	SecretRefs           RuntimeClientSecretRefs
 }
 
 // RuntimeClientProviderRegistry contains the configured runtime client provider
@@ -105,6 +107,40 @@ func (r RuntimeClientProviderRegistry) Select(target TechnicalRuntimeTarget) (Ru
 		return RuntimeClientProviderSelection{}, err
 	}
 	return RuntimeClientProviderSelection{Target: target, Provider: provider}, nil
+}
+
+// SelectWithSecretRefs resolves the runtime provider and enriches the selection
+// with optional Secret references for the selected provider cluster.
+//
+// This method does not read Kubernetes Secret values. It only attaches validated
+// references loaded by RuntimeClientSecretRefsRegistry.
+func (r RuntimeClientProviderRegistry) SelectWithSecretRefs(target TechnicalRuntimeTarget, refsRegistry RuntimeClientSecretRefsRegistry) (RuntimeClientProviderSelection, error) {
+	selection, err := r.Select(target)
+	if err != nil {
+		return RuntimeClientProviderSelection{}, err
+	}
+	refs, ok := refsRegistry.Resolve(selection.Provider.ClusterName)
+	if ok {
+		selection.SecretRefsConfigured = true
+		selection.SecretRefs = refs
+	}
+	return selection, nil
+}
+
+// SafeSummary returns a non-sensitive summary of the provider selection.
+func (s RuntimeClientProviderSelection) SafeSummary() map[string]any {
+	summary := map[string]any{
+		"targetEnvironment":    s.Target.TargetEnvironment,
+		"clusterName":          s.Target.ClusterName,
+		"providerClusterName":  s.Provider.ClusterName,
+		"providerDisplayName":  s.Provider.DisplayName,
+		"providerCurrent":      s.Provider.CurrentCluster,
+		"secretRefsConfigured": s.SecretRefsConfigured,
+	}
+	if s.SecretRefsConfigured {
+		summary["secretRefs"] = s.SecretRefs.SafeSummary()
+	}
+	return summary
 }
 
 func normalizeRuntimeProviderClusterName(clusterName string) string {

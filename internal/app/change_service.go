@@ -160,6 +160,15 @@ func WithRuntimeClientProviderSelectorFunc(fn RuntimeClientProviderSelectorFunc)
 	return func(s *ChangeService) { s.runtimeClientProviderSelector = fn }
 }
 
+// WithRuntimeClientSecretRefsRegistry wires the optional Secret reference
+// registry used to enrich RuntimeClientProviderSelection metadata.
+//
+// The registry contains references only. No Secret values are read by this
+// option.
+func WithRuntimeClientSecretRefsRegistry(registry RuntimeClientSecretRefsRegistry) ChangeServiceOption {
+	return func(s *ChangeService) { s.runtimeClientSecretRefsRegistry = registry }
+}
+
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
 	return func(s *ChangeService) {
 		s.gitCreateBranch = fn
@@ -197,6 +206,7 @@ type ChangeService struct {
 	kubernetesRuntimeEvidenceCollector KubernetesRuntimeEvidenceCollectorFunc
 	technicalRuntimeTargetResolver     TechnicalRuntimeTargetResolverFunc
 	runtimeClientProviderSelector      RuntimeClientProviderSelectorFunc
+	runtimeClientSecretRefsRegistry    RuntimeClientSecretRefsRegistry
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -232,10 +242,24 @@ func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Contex
 	if err != nil {
 		return RuntimeClientProviderSelection{}, err
 	}
+
+	var selection RuntimeClientProviderSelection
 	if s.runtimeClientProviderSelector == nil {
-		return RuntimeClientProviderSelection{Target: target}, nil
+		selection = RuntimeClientProviderSelection{Target: target}
+	} else {
+		selection, err = s.runtimeClientProviderSelector(ctx, target)
+		if err != nil {
+			return RuntimeClientProviderSelection{}, err
+		}
 	}
-	return s.runtimeClientProviderSelector(ctx, target)
+
+	refs, ok := s.runtimeClientSecretRefsRegistry.Resolve(selection.Provider.ClusterName)
+	if ok {
+		selection.SecretRefsConfigured = true
+		selection.SecretRefs = refs
+	}
+
+	return selection, nil
 }
 
 func (s *ChangeService) List(ctx context.Context) ([]domain.ChangeRequest, error) {
