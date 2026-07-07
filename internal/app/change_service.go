@@ -79,6 +79,13 @@ type DeploymentEvidenceCollectorFunc func(ctx context.Context, change domain.Cha
 // KubernetesRuntimeEvidenceCollectorFunc rappresenta la porta applicativa minima per raccogliere evidenze runtime Kubernetes/OpenShift.
 type KubernetesRuntimeEvidenceCollectorFunc func(ctx context.Context, change domain.ChangeRequest) (map[string]any, error)
 
+// TechnicalRuntimeTargetResolverFunc represents the application-level runtime target
+// resolution hook used before technical workflow execution.
+//
+// The resolver is intentionally optional in this phase so tests and deployments
+// without runtime target selection preserve the previous behavior.
+type TechnicalRuntimeTargetResolverFunc func(ctx context.Context, change domain.ChangeRequest) (TechnicalRuntimeTarget, error)
+
 // GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
 type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
 
@@ -112,6 +119,21 @@ func WithDeploymentEvidenceCollector(fn DeploymentEvidenceCollectorFunc) ChangeS
 
 func WithKubernetesRuntimeEvidenceCollector(fn KubernetesRuntimeEvidenceCollectorFunc) ChangeServiceOption {
 	return func(s *ChangeService) { s.kubernetesRuntimeEvidenceCollector = fn }
+}
+
+// WithTechnicalRuntimeTargetResolver wires the technical runtime target resolver used
+// by technical workflows before calling concrete runtime adapters.
+func WithTechnicalRuntimeTargetResolver(resolver TechnicalRuntimeTargetResolver) ChangeServiceOption {
+	return func(s *ChangeService) {
+		s.technicalRuntimeTargetResolver = resolver.ResolveChange
+	}
+}
+
+// WithTechnicalRuntimeTargetResolverFunc wires a custom technical runtime target
+// resolver. Tests can use this option to verify workflow behavior without
+// depending on runtime catalog files.
+func WithTechnicalRuntimeTargetResolverFunc(fn TechnicalRuntimeTargetResolverFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.technicalRuntimeTargetResolver = fn }
 }
 
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
@@ -149,6 +171,7 @@ type ChangeService struct {
 	evidenceStore                      EvidenceStore
 	deploymentEvidenceCollector        DeploymentEvidenceCollectorFunc
 	kubernetesRuntimeEvidenceCollector KubernetesRuntimeEvidenceCollectorFunc
+	technicalRuntimeTargetResolver     TechnicalRuntimeTargetResolverFunc
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -170,6 +193,13 @@ func NewChangeService(store ChangeStore, opts ...ChangeServiceOption) *ChangeSer
 		service.gitDefaultBranch = "main"
 	}
 	return service
+}
+
+func (s *ChangeService) resolveTechnicalRuntimeTarget(ctx context.Context, change domain.ChangeRequest) (TechnicalRuntimeTarget, error) {
+	if s.technicalRuntimeTargetResolver == nil {
+		return TechnicalRuntimeTarget{}, nil
+	}
+	return s.technicalRuntimeTargetResolver(ctx, change)
 }
 
 func (s *ChangeService) List(ctx context.Context) ([]domain.ChangeRequest, error) {
@@ -268,6 +298,10 @@ func (s *ChangeService) Validate(ctx context.Context, idOrNumber string) (map[st
 	if err != nil {
 		return nil, err
 	}
+	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
+		return nil, err
+	}
+
 	pipelineRunName, namespace, uid, err := s.tektonRunPipeline(ctx, change)
 	if err != nil {
 		return nil, fmt.Errorf("run tekton validation pipeline for %q: %w", change.ChangeNumber, err)
@@ -293,6 +327,10 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
+	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
+		return nil, err
+	}
+
 	validation, err := s.tektonCheckValidation(ctx, change)
 	if err != nil {
 		return nil, fmt.Errorf("check tekton validation pipeline for %q: %w", change.ChangeNumber, err)
@@ -409,6 +447,9 @@ func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) 
 
 	change, err := s.store.Get(ctx, idOrNumber)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
 		return nil, err
 	}
 
@@ -652,6 +693,9 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 
 	change, err := s.store.Get(ctx, idOrNumber)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
 		return nil, err
 	}
 

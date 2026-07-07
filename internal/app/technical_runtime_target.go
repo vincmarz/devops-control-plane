@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/vincmarz/devops-control-plane/internal/domain"
 )
 
 // TechnicalRuntimeTarget describes the resolved runtime target for technical
@@ -47,6 +50,11 @@ func NewTechnicalRuntimeTargetResolver(environmentClusterResolver EnvironmentClu
 		environmentClusterResolver: environmentClusterResolver,
 		defaultTektonPipelineName:  strings.TrimSpace(defaultTektonPipelineName),
 	}
+}
+
+// ResolveChange resolves the technical runtime target for a ChangeRequest.
+func (r TechnicalRuntimeTargetResolver) ResolveChange(ctx context.Context, change domain.ChangeRequest) (TechnicalRuntimeTarget, error) {
+	return r.Resolve(change.TargetEnvironment)
 }
 
 // Resolve resolves and validates the technical runtime target for an enabled

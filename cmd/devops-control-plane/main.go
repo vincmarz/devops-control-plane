@@ -40,7 +40,8 @@ func main() {
 
 	repositories := database.NewRepositorySet(db)
 
-	changeServiceOptions := []app.ChangeServiceOption{app.WithEvidenceStore(repositories.Evidences)}
+	changeServiceOptions := []app.ChangeServiceOption{
+		app.WithTechnicalRuntimeTargetResolver(app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName)), app.WithEvidenceStore(repositories.Evidences)}
 	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" || cfg.GitLabProjectID > 0 {
 		gitLabClient, err := gitlabadapter.New(gitlabadapter.Config{
 			BaseURL:        cfg.GitLabBaseURL,
