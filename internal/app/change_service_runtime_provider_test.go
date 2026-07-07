@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestChangeServiceTechnicalWorkflowsResolveRuntimeTarget(t *testing.T) {
+func TestChangeServiceTechnicalWorkflowsResolveRuntimeProviderSelection(t *testing.T) {
 	content, err := os.ReadFile("change_service.go")
 	if err != nil {
 		t.Fatalf("failed to read change_service.go: %v", err)
@@ -25,12 +25,12 @@ func TestChangeServiceTechnicalWorkflowsResolveRuntimeTarget(t *testing.T) {
 			block = text[start : start+1+end]
 		}
 		if !strings.Contains(block, "resolveRuntimeClientProviderSelection(ctx, change)") {
-			t.Fatalf("method %s should resolve RuntimeClientProviderSelection before technical execution", method)
+			t.Fatalf("method %s should resolve runtime client provider selection before technical execution", method)
 		}
 	}
 }
 
-func TestChangeServiceExposesTechnicalRuntimeTargetResolverOption(t *testing.T) {
+func TestChangeServiceExposesRuntimeClientProviderSelectionOptions(t *testing.T) {
 	content, err := os.ReadFile("change_service.go")
 	if err != nil {
 		t.Fatalf("failed to read change_service.go: %v", err)
@@ -38,10 +38,11 @@ func TestChangeServiceExposesTechnicalRuntimeTargetResolverOption(t *testing.T) 
 	text := string(content)
 
 	checks := []string{
-		"type TechnicalRuntimeTargetResolverFunc",
-		"func WithTechnicalRuntimeTargetResolver(",
-		"func WithTechnicalRuntimeTargetResolverFunc(",
-		"technicalRuntimeTargetResolver",
+		"type RuntimeClientProviderSelectorFunc",
+		"func WithRuntimeClientProviderRegistry(",
+		"func WithRuntimeClientProviderSelectorFunc(",
+		"runtimeClientProviderSelector",
+		"resolveRuntimeClientProviderSelection",
 	}
 	for _, check := range checks {
 		if !strings.Contains(text, check) {

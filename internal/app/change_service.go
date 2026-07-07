@@ -86,6 +86,13 @@ type KubernetesRuntimeEvidenceCollectorFunc func(ctx context.Context, change dom
 // without runtime target selection preserve the previous behavior.
 type TechnicalRuntimeTargetResolverFunc func(ctx context.Context, change domain.ChangeRequest) (TechnicalRuntimeTarget, error)
 
+// RuntimeClientProviderSelectorFunc represents the application-level provider
+// selection hook used after resolving a TechnicalRuntimeTarget.
+//
+// The selector remains metadata-only in this phase. It prepares the workflow for
+// future concrete Kubernetes, Tekton and Argo CD client selection.
+type RuntimeClientProviderSelectorFunc func(ctx context.Context, target TechnicalRuntimeTarget) (RuntimeClientProviderSelection, error)
+
 // GitCreateOrUpdateFileFunc rappresenta la porta applicativa minima per creare o aggiornare un file Git.
 type GitCreateOrUpdateFileFunc func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error
 
@@ -136,6 +143,23 @@ func WithTechnicalRuntimeTargetResolverFunc(fn TechnicalRuntimeTargetResolverFun
 	return func(s *ChangeService) { s.technicalRuntimeTargetResolver = fn }
 }
 
+// WithRuntimeClientProviderRegistry wires the runtime provider registry used to
+// select the provider associated with a resolved TechnicalRuntimeTarget.
+func WithRuntimeClientProviderRegistry(registry RuntimeClientProviderRegistry) ChangeServiceOption {
+	return func(s *ChangeService) {
+		s.runtimeClientProviderSelector = func(ctx context.Context, target TechnicalRuntimeTarget) (RuntimeClientProviderSelection, error) {
+			return registry.Select(target)
+		}
+	}
+}
+
+// WithRuntimeClientProviderSelectorFunc wires a custom provider selection hook.
+// Tests can use this option to validate workflow preparation without relying on
+// runtime configuration files.
+func WithRuntimeClientProviderSelectorFunc(fn RuntimeClientProviderSelectorFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.runtimeClientProviderSelector = fn }
+}
+
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
 	return func(s *ChangeService) {
 		s.gitCreateBranch = fn
@@ -172,6 +196,7 @@ type ChangeService struct {
 	deploymentEvidenceCollector        DeploymentEvidenceCollectorFunc
 	kubernetesRuntimeEvidenceCollector KubernetesRuntimeEvidenceCollectorFunc
 	technicalRuntimeTargetResolver     TechnicalRuntimeTargetResolverFunc
+	runtimeClientProviderSelector      RuntimeClientProviderSelectorFunc
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -200,6 +225,17 @@ func (s *ChangeService) resolveTechnicalRuntimeTarget(ctx context.Context, chang
 		return TechnicalRuntimeTarget{}, nil
 	}
 	return s.technicalRuntimeTargetResolver(ctx, change)
+}
+
+func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Context, change domain.ChangeRequest) (RuntimeClientProviderSelection, error) {
+	target, err := s.resolveTechnicalRuntimeTarget(ctx, change)
+	if err != nil {
+		return RuntimeClientProviderSelection{}, err
+	}
+	if s.runtimeClientProviderSelector == nil {
+		return RuntimeClientProviderSelection{Target: target}, nil
+	}
+	return s.runtimeClientProviderSelector(ctx, target)
 }
 
 func (s *ChangeService) List(ctx context.Context) ([]domain.ChangeRequest, error) {
@@ -298,7 +334,7 @@ func (s *ChangeService) Validate(ctx context.Context, idOrNumber string) (map[st
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
+	if _, err := s.resolveRuntimeClientProviderSelection(ctx, change); err != nil {
 		return nil, err
 	}
 
@@ -327,7 +363,7 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
+	if _, err := s.resolveRuntimeClientProviderSelection(ctx, change); err != nil {
 		return nil, err
 	}
 
@@ -449,7 +485,7 @@ func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
+	if _, err := s.resolveRuntimeClientProviderSelection(ctx, change); err != nil {
 		return nil, err
 	}
 
@@ -695,7 +731,7 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.resolveTechnicalRuntimeTarget(ctx, change); err != nil {
+	if _, err := s.resolveRuntimeClientProviderSelection(ctx, change); err != nil {
 		return nil, err
 	}
 
