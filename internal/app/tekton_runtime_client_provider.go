@@ -15,12 +15,16 @@ import (
 type TektonRuntimePipelineRunRequest struct {
 	Namespace          string
 	PipelineName       string
+	GenerateName       string
 	ChangeNumber       string
 	ApplicationName    string
 	GitURL             string
 	GitRevision        string
 	ValidationPath     string
 	ServiceAccountName string
+	Image              string
+	WorkspacePVC       string
+	DockerConfigSecret string
 }
 
 // TektonRuntimePipelineRunRef is the application-layer reference returned after

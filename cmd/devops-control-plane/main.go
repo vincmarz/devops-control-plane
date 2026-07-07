@@ -117,9 +117,21 @@ func main() {
 				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
 			}
 
-			ref, err := tektonClient.CreatePipelineRun(ctx, tektonadapter.CreatePipelineRunRequest{
-				Namespace:          cfg.TektonNamespace,
-				PipelineName:       cfg.TektonPipelineName,
+			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)
+			if err != nil {
+				return "", "", "", err
+			}
+			selection, err := app.DefaultRuntimeClientProviderRegistry().Select(target)
+			if err != nil {
+				return "", "", "", err
+			}
+			tektonRuntimeClient, err := app.DefaultTektonRuntimeClientProviderRegistry(currentTektonRuntimeClient{client: tektonClient}).Resolve(ctx, selection)
+			if err != nil {
+				return "", "", "", err
+			}
+			ref, err := tektonRuntimeClient.CreatePipelineRun(ctx, app.TektonRuntimePipelineRunRequest{
+				Namespace:          target.TektonNamespace,
+				PipelineName:       target.TektonPipelineName,
 				ServiceAccountName: cfg.TektonServiceAccount,
 				GenerateName:       "devops-cp-validate-" + strings.ToLower(change.ChangeNumber) + "-",
 				ChangeNumber:       change.ChangeNumber,
