@@ -104,6 +104,7 @@ func main() {
 		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (map[string]any, error) {
 			return kubernetesRuntimeClient.CollectRuntimeEvidence(ctx, cfg.KubernetesNamespace, change.ApplicationName)
 		}))
+		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeClientProviderRegistry(app.DefaultKubernetesRuntimeClientProviderRegistry(kubernetesRuntimeClient)))
 
 		tektonClient, err := tektonadapter.New(tektonadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS, CAFile: cfg.KubernetesCAFile})
 		if err != nil {

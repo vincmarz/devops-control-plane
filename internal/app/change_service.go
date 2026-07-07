@@ -130,6 +130,13 @@ func WithKubernetesRuntimeEvidenceCollector(fn KubernetesRuntimeEvidenceCollecto
 
 // WithTechnicalRuntimeTargetResolver wires the technical runtime target resolver used
 // by technical workflows before calling concrete runtime adapters.
+
+// WithKubernetesRuntimeClientProviderRegistry wires the Kubernetes runtime
+// client provider registry used by collect-evidence preparation.
+func WithKubernetesRuntimeClientProviderRegistry(registry KubernetesRuntimeClientProviderRegistry) ChangeServiceOption {
+	return func(s *ChangeService) { s.kubernetesRuntimeClientProviderRegistry = registry }
+}
+
 func WithTechnicalRuntimeTargetResolver(resolver TechnicalRuntimeTargetResolver) ChangeServiceOption {
 	return func(s *ChangeService) {
 		s.technicalRuntimeTargetResolver = resolver.ResolveChange
@@ -198,15 +205,16 @@ func WithGitMergeRequest(fn GitMergeRequestFunc) ChangeServiceOption {
 type ChangeService struct {
 	store ChangeStore
 
-	tektonRunPipeline                  TektonRunPipelineFunc
-	tektonCheckValidation              TektonCheckValidationFunc
-	argocdCheckDeployment              ArgoCDCheckDeploymentFunc
-	evidenceStore                      EvidenceStore
-	deploymentEvidenceCollector        DeploymentEvidenceCollectorFunc
-	kubernetesRuntimeEvidenceCollector KubernetesRuntimeEvidenceCollectorFunc
-	technicalRuntimeTargetResolver     TechnicalRuntimeTargetResolverFunc
-	runtimeClientProviderSelector      RuntimeClientProviderSelectorFunc
-	runtimeClientSecretRefsRegistry    RuntimeClientSecretRefsRegistry
+	tektonRunPipeline                       TektonRunPipelineFunc
+	tektonCheckValidation                   TektonCheckValidationFunc
+	argocdCheckDeployment                   ArgoCDCheckDeploymentFunc
+	evidenceStore                           EvidenceStore
+	deploymentEvidenceCollector             DeploymentEvidenceCollectorFunc
+	kubernetesRuntimeEvidenceCollector      KubernetesRuntimeEvidenceCollectorFunc
+	kubernetesRuntimeClientProviderRegistry KubernetesRuntimeClientProviderRegistry
+	technicalRuntimeTargetResolver          TechnicalRuntimeTargetResolverFunc
+	runtimeClientProviderSelector           RuntimeClientProviderSelectorFunc
+	runtimeClientSecretRefsRegistry         RuntimeClientSecretRefsRegistry
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -260,6 +268,25 @@ func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Contex
 	}
 
 	return selection, nil
+}
+
+func (s *ChangeService) collectKubernetesRuntimeEvidence(ctx context.Context, change domain.ChangeRequest, selection RuntimeClientProviderSelection) (map[string]any, error) {
+	if s.kubernetesRuntimeClientProviderRegistry.providers != nil {
+		client, err := s.kubernetesRuntimeClientProviderRegistry.Resolve(ctx, selection)
+		if err != nil {
+			return nil, err
+		}
+		namespace := strings.TrimSpace(selection.Target.KubernetesNamespace)
+		if namespace == "" {
+			return nil, fmt.Errorf("technical runtime target for change %s does not define kubernetesNamespace", change.ChangeNumber)
+		}
+		return client.CollectRuntimeEvidence(ctx, namespace, change.ApplicationName)
+	}
+
+	if s.kubernetesRuntimeEvidenceCollector == nil {
+		return nil, nil
+	}
+	return s.kubernetesRuntimeEvidenceCollector(ctx, change)
 }
 
 func (s *ChangeService) List(ctx context.Context) ([]domain.ChangeRequest, error) {
@@ -755,7 +782,8 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.resolveRuntimeClientProviderSelection(ctx, change); err != nil {
+	providerSelection, err := s.resolveRuntimeClientProviderSelection(ctx, change)
+	if err != nil {
 		return nil, err
 	}
 
@@ -775,7 +803,7 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 	evidence.Sanitized = true
 
 	if s.kubernetesRuntimeEvidenceCollector != nil {
-		runtimeEvidence, err := s.kubernetesRuntimeEvidenceCollector(ctx, change)
+		runtimeEvidence, err := s.collectKubernetesRuntimeEvidence(ctx, change, providerSelection)
 		if err != nil {
 			return nil, fmt.Errorf("collect kubernetes runtime evidence for %q: %w", change.ChangeNumber, err)
 		}
