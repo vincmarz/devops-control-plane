@@ -146,16 +146,28 @@ func main() {
 		}))
 
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonCheckValidation(func(ctx context.Context, change domain.ChangeRequest) (app.TektonValidationResult, error) {
-			status, err := tektonClient.FindLatestPipelineRunByChange(ctx, cfg.TektonNamespace, change.ChangeNumber)
+			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)
+			if err != nil {
+				return app.TektonValidationResult{}, err
+			}
+			selection, err := app.DefaultRuntimeClientProviderRegistry().Select(target)
+			if err != nil {
+				return app.TektonValidationResult{}, err
+			}
+			tektonRuntimeClient, err := app.DefaultTektonRuntimeClientProviderRegistry(currentTektonRuntimeClient{client: tektonClient}).Resolve(ctx, selection)
+			if err != nil {
+				return app.TektonValidationResult{}, err
+			}
+			status, err := tektonRuntimeClient.FindLatestPipelineRunByChange(ctx, target.TektonNamespace, change.ChangeNumber)
 			revision := cfg.TektonGitRevision
 			if cfg.TektonGitRevisionTemplate != "" {
 				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
 			}
-			result := app.TektonValidationResult{PipelineRunName: status.Name, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: cfg.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: cfg.TektonValidationPath}
+			result := app.TektonValidationResult{PipelineRunName: status.PipelineRunName, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: target.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: cfg.TektonValidationPath}
 			if err != nil {
 				return result, err
 			}
-			taskRuns, taskRunErr := tektonClient.ListTaskRunsByPipelineRun(ctx, cfg.TektonNamespace, status.Name)
+			taskRuns, taskRunErr := tektonRuntimeClient.ListTaskRunsByPipelineRun(ctx, target.TektonNamespace, status.PipelineRunName)
 			if taskRunErr == nil {
 				for _, taskRun := range taskRuns {
 					result.TaskRuns = append(result.TaskRuns, app.TektonTaskRunResult{Name: taskRun.Name, Namespace: taskRun.Namespace, PipelineTaskName: taskRun.PipelineTaskName, TaskName: taskRun.TaskName, Status: taskRun.Status, Reason: taskRun.Reason, Message: taskRun.Message, StartTime: taskRun.StartTime, CompletionTime: taskRun.CompletionTime})

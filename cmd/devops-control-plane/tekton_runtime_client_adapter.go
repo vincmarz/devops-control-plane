@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/vincmarz/devops-control-plane/internal/adapters/tekton"
@@ -36,9 +37,42 @@ func (c currentTektonRuntimeClient) CreatePipelineRun(ctx context.Context, reque
 }
 
 func (c currentTektonRuntimeClient) FindLatestPipelineRunByChange(ctx context.Context, namespace string, changeNumber string) (app.TektonValidationResult, error) {
-	return app.TektonValidationResult{}, errors.New("current Tekton runtime client check-validation provider is not wired yet")
+	if c.client == nil {
+		return app.TektonValidationResult{}, errors.New("current Tekton runtime client is not configured")
+	}
+	status, err := c.client.FindLatestPipelineRunByChange(ctx, namespace, changeNumber)
+	if err != nil {
+		return app.TektonValidationResult{}, err
+	}
+	var result app.TektonValidationResult
+	content, err := json.Marshal(status)
+	if err != nil {
+		return app.TektonValidationResult{}, err
+	}
+	if err := json.Unmarshal(content, &result); err != nil {
+		return app.TektonValidationResult{}, err
+	}
+	if result.PipelineRunName == "" {
+		result.PipelineRunName = status.Name
+	}
+	return result, nil
 }
 
 func (c currentTektonRuntimeClient) ListTaskRunsByPipelineRun(ctx context.Context, namespace string, pipelineRunName string) ([]app.TektonTaskRunResult, error) {
-	return nil, errors.New("current Tekton runtime client taskrun provider is not wired yet")
+	if c.client == nil {
+		return nil, errors.New("current Tekton runtime client is not configured")
+	}
+	taskRuns, err := c.client.ListTaskRunsByPipelineRun(ctx, namespace, pipelineRunName)
+	if err != nil {
+		return nil, err
+	}
+	var result []app.TektonTaskRunResult
+	content, err := json.Marshal(taskRuns)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(content, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
