@@ -189,8 +189,19 @@ func main() {
 		}
 		applicationService = app.NewApplicationService(argoCDClient)
 		changeServiceOptions = append(changeServiceOptions, app.WithArgoCDCheckDeployment(func(ctx context.Context, change domain.ChangeRequest) (app.ArgoCDDeploymentResult, error) {
-			argoApp, err := argoCDClient.GetApplication(ctx, change.ApplicationName)
-			return app.ArgoCDDeploymentResult{ApplicationName: argoApp.Name, Project: argoApp.Project, SyncStatus: argoApp.SyncStatus, HealthStatus: argoApp.HealthStatus, Revision: argoApp.CurrentRevision}, err
+			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)
+			if err != nil {
+				return app.ArgoCDDeploymentResult{}, err
+			}
+			selection, err := app.DefaultRuntimeClientProviderRegistry().Select(target)
+			if err != nil {
+				return app.ArgoCDDeploymentResult{}, err
+			}
+			argoCDRuntimeClient, err := app.DefaultArgoCDRuntimeClientProviderRegistry(currentArgoCDRuntimeClient{client: argoCDClient}).Resolve(ctx, selection)
+			if err != nil {
+				return app.ArgoCDDeploymentResult{}, err
+			}
+			return argoCDRuntimeClient.CheckDeployment(ctx, target.ArgoCDApplicationName)
 		}))
 		changeServiceOptions = append(changeServiceOptions, app.WithDeploymentEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error) {
 			argoApp, err := argoCDClient.GetApplication(ctx, change.ApplicationName)
