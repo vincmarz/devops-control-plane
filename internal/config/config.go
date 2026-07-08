@@ -52,6 +52,12 @@ type Config struct {
 	KubernetesCAFile      string
 	KubernetesNamespace   string
 	EvidenceBasePath      string
+
+	RuntimeSecretLoaderEnabled            bool
+	RuntimeClientFactoriesEnabled         bool
+	RuntimeClientFactoryKubernetesEnabled bool
+	RuntimeClientFactoryTektonEnabled     bool
+	RuntimeClientFactoryArgoCDEnabled     bool
 }
 
 func Load() Config {
@@ -99,6 +105,12 @@ func Load() Config {
 		KubernetesCAFile:      kubernetesCAFile,
 		KubernetesNamespace:   getEnv("KUBERNETES_NAMESPACE", "devops-ci-demo"),
 		EvidenceBasePath:      getEnv("EVIDENCE_BASE_PATH", ""),
+
+		RuntimeSecretLoaderEnabled:            getBoolEnv("DCP_RUNTIME_SECRET_LOADER_ENABLED", false),
+		RuntimeClientFactoriesEnabled:         getBoolEnv("DCP_RUNTIME_CLIENT_FACTORIES_ENABLED", false),
+		RuntimeClientFactoryKubernetesEnabled: getBoolEnv("DCP_RUNTIME_CLIENT_FACTORY_KUBERNETES_ENABLED", false),
+		RuntimeClientFactoryTektonEnabled:     getBoolEnv("DCP_RUNTIME_CLIENT_FACTORY_TEKTON_ENABLED", false),
+		RuntimeClientFactoryArgoCDEnabled:     getBoolEnv("DCP_RUNTIME_CLIENT_FACTORY_ARGOCD_ENABLED", false),
 	}
 }
 
