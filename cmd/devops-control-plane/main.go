@@ -95,6 +95,8 @@ func main() {
 		logger.Info("gitlab integration disabled; create-branch endpoint will require GitLab configuration")
 	}
 
+	runtimeSecretValueLoader := app.EmptyRuntimeSecretValueLoader{}
+
 	if cfg.KubernetesAPIURL != "" || cfg.KubernetesToken != "" {
 		kubernetesRuntimeClient, err := kubernetesadapter.New(kubernetesadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS, CAFile: cfg.KubernetesCAFile})
 		if err != nil {
@@ -104,13 +106,24 @@ func main() {
 		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (map[string]any, error) {
 			return kubernetesRuntimeClient.CollectRuntimeEvidence(ctx, cfg.KubernetesNamespace, change.ApplicationName)
 		}))
-		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeClientProviderRegistry(app.DefaultKubernetesRuntimeClientProviderRegistry(kubernetesRuntimeClient)))
+		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeClientProviderRegistry(
+			app.NewKubernetesRuntimeClientProviderFactoryAwareRegistry(
+				app.DefaultKubernetesRuntimeClientProviderRegistry(kubernetesRuntimeClient),
+				nil,
+				runtimeSecretValueLoader,
+			),
+		))
 
 		tektonClient, err := tektonadapter.New(tektonadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS, CAFile: cfg.KubernetesCAFile})
 		if err != nil {
 			logger.Error("tekton client initialization failed", "error", err)
 			os.Exit(1)
 		}
+		tektonRuntimeClientProviderRegistry := app.NewTektonRuntimeClientProviderFactoryAwareRegistry(
+			app.DefaultTektonRuntimeClientProviderRegistry(currentTektonRuntimeClient{client: tektonClient}),
+			nil,
+			runtimeSecretValueLoader,
+		)
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonRunPipeline(func(ctx context.Context, change domain.ChangeRequest) (string, string, string, error) {
 			revision := cfg.TektonGitRevision
 			if cfg.TektonGitRevisionTemplate != "" {
@@ -125,7 +138,7 @@ func main() {
 			if err != nil {
 				return "", "", "", err
 			}
-			tektonRuntimeClient, err := app.DefaultTektonRuntimeClientProviderRegistry(currentTektonRuntimeClient{client: tektonClient}).Resolve(ctx, selection)
+			tektonRuntimeClient, err := tektonRuntimeClientProviderRegistry.Resolve(ctx, selection)
 			if err != nil {
 				return "", "", "", err
 			}
@@ -154,7 +167,7 @@ func main() {
 			if err != nil {
 				return app.TektonValidationResult{}, err
 			}
-			tektonRuntimeClient, err := app.DefaultTektonRuntimeClientProviderRegistry(currentTektonRuntimeClient{client: tektonClient}).Resolve(ctx, selection)
+			tektonRuntimeClient, err := tektonRuntimeClientProviderRegistry.Resolve(ctx, selection)
 			if err != nil {
 				return app.TektonValidationResult{}, err
 			}
@@ -188,6 +201,11 @@ func main() {
 			os.Exit(1)
 		}
 		applicationService = app.NewApplicationService(argoCDClient)
+		argoCDRuntimeClientProviderRegistry := app.NewArgoCDRuntimeClientProviderFactoryAwareRegistry(
+			app.DefaultArgoCDRuntimeClientProviderRegistry(currentArgoCDRuntimeClient{client: argoCDClient}),
+			nil,
+			runtimeSecretValueLoader,
+		)
 		changeServiceOptions = append(changeServiceOptions, app.WithArgoCDCheckDeployment(func(ctx context.Context, change domain.ChangeRequest) (app.ArgoCDDeploymentResult, error) {
 			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)
 			if err != nil {
@@ -197,7 +215,7 @@ func main() {
 			if err != nil {
 				return app.ArgoCDDeploymentResult{}, err
 			}
-			argoCDRuntimeClient, err := app.DefaultArgoCDRuntimeClientProviderRegistry(currentArgoCDRuntimeClient{client: argoCDClient}).Resolve(ctx, selection)
+			argoCDRuntimeClient, err := argoCDRuntimeClientProviderRegistry.Resolve(ctx, selection)
 			if err != nil {
 				return app.ArgoCDDeploymentResult{}, err
 			}

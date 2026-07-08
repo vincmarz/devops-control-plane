@@ -16,7 +16,7 @@ func TestMainWiresArgoCDRuntimeProviderIntoCheckDeployment(t *testing.T) {
 	checks := []string{
 		"DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)",
 		"DefaultRuntimeClientProviderRegistry().Select(target)",
-		"DefaultArgoCDRuntimeClientProviderRegistry(currentArgoCDRuntimeClient{client: argoCDClient}).Resolve(ctx, selection)",
+		"argoCDRuntimeClientProviderRegistry.Resolve(ctx, selection)",
 		"argoCDRuntimeClient.CheckDeployment(ctx, target.ArgoCDApplicationName)",
 	}
 	for _, check := range checks {

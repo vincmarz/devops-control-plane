@@ -16,7 +16,7 @@ func TestMainWiresTektonRuntimeProviderIntoCheckValidation(t *testing.T) {
 	checks := []string{
 		"DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)",
 		"DefaultRuntimeClientProviderRegistry().Select(target)",
-		"DefaultTektonRuntimeClientProviderRegistry(currentTektonRuntimeClient{client: tektonClient}).Resolve(ctx, selection)",
+		"tektonRuntimeClientProviderRegistry.Resolve(ctx, selection)",
 		"FindLatestPipelineRunByChange(ctx, target.TektonNamespace, change.ChangeNumber)",
 		"ListTaskRunsByPipelineRun(ctx, target.TektonNamespace, status.PipelineRunName)",
 		"PipelineName: target.TektonPipelineName",

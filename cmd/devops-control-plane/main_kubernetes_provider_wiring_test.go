@@ -13,7 +13,7 @@ func TestMainWiresKubernetesRuntimeClientProviderRegistry(t *testing.T) {
 	}
 	text := string(content)
 
-	check := "app.WithKubernetesRuntimeClientProviderRegistry(app.DefaultKubernetesRuntimeClientProviderRegistry(kubernetesRuntimeClient))"
+	check := "app.NewKubernetesRuntimeClientProviderFactoryAwareRegistry("
 	if !strings.Contains(text, check) {
 		t.Fatalf("main.go should contain %q", check)
 	}

@@ -131,9 +131,17 @@ func WithKubernetesRuntimeEvidenceCollector(fn KubernetesRuntimeEvidenceCollecto
 // WithTechnicalRuntimeTargetResolver wires the technical runtime target resolver used
 // by technical workflows before calling concrete runtime adapters.
 
+// KubernetesRuntimeClientProviderResolver is the minimal runtime client
+// resolution contract used by ChangeService. It is satisfied by both the
+// default Kubernetes runtime client provider registry and the factory-aware
+// registry wrapper prepared for real multi-cluster clients.
+type KubernetesRuntimeClientProviderResolver interface {
+	Resolve(context.Context, RuntimeClientProviderSelection) (KubernetesRuntimeEvidenceClient, error)
+}
+
 // WithKubernetesRuntimeClientProviderRegistry wires the Kubernetes runtime
 // client provider registry used by collect-evidence preparation.
-func WithKubernetesRuntimeClientProviderRegistry(registry KubernetesRuntimeClientProviderRegistry) ChangeServiceOption {
+func WithKubernetesRuntimeClientProviderRegistry(registry KubernetesRuntimeClientProviderResolver) ChangeServiceOption {
 	return func(s *ChangeService) { s.kubernetesRuntimeClientProviderRegistry = registry }
 }
 
@@ -211,7 +219,7 @@ type ChangeService struct {
 	evidenceStore                           EvidenceStore
 	deploymentEvidenceCollector             DeploymentEvidenceCollectorFunc
 	kubernetesRuntimeEvidenceCollector      KubernetesRuntimeEvidenceCollectorFunc
-	kubernetesRuntimeClientProviderRegistry KubernetesRuntimeClientProviderRegistry
+	kubernetesRuntimeClientProviderRegistry KubernetesRuntimeClientProviderResolver
 	technicalRuntimeTargetResolver          TechnicalRuntimeTargetResolverFunc
 	runtimeClientProviderSelector           RuntimeClientProviderSelectorFunc
 	runtimeClientSecretRefsRegistry         RuntimeClientSecretRefsRegistry
@@ -271,7 +279,7 @@ func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Contex
 }
 
 func (s *ChangeService) collectKubernetesRuntimeEvidence(ctx context.Context, change domain.ChangeRequest, selection RuntimeClientProviderSelection) (map[string]any, error) {
-	if s.kubernetesRuntimeClientProviderRegistry.providers != nil {
+	if s.kubernetesRuntimeClientProviderRegistry != nil {
 		client, err := s.kubernetesRuntimeClientProviderRegistry.Resolve(ctx, selection)
 		if err != nil {
 			return nil, err
