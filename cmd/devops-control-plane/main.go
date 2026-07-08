@@ -97,6 +97,22 @@ func main() {
 
 	var runtimeSecretValueLoader app.RuntimeSecretValueLoader = app.EmptyRuntimeSecretValueLoader{}
 
+	kubernetesRuntimeClientFactory, err := buildRuntimeKubernetesClientFactory(cfg)
+	if err != nil {
+		logger.Error("runtime kubernetes client factory initialization failed", "error", err)
+		os.Exit(1)
+	}
+	tektonRuntimeClientFactory, err := buildRuntimeTektonClientFactory(cfg)
+	if err != nil {
+		logger.Error("runtime tekton client factory initialization failed", "error", err)
+		os.Exit(1)
+	}
+	argoCDRuntimeClientFactory, err := buildRuntimeArgoCDClientFactory(cfg)
+	if err != nil {
+		logger.Error("runtime argocd client factory initialization failed", "error", err)
+		os.Exit(1)
+	}
+
 	if cfg.KubernetesAPIURL != "" || cfg.KubernetesToken != "" {
 		kubernetesRuntimeClient, err := kubernetesadapter.New(kubernetesadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS, CAFile: cfg.KubernetesCAFile})
 		if err != nil {
@@ -118,7 +134,7 @@ func main() {
 		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeClientProviderRegistry(
 			app.NewKubernetesRuntimeClientProviderFactoryAwareRegistry(
 				app.DefaultKubernetesRuntimeClientProviderRegistry(kubernetesRuntimeClient),
-				nil,
+				kubernetesRuntimeClientFactory,
 				runtimeSecretValueLoader,
 			),
 		))
@@ -130,7 +146,7 @@ func main() {
 		}
 		tektonRuntimeClientProviderRegistry := app.NewTektonRuntimeClientProviderFactoryAwareRegistry(
 			app.DefaultTektonRuntimeClientProviderRegistry(currentTektonRuntimeClient{client: tektonClient}),
-			nil,
+			tektonRuntimeClientFactory,
 			runtimeSecretValueLoader,
 		)
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonRunPipeline(func(ctx context.Context, change domain.ChangeRequest) (string, string, string, error) {
@@ -212,7 +228,7 @@ func main() {
 		applicationService = app.NewApplicationService(argoCDClient)
 		argoCDRuntimeClientProviderRegistry := app.NewArgoCDRuntimeClientProviderFactoryAwareRegistry(
 			app.DefaultArgoCDRuntimeClientProviderRegistry(currentArgoCDRuntimeClient{client: argoCDClient}),
-			nil,
+			argoCDRuntimeClientFactory,
 			runtimeSecretValueLoader,
 		)
 		changeServiceOptions = append(changeServiceOptions, app.WithArgoCDCheckDeployment(func(ctx context.Context, change domain.ChangeRequest) (app.ArgoCDDeploymentResult, error) {
