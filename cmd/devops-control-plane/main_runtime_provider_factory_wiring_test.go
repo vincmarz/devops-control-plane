@@ -12,7 +12,7 @@ func TestMainWiresFactoryAwareRuntimeProviderRegistries(t *testing.T) {
 		t.Fatalf("ReadFile main.go: %v", err)
 	}
 	checks := []string{
-		"runtimeSecretValueLoader := app.EmptyRuntimeSecretValueLoader{}",
+		"var runtimeSecretValueLoader app.RuntimeSecretValueLoader = app.EmptyRuntimeSecretValueLoader{}",
 		"app.NewKubernetesRuntimeClientProviderFactoryAwareRegistry(",
 		"app.NewTektonRuntimeClientProviderFactoryAwareRegistry(",
 		"app.NewArgoCDRuntimeClientProviderFactoryAwareRegistry(",

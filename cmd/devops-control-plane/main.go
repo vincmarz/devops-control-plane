@@ -95,12 +95,21 @@ func main() {
 		logger.Info("gitlab integration disabled; create-branch endpoint will require GitLab configuration")
 	}
 
-	runtimeSecretValueLoader := app.EmptyRuntimeSecretValueLoader{}
+	var runtimeSecretValueLoader app.RuntimeSecretValueLoader = app.EmptyRuntimeSecretValueLoader{}
 
 	if cfg.KubernetesAPIURL != "" || cfg.KubernetesToken != "" {
 		kubernetesRuntimeClient, err := kubernetesadapter.New(kubernetesadapter.Config{APIURL: cfg.KubernetesAPIURL, Token: cfg.KubernetesToken, TimeoutSeconds: cfg.TektonTimeoutSeconds, InsecureTLS: cfg.KubernetesInsecureTLS, CAFile: cfg.KubernetesCAFile})
 		if err != nil {
 			logger.Error("kubernetes client initialization failed", "error", err)
+			os.Exit(1)
+		}
+		runtimeSecretValueLoader, err = buildRuntimeSecretValueLoader(
+			cfg,
+			app.KubernetesSecretValueLoaderConfig{},
+			kubernetesRuntimeClient,
+		)
+		if err != nil {
+			logger.Error("runtime secret value loader initialization failed", "error", err)
 			os.Exit(1)
 		}
 		changeServiceOptions = append(changeServiceOptions, app.WithKubernetesRuntimeEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (map[string]any, error) {
