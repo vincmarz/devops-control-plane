@@ -1189,3 +1189,495 @@ The future real-cluster checks must validate that:
 - Secret references are allow-listed;
 - runtime Secret loader and factories are explicitly enabled only when safe;
 - no raw Secret values appear in logs, evidence or UI.
+
+## Post-Phase 15 troubleshooting matrix
+
+Status: Active operational baseline  
+Phase reference: 10.10.1  
+Last updated: 2026-07-09
+
+### Purpose
+
+This section refreshes the troubleshooting matrix after completion of Phase 15.
+
+The current operational baseline is namespace-isolated on `ocp-dev`:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+The codebase is multi-cluster code-ready, but physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+This troubleshooting matrix focuses on the current validated runtime baseline and on the fail-closed guardrails introduced for future multi-cluster onboarding.
+
+### Troubleshooting principles
+
+During troubleshooting:
+
+1. preserve the evidence directory;
+2. avoid destructive commands unless an approved remediation procedure explicitly requires them;
+3. do not print Secret values;
+4. do not decode or copy raw tokens into notes, tickets or evidence;
+5. identify the failing layer before applying remediation;
+6. keep `dev`, `staging` and `production` namespace-isolated checks separate;
+7. confirm that no operation silently falls back to `ocp-dev` when a non-current target is expected.
+
+### Common failure matrix
+
+#### DevOps Control Plane pod is not ready
+
+Symptoms:
+
+- the DevOps Control Plane pod is not `Running`;
+- one or more containers are not ready;
+- rollout does not complete.
+
+Check:
+
+- inspect deployment status in namespace `devops-control-plane`;
+- inspect pod events;
+- inspect container logs;
+- verify image reference;
+- verify PostgreSQL reachability.
+
+Likely causes:
+
+- image pull issue;
+- configuration error;
+- PostgreSQL connection issue;
+- OAuth proxy sidecar issue;
+- resource pressure.
+
+Remediation direction:
+
+- do not restart repeatedly without checking events;
+- preserve pod logs and events;
+- verify ConfigMap, Secret references and deployment image;
+- rollback only if a recent deployment introduced the failure.
+
+#### `/readyz` returns non-200
+
+Symptoms:
+
+- direct `/readyz` returns non-200;
+- route `/readyz` returns non-200;
+- dashboard may still load partially.
+
+Check:
+
+- direct application port-forward;
+- route through OAuth proxy;
+- PostgreSQL connectivity;
+- application logs.
+
+Likely causes:
+
+- database not reachable;
+- application configuration issue;
+- readiness handler dependency failure;
+- route or OAuth proxy issue.
+
+Remediation direction:
+
+- distinguish direct backend failure from route or proxy failure;
+- if direct readiness fails, inspect application and database first;
+- if only route readiness fails, inspect OAuth proxy and route configuration.
+
+#### Dashboard returns non-200
+
+Symptoms:
+
+- dashboard HTTP check fails;
+- browser shows error;
+- UI does not render latest ChangeRequest.
+
+Check:
+
+- backend route or port-forward response;
+- authentication headers or OAuth proxy behavior;
+- application logs;
+- `/readyz`.
+
+Likely causes:
+
+- AuthN/AuthZ issue;
+- OAuth proxy issue;
+- UI handler error;
+- backend dependency issue.
+
+Remediation direction:
+
+- first confirm `/readyz`;
+- then test dashboard through direct port-forward with trusted forwarded headers;
+- preserve HTML response if present.
+
+#### Dashboard does not show latest ChangeRequest
+
+Symptoms:
+
+- dashboard shows an older ChangeRequest;
+- expected latest ChangeRequest is missing.
+
+Check:
+
+- ChangeRequest list through API or UI;
+- database records;
+- UI dashboard HTML;
+- recent commits affecting UI handlers.
+
+Likely causes:
+
+- latest ChangeRequest not present in database;
+- UI selection logic issue;
+- stale pod image;
+- browser cache.
+
+Remediation direction:
+
+- confirm latest ChangeRequest exists in backend data;
+- verify running pod image;
+- restart rollout only after confirming the image in registry is updated.
+
+#### `Environments / Namespaces` is missing in UI
+
+Symptoms:
+
+- topbar shows old static environment text;
+- namespace mapping is not visible.
+
+Check:
+
+- running pod image;
+- UI HTML from dashboard;
+- `internal/api/ui_handlers.go` in the expected commit;
+- rollout status.
+
+Likely causes:
+
+- stale image deployed;
+- latest tag not pushed;
+- rollout restarted before push;
+- browser cache.
+
+Remediation direction:
+
+- confirm image was pushed before rollout;
+- inspect pod image;
+- force rollout only after push is confirmed.
+
+#### Argo CD Application is OutOfSync or Degraded
+
+Symptoms:
+
+- sync status is not `Synced`;
+- health status is not `Healthy`;
+- deployment readiness may be affected.
+
+Check:
+
+- Application status in `openshift-gitops`;
+- target namespace resources;
+- GitOps repository revision;
+- Kustomize overlay path.
+
+Likely causes:
+
+- GitOps manifest issue;
+- namespace mismatch;
+- failed sync;
+- missing resource or invalid overlay;
+- target namespace permissions.
+
+Remediation direction:
+
+- inspect Argo CD Application status first;
+- compare expected GitOps path with actual Application path;
+- avoid manual cluster drift unless explicitly required for emergency restoration.
+
+#### Deployment is not ready in one namespace
+
+Symptoms:
+
+- ready replicas do not match desired replicas;
+- pods are pending, crashing or unavailable;
+- route health check fails.
+
+Check:
+
+- Deployment status;
+- ReplicaSet status;
+- Pod status;
+- Pod events;
+- container logs;
+- image pull status.
+
+Likely causes:
+
+- image pull issue;
+- invalid deployment manifest;
+- insufficient resources;
+- failing application health endpoint;
+- namespace-specific configuration issue.
+
+Remediation direction:
+
+- isolate the affected namespace;
+- avoid assuming all environments are impacted;
+- check `devops-ci-demo`, `devops-ci-staging` and `devops-ci-production` separately.
+
+#### Route `/healthz` fails
+
+Symptoms:
+
+- route health check returns non-200;
+- deployment may still be ready.
+
+Check:
+
+- Route host;
+- Service endpoints;
+- Pod readiness;
+- application logs;
+- TLS route configuration.
+
+Likely causes:
+
+- route misconfiguration;
+- service selector mismatch;
+- application endpoint failure;
+- DNS or ingress issue.
+
+Remediation direction:
+
+- test service and pod locally if possible;
+- confirm route points to the correct service;
+- preserve route host evidence.
+
+#### Tekton PipelineRun failed
+
+Symptoms:
+
+- PipelineRun condition status is not `True`;
+- reason is not `Succeeded`;
+- failed task count is greater than zero;
+- UI validation evidence shows failure.
+
+Check:
+
+- PipelineRun conditions;
+- TaskRun status;
+- TaskRun logs;
+- Git revision;
+- validation path;
+- namespace where PipelineRun was created.
+
+Likely causes:
+
+- invalid GitOps path;
+- missing Task or Pipeline;
+- Git clone issue;
+- RBAC issue in namespace;
+- workspace or parameter issue.
+
+Remediation direction:
+
+- inspect the PipelineRun in the target Tekton namespace;
+- confirm validation path is environment-specific;
+- do not rerun blindly before understanding failed TaskRuns.
+
+#### UI does not show Tekton validation evidence
+
+Symptoms:
+
+- ChangeRequest detail page loads;
+- Tekton validation card is missing;
+- raw evidence exists but is not rendered.
+
+Check:
+
+- evidence records for the ChangeRequest;
+- evidence type;
+- latest validation evidence;
+- UI detail HTML;
+- backend logs.
+
+Likely causes:
+
+- validation evidence not collected;
+- wrong ChangeRequest selected;
+- evidence type mismatch;
+- stale pod image;
+- UI rendering issue.
+
+Remediation direction:
+
+- verify check-validation was executed;
+- inspect evidence list for the ChangeRequest;
+- confirm UI is running the commit that includes Tekton validation card support.
+
+#### Wrong environment or namespace mapping
+
+Symptoms:
+
+- action executes against unexpected namespace;
+- UI shows unexpected environment mapping;
+- evidence references the wrong namespace.
+
+Check:
+
+- Environment Catalog;
+- Cluster Registry;
+- TechnicalRuntimeTarget resolution;
+- ChangeRequest target environment;
+- runtime evidence payload.
+
+Likely causes:
+
+- stale environment catalog file;
+- wrong targetEnvironment in ChangeRequest;
+- fallback configuration;
+- deployment running previous ConfigMap.
+
+Remediation direction:
+
+- verify target environment first;
+- verify resolved namespace;
+- verify pod configuration;
+- do not proceed if the target does not match the expected namespace.
+
+#### Runtime provider missing
+
+Symptoms:
+
+- technical action fails before runtime client construction;
+- error references missing runtime provider for cluster;
+- simulated external target fails as expected.
+
+Expected behavior:
+
+- this is fail-closed behavior.
+
+Likely causes:
+
+- cluster exists in target model but no runtime provider is configured;
+- real cluster onboarding is incomplete;
+- provider registry does not include the target cluster.
+
+Remediation direction:
+
+- do not force fallback to `ocp-dev`;
+- configure provider only through the approved onboarding contract;
+- verify Secret references, RBAC and factories before enablement.
+
+#### Runtime provider disabled
+
+Symptoms:
+
+- provider selection fails with disabled provider error.
+
+Expected behavior:
+
+- this is fail-closed behavior.
+
+Likely causes:
+
+- target provider intentionally disabled;
+- onboarding not approved;
+- readiness gates not satisfied.
+
+Remediation direction:
+
+- keep disabled until prerequisites are complete;
+- do not enable provider only to bypass the error;
+- complete readiness gates first.
+
+#### Secret loading fails
+
+Symptoms:
+
+- Secret reference validation fails;
+- allow-list rejects cluster or Secret reference;
+- getter not configured;
+- required key missing.
+
+Expected behavior:
+
+- this is fail-closed behavior.
+
+Likely causes:
+
+- runtime Secret loader disabled;
+- Secret reference not allow-listed;
+- Secret missing required key;
+- Kubernetes Secret getter not configured.
+
+Remediation direction:
+
+- do not print or decode Secret values into logs;
+- verify only names, namespaces and key names;
+- update allow-list only through approved change;
+- keep evidence sanitized.
+
+#### Runtime factory fails
+
+Symptoms:
+
+- factory returns not configured;
+- API URL missing;
+- base URL missing;
+- token value missing;
+- kubeconfig unsupported;
+- raw CA unsupported.
+
+Expected behavior:
+
+- this is fail-closed behavior.
+
+Likely causes:
+
+- factory flags disabled;
+- required runtime configuration missing;
+- unsupported credential material;
+- real cluster onboarding incomplete.
+
+Remediation direction:
+
+- do not bypass disabled-by-default flags;
+- enable only the exact required factory;
+- validate configuration with unit tests before runtime enablement;
+- preserve fail-closed semantics.
+
+### Escalation criteria
+
+Escalate when:
+
+- `/readyz` remains non-200 after dependency checks;
+- Argo CD is degraded for multiple environments;
+- deployments are unavailable in more than one namespace;
+- Tekton repeatedly fails for the same validation path;
+- evidence contains unexpected sensitive data;
+- target environment resolution appears unsafe;
+- a provider unexpectedly falls back to `ocp-dev`;
+- rollback is required.
+
+### Evidence to preserve
+
+For every incident, preserve:
+
+- evidence directory path;
+- pod list;
+- pod events;
+- readiness output;
+- route health output;
+- Argo CD Application status;
+- deployment status;
+- PipelineRun and TaskRun status;
+- UI HTTP response status;
+- relevant sanitized logs;
+- command timestamps where available.
+
+### Final rule
+
+If the system cannot prove the intended target environment and namespace, stop the operation.
+
+For multi-cluster readiness, an explicit fail-closed error is safer than an implicit fallback to the wrong cluster or namespace.
