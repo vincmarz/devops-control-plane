@@ -1429,3 +1429,137 @@ At the same time, the codebase is now more strongly validated for future real mu
 Physical runtime validation remains deferred.
 
 Code readiness continues.
+
+## Phase 15.9.3.2 — Secret reference and runtime factory fail-closed coverage
+
+Status: Completed  
+Date: 2026-07-09  
+Scope: Multi-cluster code-readiness guardrails
+
+### Purpose
+
+Phase 15.9.3.2 documents the review of Secret reference handling, runtime Secret loading and runtime client factory fail-closed behavior.
+
+The goal is to confirm that the DevOps Control Plane can continue progressing toward code-level multi-cluster readiness even when physical cross-cluster runtime validation is deferred by infrastructure availability.
+
+### Review summary
+
+The review confirmed that the codebase already includes the required safety boundaries for future real multi-cluster onboarding.
+
+The following areas were reviewed:
+
+- runtime Secret reference model;
+- Secret reference registry;
+- Secret reference validation;
+- Secret value loader;
+- Kubernetes Secret getter readiness gate;
+- allow-list based Secret loading;
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory;
+- provider-aware runtime factory wiring;
+- disabled-by-default runtime factory flags;
+- fail-closed fallback behavior.
+
+### Secret reference model
+
+The codebase includes a dedicated Secret reference model based on `RuntimeClientSecretRefs`.
+
+Secret references are modeled as metadata and are attached to runtime provider selections without exposing raw Secret values.
+
+The review confirmed the following elements:
+
+- `RuntimeClientSecretRefs`;
+- `RuntimeClientSecretRefsRegistry`;
+- `RuntimeClientSecretRefs.Validate`;
+- `RuntimeClientProviderRegistry.SelectWithSecretRefs`;
+- sanitized `SafeSummary` output.
+
+This supports future real-cluster onboarding because cluster credentials can be referenced without being embedded directly in configuration, logs or evidence.
+
+### Runtime Secret loader
+
+The runtime Secret value loading path is guarded by conservative defaults.
+
+The following protections are present:
+
+- default empty loader;
+- disabled Kubernetes Secret value loader;
+- allow-list based Kubernetes Secret value loader;
+- Kubernetes Secret getter readiness boundary;
+- validation of allowed clusters and allowed Secret references;
+- fail-closed behavior for missing getter, missing references and missing required keys.
+
+The runtime Secret loader remains disabled by default unless explicitly enabled through configuration.
+
+### Runtime client factories
+
+The following factory abstractions are present:
+
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory.
+
+Each factory has a conservative empty implementation that does not build a client and returns a clear not-configured error.
+
+The following factory enablement flags default to disabled:
+
+- `RuntimeClientFactoryKubernetesEnabled`;
+- `RuntimeClientFactoryTektonEnabled`;
+- `RuntimeClientFactoryArgoCDEnabled`.
+
+This prevents accidental construction of real external-cluster clients before the operator explicitly enables the required capability.
+
+### Adapter guardrails
+
+The concrete runtime factory adapters include additional safety checks.
+
+The review confirmed guardrails for:
+
+- missing Kubernetes API URL;
+- missing Tekton API URL;
+- missing Argo CD base URL;
+- missing token value;
+- unsupported kubeconfig references;
+- unsupported raw CA references;
+- invalid factory requests.
+
+These guardrails are important because future real-cluster onboarding must not silently accept incomplete or unsafe credential material.
+
+### Fail-closed behavior
+
+The review confirmed the following fail-closed behavior:
+
+- missing runtime provider fails explicitly;
+- disabled runtime provider fails explicitly;
+- missing Secret references prevent factory-aware client construction;
+- missing allow-list entries prevent Secret loading;
+- disabled Secret loader does not read Secrets;
+- empty factories do not return clients;
+- factory builders remain disabled unless global and capability-specific flags are enabled.
+
+This is aligned with the security expectation that a future external cluster target must never silently fall back to `ocp-dev`.
+
+### Automated validation
+
+The following validation completed successfully during the review:
+
+`go test ./internal/app -count=1`
+
+The broader validation also completed successfully:
+
+`go test ./internal/api ./internal/app ./cmd/devops-control-plane`
+
+### Multi-cluster readiness impact
+
+This phase confirms that the DevOps Control Plane has the required fail-closed technical foundations for future real multi-cluster onboarding.
+
+Physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+However, the codebase continues to be prepared for multi-cluster operation through explicit runtime target resolution, provider selection, Secret references, allow-list validation and disabled-by-default client factory enablement.
+
+### Closure statement
+
+Phase 15.9.3.2 confirms that Secret reference and runtime factory guardrails are in place and validated.
+
+The project remains physically validated on the namespace-isolated `ocp-dev` topology, while code-level multi-cluster readiness continues to be actively consolidated.
