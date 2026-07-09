@@ -1234,3 +1234,113 @@ The namespace-isolated multi-environment baseline is stable across `dev`, `stagi
 This confirms that the current simulated multi-environment topology is ready to be used as the controlled baseline for the next planning steps toward real multi-cluster enablement.
 
 This does not replace the future physical multi-cluster objective. It confirms that the environment catalog, GitOps overlays, Argo CD Applications, Tekton validation paths, runtime evidence model and UI visibility are aligned before onboarding a real non-production cluster.
+
+## Phase 15.9.1 — Physical cluster availability constraint and multi-cluster readiness closure strategy
+
+**Status:** Completed as planning and closure strategy  
+**Date:** 2026-07-09  
+**Baseline tag:** `namespace-isolated-baseline-20260709`  
+**Baseline commit:** `af6ddb3` — `Document phase 15.8.11.1 runtime smoke matrix`
+
+### Purpose
+
+Phase 15.9.1 documents the infrastructure constraint that currently prevents physical multi-cluster runtime validation.
+
+At this point, only the `ocp-dev` OpenShift cluster is available. There is no separate real non-production cluster available and there is no separate real production cluster available for onboarding.
+
+The project must therefore avoid remaining open indefinitely while waiting for unavailable infrastructure. The correct closure strategy is to declare the DevOps Control Plane as multi-cluster-ready from an architecture, configuration, runtime targeting, Secret reference, client factory and operational readiness perspective, while explicitly deferring physical cross-cluster runtime validation until an additional OpenShift cluster becomes available.
+
+### Current validated topology
+
+The currently validated topology remains namespace-isolated on `ocp-dev`:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+This topology is no longer treated as an accidental workaround. It is the official validated fallback topology until real clusters become available.
+
+### Infrastructure constraint
+
+The following physical multi-cluster targets are currently unavailable:
+
+- a real non-production OpenShift cluster for `staging`;
+- a real production OpenShift cluster for `production`.
+
+Because these clusters are unavailable, the project cannot complete a physical cross-cluster runtime smoke test at this time.
+
+This is an infrastructure availability constraint, not a blocker in the DevOps Control Plane architecture.
+
+### Multi-cluster readiness closure strategy
+
+The DevOps Control Plane is considered multi-cluster-ready when the following capabilities are present and validated or safely gated:
+
+- Environment Catalog supports logical environment modeling.
+- Cluster Registry abstraction supports future physical cluster targets.
+- Runtime target resolution is environment-aware.
+- Kubernetes, Tekton and Argo CD runtime clients are provider-aware by design.
+- Secret references are modeled without exposing raw Secret values.
+- Runtime Secret loader and concrete factories remain disabled by default unless explicitly enabled.
+- Secret reference allow-list validation is available.
+- Readiness gates fail closed when required configuration is incomplete or unsafe.
+- Validation paths are environment-specific.
+- Runtime evidence is environment-aware and sanitized.
+- The UI shows the validated environment-to-namespace mapping.
+- The namespace-isolated dev, staging and production baseline is fully validated.
+
+### Closure statement
+
+Physical multi-cluster runtime validation is explicitly deferred because no additional OpenShift cluster is currently available.
+
+The multi-cluster readiness work is closed as a validated readiness baseline, not as a physical multi-cluster deployment.
+
+The validated baseline is:
+
+- namespace-isolated;
+- multi-environment;
+- environment-aware;
+- evidence-aware;
+- provider-aware in the runtime design;
+- ready for future physical cluster onboarding.
+
+### Future real-cluster onboarding condition
+
+When a real additional OpenShift cluster becomes available, onboarding must resume from this baseline.
+
+The first real-cluster onboarding should not redesign the current model. It should only provide the missing infrastructure inputs:
+
+- cluster identity;
+- API server URL;
+- certificate authority reference;
+- token Secret reference;
+- target namespace;
+- Tekton namespace;
+- Argo CD access model;
+- minimum RBAC;
+- readiness validation;
+- rollback plan.
+
+### Required future validation
+
+When a real cluster becomes available, the first physical multi-cluster validation must prove:
+
+- the target environment no longer falls back silently to `ocp-dev`;
+- readiness fails closed if Secret references, RBAC or runtime factories are incomplete;
+- `create`, `check-deployment`, `validate`, `check-validation` and `collect-evidence` work for the real target environment;
+- no raw Secret values appear in logs, evidence or UI;
+- the existing `dev` baseline remains unaffected;
+- rollback to the namespace-isolated fallback topology is possible and documented.
+
+### Impact on Phase 15
+
+This phase allows Phase 15 to proceed toward closure without waiting for unavailable infrastructure.
+
+Recommended Phase 15 closure wording:
+
+`Phase 15 — Multi-environment / multi-cluster readiness baseline: completed as multi-cluster-ready baseline. Physical cross-cluster runtime validation is deferred by infrastructure availability.`
+
+### Next direction
+
+The next planning work should focus on finalizing the multi-cluster readiness checklist and the deferred real-cluster onboarding contract.
+
+The project should not assume near-term availability of a non-production or production cluster. Future onboarding must be treated as conditional on infrastructure availability.
