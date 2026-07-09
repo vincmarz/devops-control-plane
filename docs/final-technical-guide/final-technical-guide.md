@@ -1630,3 +1630,327 @@ Le entita principali sono:
 Il modello dati collega governance, automazione, audit, runtime evidence, UI e operability.
 
 Questo e uno dei motivi per cui il DevOps Control Plane puo essere considerato una piattaforma di controllo e non una semplice raccolta di script.
+
+## 17. ChangeRequest lifecycle
+
+Una `ChangeRequest` rappresenta il punto centrale del DevOps Control Plane.
+
+Tutte le azioni principali partono da una richiesta di cambiamento e vengono collegate a quella richiesta: eventi, workflow GitLab, validazioni Tekton, controlli Argo CD, runtime evidence, audit trail e visualizzazione nella UI.
+
+La ChangeRequest permette di trasformare un insieme di operazioni tecniche distribuite in un workflow coerente e tracciabile.
+
+Vista semplificata:
+
+```text
+ChangeRequest
+      |
+      +--> lifecycle status
+      +--> runtime status
+      +--> ChangeEvent audit trail
+      +--> GitLab workflow
+      +--> Argo CD checks
+      +--> Tekton validation
+      +--> runtime evidence
+      +--> UI detail view
+```
+
+### 17.1 Perche serve una ChangeRequest
+
+Senza una ChangeRequest, le operazioni DevOps restano sparse tra strumenti diversi.
+
+Per esempio:
+
+- GitLab conosce branch, commit e merge request;
+- Argo CD conosce sync e health delle applicazioni;
+- Tekton conosce PipelineRun e TaskRun;
+- Kubernetes/OpenShift conosce deployment, pod, service e route;
+- PostgreSQL conserva dati applicativi.
+
+La ChangeRequest collega questi elementi e fornisce un riferimento unico.
+
+Questo riferimento unico consente di rispondere a domande operative come:
+
+- quale cambiamento era richiesto;
+- quale ambiente era coinvolto;
+- quale namespace e stato usato;
+- quale validazione e stata lanciata;
+- quale evidence e stata raccolta;
+- quale stato finale ha assunto il workflow.
+
+### 17.2 Informazioni principali della ChangeRequest
+
+Una ChangeRequest contiene informazioni funzionali e tecniche.
+
+Informazioni funzionali:
+
+- numero della richiesta;
+- titolo;
+- descrizione;
+- requester;
+- applicazione coinvolta.
+
+Informazioni tecniche:
+
+- target environment;
+- branch o revisione Git;
+- stato del processo;
+- stato runtime;
+- riferimenti a eventi;
+- riferimenti a evidenze.
+
+Il campo `targetEnvironment` e particolarmente importante perche guida la risoluzione del runtime target.
+
+### 17.3 Target environment
+
+Gli ambienti logici attualmente validati sono:
+
+- `dev`;
+- `staging`;
+- `production`.
+
+La baseline corrente usa namespace isolation sul cluster `ocp-dev`:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Il lifecycle di una ChangeRequest deve preservare l'ambiente richiesto.
+
+Una richiesta per `staging` non deve essere trattata come `dev`.
+
+Una richiesta per `production` non deve essere trattata come `dev`.
+
+Questa regola e ancora piu importante in ottica multi-cluster futura.
+
+### 17.4 Creazione della ChangeRequest
+
+Il workflow inizia con la creazione della ChangeRequest.
+
+Durante la creazione, il backend deve:
+
+- validare i dati in ingresso;
+- verificare il target environment;
+- creare il record persistente;
+- produrre un primo evento di audit;
+- inizializzare gli stati del processo e del runtime.
+
+Il risultato atteso e che la richiesta sia disponibile tramite API e UI.
+
+La dashboard puo poi mostrare la richiesta piu recente come riferimento operativo.
+
+### 17.5 Lifecycle status
+
+Il lifecycle status rappresenta lo stato logico del processo.
+
+Esempi concettuali:
+
+- richiesta creata;
+- workflow in corso;
+- validazione richiesta;
+- validazione completata;
+- errore;
+- completata.
+
+Questo stato descrive il percorso applicativo della richiesta.
+
+Il lifecycle status non deve essere confuso con il runtime status.
+
+### 17.6 Runtime status
+
+Il runtime status rappresenta lo stato tecnico osservato.
+
+Esempi:
+
+- deployment pronto;
+- deployment non pronto;
+- Argo CD `Synced`;
+- Argo CD `Healthy`;
+- PipelineRun `Succeeded`;
+- PipelineRun `Failed`;
+- evidence mancante;
+- check non ancora eseguito.
+
+Il runtime status deriva dalle integrazioni tecniche e dalle evidence raccolte.
+
+### 17.7 ChangeEvent durante il lifecycle
+
+Ogni passaggio importante del lifecycle puo generare un `ChangeEvent`.
+
+Esempi:
+
+```text
+ChangeRequest created
+Git branch prepared
+Merge request created
+Runtime evidence collected
+Deployment checked
+Tekton validation started
+Tekton validation checked
+Evidence stored
+Workflow failed
+Workflow completed
+```
+
+Questi eventi formano l'audit trail della richiesta.
+
+### 17.8 Workflow tecnico collegato
+
+Una ChangeRequest puo attivare o coordinare diversi workflow tecnici:
+
+- workflow GitLab;
+- collect-evidence;
+- check-deployment;
+- validate;
+- check-validation;
+- UI evidence rendering.
+
+Questi workflow non sono indipendenti dalla ChangeRequest: devono essere associati alla richiesta corretta.
+
+### 17.9 collect-evidence
+
+`collect-evidence` raccoglie informazioni runtime dal target environment.
+
+Nel baseline corrente, questo significa osservare il namespace corretto:
+
+- `devops-ci-demo` per dev;
+- `devops-ci-staging` per staging;
+- `devops-ci-production` per production.
+
+L'evidence deve indicare chiaramente ambiente, namespace e risorse osservate.
+
+### 17.10 check-deployment
+
+`check-deployment` verifica se l'applicazione target e pronta nel namespace corretto.
+
+Il check deve restare environment-specific.
+
+Un deployment pronto in `devops-ci-demo` non dimostra che staging o production siano pronti.
+
+### 17.11 validate
+
+`validate` avvia la validazione Tekton.
+
+La validazione deve usare il path GitOps corretto per l'ambiente.
+
+Esempi validati:
+
+- staging: `apps/demo-go-color-app/overlays/staging`;
+- production: `apps/demo-go-color-app/overlays/production`.
+
+Questa distinzione evita di validare un overlay sbagliato.
+
+### 17.12 check-validation
+
+`check-validation` legge l'esito della PipelineRun Tekton e produce validation evidence.
+
+La validation evidence deve includere:
+
+- ChangeRequest;
+- target environment;
+- Tekton namespace;
+- PipelineRun;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitization state.
+
+Esempio staging:
+
+```text
+ChangeRequest: CHG-2026-0049
+Tekton namespace: devops-ci-staging
+PipelineRun: devops-cp-validate-chg-2026-0049-nd7rm
+validationPath: apps/demo-go-color-app/overlays/staging
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+Esempio production:
+
+```text
+ChangeRequest: CHG-2026-0050
+Tekton namespace: devops-ci-production
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+validationPath: apps/demo-go-color-app/overlays/production
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+### 17.13 UI e lifecycle
+
+La UI rende visibile il lifecycle della ChangeRequest.
+
+La dashboard mostra la richiesta piu recente.
+
+La pagina di dettaglio mostra:
+
+- dati principali della richiesta;
+- audit log;
+- runtime evidence;
+- Tekton validation evidence;
+- raw sanitized evidence quando utile;
+- stato e contesto operativo.
+
+La UI non deve mostrare solo un elenco statico di dati. Deve aiutare l'operatore a capire cosa e successo e quale stato e stato osservato.
+
+### 17.14 Fail-closed nel lifecycle
+
+Il lifecycle deve rispettare i guardrail fail-closed.
+
+Esempi:
+
+- target environment sconosciuto;
+- cluster reference non valida;
+- provider runtime mancante;
+- provider runtime disabled;
+- Secret reference non allow-listed;
+- factory non configurata;
+- factory disabled.
+
+In questi casi l'operazione deve fallire in modo esplicito.
+
+Non deve essere eseguito un fallback silenzioso verso `ocp-dev`.
+
+### 17.15 Relazione con multi-cluster readiness
+
+Il lifecycle e oggi validato sulla baseline namespace-isolated.
+
+Tuttavia il codice e stato anche validato con target simulati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+I test confermano che:
+
+- staging non ricade su `ocp-dev`;
+- production non ricade su `ocp-dev`;
+- provider mancante fallisce fail-closed;
+- provider disabled fallisce fail-closed.
+
+Questo dimostra che il lifecycle e predisposto al futuro multi-cluster reale.
+
+### 17.16 Sintesi
+
+Il lifecycle della ChangeRequest e il filo conduttore del DevOps Control Plane.
+
+La ChangeRequest collega:
+
+- governance;
+- workflow GitLab;
+- runtime target resolution;
+- Argo CD;
+- Tekton;
+- Kubernetes/OpenShift;
+- evidence;
+- audit;
+- UI;
+- operability.
+
+Questo modello consente di trasformare operazioni tecniche distribuite in un processo unico, persistente, verificabile e comprensibile.
