@@ -2141,3 +2141,112 @@ Physical multi-cluster validation is deferred.
 Multi-cluster code readiness is completed for the current baseline.
 
 The namespace-isolated topology on `ocp-dev` remains the validated operational baseline until real clusters become available.
+
+## Phase 15.9.7.3 — Simulated staging and production cluster readiness validation
+
+Status: Completed  
+Date: 2026-07-09  
+Scope: Simulated staging and production external-cluster readiness validation  
+Code commit: `9b72931` — `Add simulated staging and production cluster readiness tests`  
+Evidence directory: `/tmp/dcp-15-9-7-2-20260709-155131`
+
+### Purpose
+
+Phase 15.9.7.3 documents the simulated staging and production external-cluster readiness validation.
+
+This validation was added after the formal Phase 15 closure to further strengthen the multi-cluster code-readiness claim.
+
+The goal was to prove that the DevOps Control Plane can model `staging` and `production` as two distinct future external cluster targets, even though no physical staging or production cluster is currently available.
+
+### Simulated topology
+
+The simulation validated the following future external-cluster target model:
+
+- `staging` -> `ocp-staging-simulated` / `devops-ci-staging`
+- `production` -> `ocp-production-simulated` / `devops-ci-production`
+
+This does not replace the validated runtime baseline.
+
+The current operational runtime baseline remains:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+### Validation performed
+
+The following simulated readiness tests were executed:
+
+- `TestMultiClusterReadinessResolvesSimulatedStagingAndProductionClusters`
+- `TestMultiClusterReadinessRejectsMissingRuntimeProvidersForSimulatedStagingAndProduction`
+- `TestMultiClusterReadinessRejectsDisabledRuntimeProvidersForSimulatedStagingAndProduction`
+
+The tests validated both `staging` and `production`.
+
+### Validated behavior
+
+The simulation confirmed that:
+
+- `staging` resolves to `ocp-staging-simulated`;
+- `production` resolves to `ocp-production-simulated`;
+- `staging` does not silently fall back to `ocp-dev`;
+- `production` does not silently fall back to `ocp-dev`;
+- Kubernetes namespace resolution remains environment-specific;
+- Tekton namespace resolution remains environment-specific;
+- Argo CD application resolution remains environment-specific;
+- Git target branch resolution remains environment-specific;
+- validation path resolution remains environment-specific;
+- missing runtime provider fails closed;
+- disabled runtime provider fails closed.
+
+### Automated validation results
+
+Targeted simulated staging and production tests completed successfully.
+
+Summary:
+
+- `validated_no_fallback_to_ocp_dev=true`
+- `validated_missing_provider_fail_closed=true`
+- `validated_disabled_provider_fail_closed=true`
+
+The package-level test completed successfully:
+
+`go test ./internal/app -count=1`
+
+The broader validation also completed successfully:
+
+`go test ./internal/api ./internal/app ./cmd/devops-control-plane`
+
+### Multi-cluster readiness impact
+
+This simulation strengthens the multi-cluster code-readiness baseline.
+
+Before this validation, the codebase already proved support for a generic simulated external cluster.
+
+After this validation, the codebase also proves that `staging` and `production` can be modeled as separate simulated external clusters with independent runtime target metadata.
+
+This is closer to the intended future physical topology.
+
+### Physical validation status
+
+Physical staging cluster validation remains deferred.
+
+Physical production cluster validation remains deferred.
+
+The deferral is caused by infrastructure availability, not by missing code-readiness foundations.
+
+### Closure statement
+
+The DevOps Control Plane is now validated for:
+
+- namespace-isolated runtime execution on `ocp-dev`;
+- simulated external staging cluster target resolution;
+- simulated external production cluster target resolution;
+- fail-closed behavior when external runtime providers are missing;
+- fail-closed behavior when external runtime providers are disabled.
+
+This further supports the final Phase 15 position:
+
+Physical cross-cluster runtime validation is deferred.
+
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
