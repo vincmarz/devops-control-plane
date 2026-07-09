@@ -159,6 +159,10 @@ func main() {
 			if err != nil {
 				return "", "", "", err
 			}
+			validationPath := target.ValidationPath
+			if validationPath == "" {
+				validationPath = cfg.TektonValidationPath
+			}
 			selection, err := app.DefaultRuntimeClientProviderRegistry().Select(target)
 			if err != nil {
 				return "", "", "", err
@@ -175,7 +179,7 @@ func main() {
 				ChangeNumber:       change.ChangeNumber,
 				GitURL:             cfg.TektonGitURL,
 				GitRevision:        revision,
-				ValidationPath:     cfg.TektonValidationPath,
+				ValidationPath:     validationPath,
 				Image:              cfg.TektonImage,
 				WorkspacePVC:       cfg.TektonWorkspacePVC,
 				DockerConfigSecret: cfg.TektonDockerConfigSecret,
@@ -201,7 +205,11 @@ func main() {
 			if cfg.TektonGitRevisionTemplate != "" {
 				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
 			}
-			result := app.TektonValidationResult{PipelineRunName: status.PipelineRunName, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: target.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: cfg.TektonValidationPath}
+			validationPath := target.ValidationPath
+			if validationPath == "" {
+				validationPath = cfg.TektonValidationPath
+			}
+			result := app.TektonValidationResult{PipelineRunName: status.PipelineRunName, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: target.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: validationPath}
 			if err != nil {
 				return result, err
 			}

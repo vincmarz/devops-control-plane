@@ -27,6 +27,7 @@ type TechnicalRuntimeTarget struct {
 	TektonPipelineName     string
 	ArgoCDApplicationName  string
 	GitTargetBranch        string
+	ValidationPath         string
 }
 
 // TechnicalRuntimeTargetResolver resolves the technical runtime target for a
@@ -88,6 +89,7 @@ func (r TechnicalRuntimeTargetResolver) Resolve(targetEnvironment string) (Techn
 		TektonPipelineName:     r.defaultTektonPipelineName,
 		ArgoCDApplicationName:  strings.TrimSpace(environment.ArgoCDApplicationName),
 		GitTargetBranch:        strings.TrimSpace(environment.GitTargetBranch),
+		ValidationPath:         strings.TrimSpace(environment.ValidationPath),
 	}
 
 	if target.EnvironmentDisplayName == "" {

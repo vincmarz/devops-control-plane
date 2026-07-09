@@ -22,6 +22,7 @@ type EnvironmentDefinition struct {
 	TektonNamespace       string `yaml:"tektonNamespace"`
 	ArgoCDApplicationName string `yaml:"argocdApplicationName"`
 	GitTargetBranch       string `yaml:"gitTargetBranch"`
+	ValidationPath        string `yaml:"validationPath"`
 	AllowTechnicalActions bool   `yaml:"allowTechnicalActions"`
 	AllowPromotionSource  bool   `yaml:"allowPromotionSource"`
 	AllowPromotionTarget  bool   `yaml:"allowPromotionTarget"`
@@ -59,6 +60,7 @@ func DefaultEnvironmentCatalogFallback() EnvironmentCatalog {
 			TektonNamespace:       "devops-ci-demo",
 			ArgoCDApplicationName: "demo-go-color-app",
 			GitTargetBranch:       "main",
+			ValidationPath:        "apps/demo-go-color-app",
 			AllowTechnicalActions: true,
 			AllowPromotionSource:  true,
 			AllowPromotionTarget:  false,
@@ -128,6 +130,7 @@ func NewEnvironmentCatalog(definitions []EnvironmentDefinition, defaultEnvironme
 		}
 		definition.Name = name
 		definition.ClusterName = normalizeClusterName(definition.ClusterName)
+		definition.ValidationPath = strings.TrimSpace(definition.ValidationPath)
 		catalog.environments[name] = definition
 	}
 
