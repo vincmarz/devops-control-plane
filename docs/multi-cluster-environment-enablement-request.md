@@ -1344,3 +1344,88 @@ Recommended Phase 15 closure wording:
 The next planning work should focus on finalizing the multi-cluster readiness checklist and the deferred real-cluster onboarding contract.
 
 The project should not assume near-term availability of a non-production or production cluster. Future onboarding must be treated as conditional on infrastructure availability.
+
+## Phase 15.9.2.3 — Multi-cluster code readiness test coverage
+
+Status: Completed  
+Date: 2026-07-09  
+Code commit: `68a8b2e` — `Add simulated external cluster fail-closed tests`
+
+### Purpose
+
+Phase 15.9.2.3 documents the test coverage added to prove that the DevOps Control Plane is being prepared for real multi-cluster execution even though no additional physical OpenShift cluster is currently available.
+
+The goal is to keep progressing on code readiness without depending on unavailable infrastructure.
+
+### Context
+
+The validated runtime baseline remains namespace-isolated on `ocp-dev`:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+
+However, code readiness continues. The system must be ready to support a future topology where an environment resolves to a cluster different from `ocp-dev`.
+
+### Test coverage added
+
+The following test file was added:
+
+`internal/app/multicluster_readiness_failclosed_test.go`
+
+The test suite validates a simulated external non-production cluster named:
+
+`ocp-nonprod-simulated`
+
+The tests prove that:
+
+- `staging` can resolve to a cluster different from `ocp-dev`;
+- the resolved `TechnicalRuntimeTarget` preserves the external cluster name;
+- the runtime target does not silently fall back to `ocp-dev`;
+- Kubernetes and Tekton namespaces are resolved from the environment metadata;
+- Argo CD application metadata is resolved from the environment metadata;
+- environment-specific validation path is preserved;
+- runtime provider selection fails closed when the external cluster provider is missing;
+- runtime provider selection fails closed when the external cluster provider is configured but disabled.
+
+### Validated fail-closed behavior
+
+The following fail-closed cases are now covered:
+
+- missing runtime provider for `ocp-nonprod-simulated`;
+- disabled runtime provider for `ocp-nonprod-simulated`;
+- no silent fallback from `staging` to `ocp-dev`.
+
+This behavior is required for safe future multi-cluster enablement.
+
+If a future environment points to a real cluster and the runtime provider is missing or disabled, the DevOps Control Plane must fail explicitly instead of executing against the wrong cluster.
+
+### Automated validation
+
+The following tests were executed successfully:
+
+`go test ./internal/app -count=1`
+
+The broader validation was also executed successfully:
+
+`go test ./internal/api ./internal/app ./cmd/devops-control-plane`
+
+### Multi-cluster readiness impact
+
+This phase strengthens the multi-cluster code-readiness baseline.
+
+The project now has test evidence that the runtime target model can represent a future external cluster and that runtime provider selection does not degrade into unsafe fallback behavior.
+
+This is important because the lack of a second physical cluster should not block code preparation.
+
+### Closure statement
+
+The DevOps Control Plane remains physically validated on a namespace-isolated topology only.
+
+At the same time, the codebase is now more strongly validated for future real multi-cluster onboarding through simulated external-cluster fail-closed tests.
+
+Physical runtime validation remains deferred.
+
+Code readiness continues.
