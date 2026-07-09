@@ -1954,3 +1954,257 @@ La ChangeRequest collega:
 - operability.
 
 Questo modello consente di trasformare operazioni tecniche distribuite in un processo unico, persistente, verificabile e comprensibile.
+
+## 18. GitLab Merge Request workflow
+
+Il workflow GitLab collega una `ChangeRequest` al ciclo di vita del codice e della configurazione GitOps.
+
+Nel DevOps Control Plane, GitLab non viene usato solo come repository remoto. GitLab rappresenta il punto in cui una modifica viene preparata, versionata, proposta e infine resa disponibile al modello GitOps.
+
+Il workflow GitLab permette di collegare:
+
+- richiesta di cambiamento;
+- branch Git;
+- commit;
+- merge request;
+- merge;
+- revisione usata da Argo CD e Tekton;
+- audit ed evidence.
+
+Vista semplificata:
+
+```text
+ChangeRequest
+      |
+      +--> branch Git
+      +--> commit
+      +--> Merge Request
+      +--> merge
+      +--> GitOps revision
+      +--> Argo CD / Tekton validation
+```
+
+### 18.1 Perche GitLab e importante
+
+GitLab e importante perche conserva la storia delle modifiche.
+
+In un flusso GitOps, una modifica al runtime non dovrebbe essere un'azione manuale e non tracciata sul cluster. La modifica dovrebbe passare dal repository, essere revisionabile e avere un collegamento con una richiesta di cambiamento.
+
+Il DevOps Control Plane usa GitLab per rendere il cambiamento:
+
+- tracciabile;
+- revisionabile;
+- collegato a una ChangeRequest;
+- auditabile;
+- compatibile con GitOps.
+
+### 18.2 Branch workflow
+
+Il workflow puo creare o usare un branch dedicato alla ChangeRequest.
+
+Il branch rappresenta l'area di lavoro tecnica del cambiamento.
+
+Esempio concettuale:
+
+```text
+ChangeRequest: CHG-2026-0050
+branch: change/CHG-2026-0050
+```
+
+Il branch permette di separare la modifica dal branch principale finche non e stata validata e approvata.
+
+### 18.3 Commit workflow
+
+Il commit rappresenta la modifica effettiva salvata in Git.
+
+Nel contesto GitOps, un commit puo modificare manifest, overlay, configurazioni o altri file dichiarativi.
+
+Il commit deve essere collegabile alla ChangeRequest.
+
+Questo collegamento permette di sapere quale richiesta ha introdotto una modifica nel repository.
+
+### 18.4 Merge Request
+
+La Merge Request e il punto di revisione.
+
+Una MR permette di confrontare la modifica proposta con il branch di destinazione, analizzare il diff e decidere se procedere.
+
+Nel DevOps Control Plane, la MR e parte del workflow controllato.
+
+La piattaforma puo conservare riferimenti come:
+
+- branch sorgente;
+- branch target;
+- URL o identificativo della MR;
+- stato della MR;
+- risultato del merge.
+
+### 18.5 Merge
+
+Il merge porta la modifica nel branch principale o nel branch GitOps target.
+
+Dopo il merge, gli strumenti GitOps possono osservare la revisione aggiornata.
+
+Argo CD puo quindi confrontare il repository con lo stato del cluster.
+
+Tekton puo validare path e contenuti GitOps in modo coerente con l'ambiente target.
+
+### 18.6 Relazione con GitOps
+
+Il workflow GitLab e collegato direttamente al modello GitOps.
+
+GitLab conserva la modifica.
+
+Argo CD legge la modifica.
+
+Tekton valida la modifica.
+
+Il DevOps Control Plane coordina il processo e conserva stato, eventi ed evidence.
+
+Vista semplificata:
+
+```text
+GitLab repository
+      |
+      v
+GitOps manifests
+      |
+      +--> Argo CD sync and health
+      +--> Tekton validation
+      +--> DevOps Control Plane evidence
+```
+
+### 18.7 Relazione con Kustomize overlays
+
+Per staging e production, il workflow deve considerare i path GitOps corretti.
+
+Esempi validati:
+
+```text
+apps/demo-go-color-app/overlays/staging
+apps/demo-go-color-app/overlays/production
+```
+
+Questi path sono importanti perche una validazione staging non deve validare per errore l'overlay production, e una validazione production non deve validare per errore l'overlay staging.
+
+Il validation path environment-specific e una parte essenziale del workflow.
+
+### 18.8 Relazione con ChangeRequest
+
+Il workflow GitLab deve restare collegato alla ChangeRequest.
+
+La ChangeRequest conserva il contesto funzionale e operativo.
+
+GitLab conserva il contesto tecnico della modifica.
+
+Il collegamento tra i due permette di rispondere a domande come:
+
+- quale ChangeRequest ha generato questo branch;
+- quale MR e collegata alla richiesta;
+- quale commit e stato validato;
+- quale revisione e stata osservata da Argo CD;
+- quale path e stato validato da Tekton.
+
+### 18.9 Relazione con audit
+
+Ogni passaggio importante del workflow GitLab puo produrre un ChangeEvent.
+
+Esempi:
+
+- branch creato;
+- commit creato;
+- merge request aperta;
+- merge request aggiornata;
+- merge completato;
+- errore GitLab;
+- workflow GitLab completato.
+
+Questi eventi diventano parte dell'audit trail della ChangeRequest.
+
+### 18.10 Relazione con evidence
+
+Il workflow GitLab puo contribuire indirettamente alle evidence.
+
+Per esempio, una Tekton validation evidence puo contenere o riferire:
+
+- Git revision;
+- branch;
+- validation path;
+- repository path.
+
+Questi dati aiutano a capire quale contenuto e stato validato.
+
+### 18.11 Relazione con Argo CD
+
+Dopo che una modifica GitOps e disponibile nel repository, Argo CD puo osservarla.
+
+Argo CD produce stato come:
+
+- `Synced`;
+- `OutOfSync`;
+- `Healthy`;
+- `Degraded`.
+
+Il DevOps Control Plane raccoglie o rappresenta queste informazioni come deployment evidence o runtime evidence.
+
+### 18.12 Relazione con Tekton
+
+Tekton valida tecnicamente il contenuto GitOps.
+
+Nel progetto, le validazioni importanti includono i path environment-specific:
+
+- staging: `apps/demo-go-color-app/overlays/staging`;
+- production: `apps/demo-go-color-app/overlays/production`.
+
+Il risultato Tekton viene raccolto tramite `check-validation` e collegato alla ChangeRequest.
+
+### 18.13 Errori tipici del workflow GitLab
+
+Possibili errori:
+
+- repository non raggiungibile;
+- branch gia esistente;
+- branch target errato;
+- commit fallito;
+- merge request non creata;
+- merge request non mergeabile;
+- problema di permessi;
+- token GitLab non valido;
+- errore TLS o trust bundle.
+
+In questi casi il DevOps Control Plane deve registrare l'errore e preservare il contesto nella ChangeRequest.
+
+### 18.14 Sicurezza del workflow GitLab
+
+Il workflow GitLab puo richiedere token o credenziali.
+
+Questi valori non devono essere stampati nei log, nelle evidence o nella documentazione.
+
+La documentazione puo citare nomi di Secret o riferimenti, ma non deve contenere valori raw.
+
+La regola operativa resta:
+
+```text
+reference yes, raw secret no
+```
+
+### 18.15 Stato corrente
+
+Il workflow GitLab e stato completato end-to-end nelle fasi precedenti del progetto.
+
+Oggi il suo ruolo nella guida finale e spiegare come la parte Git si integra con:
+
+- ChangeRequest lifecycle;
+- GitOps;
+- Argo CD;
+- Tekton;
+- evidence;
+- audit trail.
+
+### 18.16 Sintesi
+
+Il GitLab Merge Request workflow fornisce la dimensione Git del DevOps Control Plane.
+
+Il workflow collega una richiesta di cambiamento a una modifica versionata, revisionabile e compatibile con GitOps.
+
+Grazie a questo collegamento, il DevOps Control Plane puo dimostrare non solo che una validazione e stata eseguita, ma anche quale contenuto Git e stato validato e da quale ChangeRequest e nato il cambiamento.
