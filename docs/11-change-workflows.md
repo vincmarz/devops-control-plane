@@ -1055,3 +1055,289 @@ This preserves the original spirit of the project while aligning the workflow mo
 |---|---:|---|
 | 2026-06-25 | 0.1 | Initial change workflows document in Italian. |
 | 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original GitOps-first workflow and educational intent and aligning it with the current lifecycle/runtime status, GitLab, Tekton, Argo CD, evidence and multi-environment baseline. |
+
+## Post-Phase 15 Change Workflow Alignment
+
+Status: Active workflow baseline  
+Phase reference: 13.5  
+Last updated: 2026-07-09
+
+### Purpose
+
+This section refreshes the Change Workflow documentation after completion of Phase 15 and the post-closure simulated staging and production cluster readiness validation.
+
+The DevOps Control Plane workflow is now validated across a namespace-isolated multi-environment baseline on the available `ocp-dev` OpenShift cluster.
+
+Current validated topology:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+The codebase is multi-cluster code-ready, and the workflow model must preserve explicit environment, namespace and runtime target information.
+
+### Current workflow capabilities
+
+The current workflow supports the following operational actions:
+
+- create ChangeRequest;
+- collect runtime evidence;
+- check deployment status;
+- start Tekton validation;
+- check Tekton validation result;
+- collect and render validation evidence;
+- expose runtime and validation evidence in the UI;
+- preserve audit events;
+- maintain lifecycle and runtime status.
+
+The important post-Phase 15 change is that these operations are now validated across the logical `dev`, `staging` and `production` environments using namespace isolation on `ocp-dev`.
+
+### Create ChangeRequest
+
+The `create` workflow creates a ChangeRequest for a target application and target environment.
+
+The target environment must be explicit.
+
+Expected target environments in the current validated baseline:
+
+- `dev`;
+- `staging`;
+- `production`.
+
+The ChangeRequest must preserve the selected target environment so that later workflow steps resolve the correct runtime target.
+
+The workflow must not silently rewrite a staging or production request into a dev request.
+
+### Runtime target resolution
+
+For technical workflow actions, the DevOps Control Plane resolves a runtime target from the ChangeRequest target environment.
+
+The resolved runtime target includes:
+
+- target environment;
+- environment name;
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application name;
+- Git target branch;
+- validation path.
+
+For the current namespace-isolated baseline:
+
+- `dev` resolves to namespace `devops-ci-demo`;
+- `staging` resolves to namespace `devops-ci-staging`;
+- `production` resolves to namespace `devops-ci-production`.
+
+For future real-cluster onboarding, the same model must support physical cluster names different from `ocp-dev`.
+
+### collect-evidence workflow
+
+The `collect-evidence` workflow collects runtime evidence from the target environment.
+
+Current evidence may include:
+
+- Kubernetes namespace;
+- deployment status;
+- replica readiness;
+- pods;
+- services;
+- routes;
+- Argo CD status;
+- runtime diagnostics.
+
+The evidence must include enough metadata to identify the target environment and namespace.
+
+This is required because `dev`, `staging` and `production` currently share the same physical cluster.
+
+### check-deployment workflow
+
+The `check-deployment` workflow verifies whether the target application is deployed and healthy in the target namespace.
+
+For the current baseline, the workflow must validate:
+
+- `devops-ci-demo` for `dev`;
+- `devops-ci-staging` for `staging`;
+- `devops-ci-production` for `production`.
+
+The workflow must not treat successful deployment in one namespace as proof that another namespace is healthy.
+
+### validate workflow
+
+The `validate` workflow starts Tekton validation for the selected target environment.
+
+The Tekton validation must run against environment-specific GitOps metadata.
+
+Current validated validation paths:
+
+- `apps/demo-go-color-app/overlays/staging`;
+- `apps/demo-go-color-app/overlays/production`.
+
+This prevents staging and production from accidentally validating the wrong GitOps overlay.
+
+### check-validation workflow
+
+The `check-validation` workflow reads the Tekton PipelineRun result and creates validation evidence.
+
+Validation evidence must include:
+
+- target environment;
+- Tekton namespace;
+- Pipeline name;
+- PipelineRun name;
+- Git revision or branch;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitization state.
+
+A successful validation is expected to have:
+
+- PipelineRun status `True`;
+- reason `Succeeded`;
+- failed task count `0`;
+- evidence sanitized `true`.
+
+### Validated staging workflow
+
+The final validated staging workflow evidence is:
+
+- ChangeRequest: `CHG-2026-0049`;
+- environment: `staging`;
+- Tekton namespace: `devops-ci-staging`;
+- PipelineRun: `devops-cp-validate-chg-2026-0049-nd7rm`;
+- validation path: `apps/demo-go-color-app/overlays/staging`;
+- result: `Succeeded`;
+- failed task count: `0`;
+- evidence sanitized: `true`.
+
+### Validated production workflow
+
+The final validated production workflow evidence is:
+
+- ChangeRequest: `CHG-2026-0050`;
+- environment: `production`;
+- Tekton namespace: `devops-ci-production`;
+- PipelineRun: `devops-cp-validate-chg-2026-0050-8wqtv`;
+- validation path: `apps/demo-go-color-app/overlays/production`;
+- result: `Succeeded`;
+- failed task count: `0`;
+- evidence sanitized: `true`.
+
+### UI workflow visibility
+
+The UI now reflects the workflow state more accurately.
+
+Expected UI behavior:
+
+- dashboard selects the latest ChangeRequest;
+- dashboard shows `Environments / Namespaces`;
+- ChangeRequest detail shows runtime evidence;
+- ChangeRequest detail shows latest Tekton validation evidence when available;
+- validation path is visible;
+- Tekton namespace is visible;
+- PipelineRun name is visible;
+- failed task count is visible;
+- sanitized evidence state is visible.
+
+The UI therefore acts as an operational view of the workflow, not only as a static dashboard.
+
+### Dashboard behavior
+
+The dashboard must not rely on a hardcoded ChangeRequest.
+
+The dashboard selects the most recent ChangeRequest available in backend data.
+
+Older ChangeRequests remain available through the Change Requests list.
+
+This behavior supports operational usage because the dashboard reflects the latest workflow activity.
+
+### Evidence rendering behavior
+
+Evidence rendering must remain safe and sanitized.
+
+The UI may render:
+
+- namespace names;
+- ChangeRequest numbers;
+- PipelineRun names;
+- Argo CD Application names;
+- validation paths;
+- status and reason fields;
+- failed task count;
+- sanitized evidence state.
+
+The UI must not render:
+
+- raw Secret values;
+- bearer tokens;
+- kubeconfig payloads;
+- private keys;
+- decoded Secret content.
+
+### Multi-cluster code-ready workflow behavior
+
+The workflow model is now prepared for future physical multi-cluster onboarding.
+
+Post-closure tests validated simulated external cluster targets:
+
+- `staging` -> `ocp-staging-simulated`;
+- `production` -> `ocp-production-simulated`.
+
+The tests confirm that:
+
+- staging does not silently fall back to `ocp-dev`;
+- production does not silently fall back to `ocp-dev`;
+- missing runtime provider fails closed;
+- disabled runtime provider fails closed.
+
+This means the workflow can model future physical clusters without redesigning the workflow.
+
+### Physical multi-cluster status
+
+Physical staging cluster validation remains deferred.
+
+Physical production cluster validation remains deferred.
+
+The deferral is caused by infrastructure availability, not by the workflow model.
+
+Until additional clusters are available, the namespace-isolated topology on `ocp-dev` remains the official validated runtime baseline.
+
+### Workflow pass criteria
+
+A complete workflow validation passes when:
+
+- ChangeRequest is created for the intended environment;
+- runtime target resolves to the expected namespace;
+- deployment check succeeds in the target namespace;
+- Tekton validation starts in the expected Tekton namespace;
+- check-validation returns a terminal successful result;
+- failed task count is zero;
+- evidence is sanitized;
+- UI ChangeRequest detail renders the evidence;
+- dashboard remains consistent with the latest ChangeRequest;
+- no raw Secret material is exposed.
+
+### Workflow failure handling
+
+If a workflow step fails:
+
+1. preserve the evidence;
+2. confirm the target environment;
+3. confirm the resolved namespace;
+4. inspect Argo CD status when deployment is affected;
+5. inspect PipelineRun and TaskRun status when validation is affected;
+6. confirm that Secret and provider failures are expected fail-closed results;
+7. do not force fallback to `ocp-dev`;
+8. do not bypass Secret or factory guardrails.
+
+### Closure statement
+
+The Change Workflow documentation is aligned with the current post-Phase 15 runtime baseline.
+
+The workflow now covers namespace-isolated dev, staging and production validation, Tekton validation evidence, Argo CD and Kubernetes runtime evidence, UI evidence rendering and multi-cluster code-ready fail-closed behavior.
+
+Physical cross-cluster workflow validation remains deferred until additional OpenShift clusters become available.
