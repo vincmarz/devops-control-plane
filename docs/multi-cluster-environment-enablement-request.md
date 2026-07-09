@@ -1809,3 +1809,163 @@ Phase 15.9.4 completes the deferred real-cluster onboarding contract.
 The DevOps Control Plane remains physically validated on the namespace-isolated `ocp-dev` topology.
 
 The codebase and process remain prepared for future real multi-cluster onboarding when additional infrastructure becomes available.
+
+## Phase 15.9.5 — Final multi-cluster readiness checklist
+
+Status: Completed  
+Date: 2026-07-09  
+Scope: Multi-cluster code-readiness baseline closure checklist
+
+### Purpose
+
+Phase 15.9.5 defines the final readiness checklist for the DevOps Control Plane multi-cluster baseline.
+
+The checklist confirms that the project is not physically validated across multiple clusters because only `ocp-dev` is currently available, but the codebase, configuration model, runtime target model, Secret reference model and operational guardrails are prepared for future real multi-cluster onboarding.
+
+### Validated runtime baseline
+
+The validated runtime baseline is namespace-isolated on `ocp-dev`:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+This baseline is tagged as:
+
+`namespace-isolated-baseline-20260709`
+
+The baseline commit is:
+
+`af6ddb3` — `Document phase 15.8.11.1 runtime smoke matrix`
+
+### Final readiness checklist
+
+Environment Catalog:
+
+- logical environments are modeled;
+- dev, staging and production are represented;
+- environment-to-namespace mapping is explicit;
+- environment metadata includes GitOps validation path;
+- disabled or unknown environments are rejected fail-closed where required.
+
+Cluster Registry:
+
+- cluster definitions are modeled;
+- current `ocp-dev` cluster is represented;
+- future cluster references are supported;
+- invalid cluster references can be rejected;
+- disabled clusters remain fail-closed.
+
+Runtime target resolution:
+
+- `TechnicalRuntimeTarget` exists;
+- runtime target resolution is environment-aware;
+- cluster name, Kubernetes namespace, Tekton namespace, Argo CD application and validation path are part of the resolved target;
+- simulated external-cluster tests prove that a non-current cluster target does not silently fall back to `ocp-dev`.
+
+Runtime provider selection:
+
+- `RuntimeClientProviderRegistry` exists;
+- provider selection is based on resolved cluster name;
+- missing provider fails closed;
+- disabled provider fails closed;
+- simulated external-cluster tests cover missing and disabled provider behavior.
+
+Secret reference model:
+
+- `RuntimeClientSecretRefs` exists;
+- Secret references are metadata only;
+- raw Secret values are not stored in provider selection summaries;
+- Secret reference validation exists;
+- Secret references can be attached to provider selections without reading Secret values.
+
+Secret loader:
+
+- runtime Secret loading is disabled by default;
+- empty and disabled loaders exist;
+- allow-list based Secret loading exists;
+- missing getter fails closed;
+- non allow-listed cluster or Secret reference fails closed;
+- missing required Secret keys fail closed.
+
+Runtime client factories:
+
+- Kubernetes runtime client factory exists;
+- Tekton runtime client factory exists;
+- Argo CD runtime client factory exists;
+- empty factories fail closed;
+- factory builders are gated by global and capability-specific flags;
+- factory flags default to disabled.
+
+Factory adapters:
+
+- Kubernetes adapter supports token-based client construction;
+- Tekton adapter supports token-based client construction;
+- Argo CD adapter supports token-based client construction;
+- unsupported kubeconfig inputs fail closed;
+- unsupported raw CA inputs fail closed;
+- missing API URL or base URL fails closed;
+- missing token value fails closed.
+
+UI and evidence:
+
+- dashboard selects the latest ChangeRequest;
+- `Environments / Namespaces` is visible in the UI;
+- Tekton validation evidence is visible in ChangeRequest detail;
+- runtime and validation evidence remain sanitized;
+- UI aligns with namespace-isolated dev, staging and production topology.
+
+Operational validation:
+
+- final runtime smoke matrix completed successfully for dev, staging and production;
+- Argo CD Applications were Synced and Healthy;
+- deployments were ready in all three namespaces;
+- route health checks returned HTTP 200;
+- staging and production Tekton PipelineRuns completed with reason Succeeded;
+- UI detail pages for staging and production ChangeRequests returned HTTP 200.
+
+Documentation:
+
+- namespace-isolated baseline is documented;
+- phase 15.8.10 UI runtime evidence closure is documented;
+- phase 15.8.11 runtime smoke matrix is documented;
+- physical cluster availability constraint is documented;
+- multi-cluster code readiness test coverage is documented;
+- Secret reference and runtime factory fail-closed coverage is documented;
+- deferred real-cluster onboarding contract is documented.
+
+### Deferred items
+
+The following items remain deferred because additional infrastructure is not available:
+
+- physical runtime validation against a real non-production cluster;
+- physical runtime validation against a real production cluster;
+- real cross-cluster Argo CD deployment check;
+- real cross-cluster Tekton validation;
+- real external-cluster Secret loading;
+- real external-cluster RBAC validation.
+
+These items are deferred by infrastructure availability, not by missing architectural readiness.
+
+### Closure assessment
+
+The DevOps Control Plane satisfies the multi-cluster code-readiness baseline.
+
+The current state can be summarized as:
+
+- namespace-isolated runtime baseline: validated;
+- multi-environment execution: validated;
+- multi-cluster runtime model: implemented;
+- external-cluster target simulation: tested;
+- Secret reference guardrails: implemented and reviewed;
+- runtime factory guardrails: implemented and reviewed;
+- real cluster onboarding contract: documented;
+- physical cross-cluster validation: deferred.
+
+### Final statement
+
+The DevOps Control Plane is ready to accept future real cluster onboarding as a controlled configuration, credential, RBAC and validation activity.
+
+When a real additional cluster becomes available, the next work must follow the deferred onboarding contract instead of redesigning the runtime model.
+
+Until then, the official runtime baseline remains the namespace-isolated topology on `ocp-dev`.
