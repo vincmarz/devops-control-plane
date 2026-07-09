@@ -1969,3 +1969,175 @@ The DevOps Control Plane is ready to accept future real cluster onboarding as a 
 When a real additional cluster becomes available, the next work must follow the deferred onboarding contract instead of redesigning the runtime model.
 
 Until then, the official runtime baseline remains the namespace-isolated topology on `ocp-dev`.
+
+## Phase 15.9.6 — Close Phase 15 as multi-cluster code-ready baseline
+
+Status: Completed  
+Date: 2026-07-09  
+Scope: Formal closure of Phase 15 as multi-cluster code-ready baseline
+
+### Purpose
+
+Phase 15.9.6 formally closes Phase 15.
+
+The purpose of this closure is to distinguish between two different outcomes:
+
+- physical multi-cluster runtime validation;
+- multi-cluster code, configuration and operational readiness.
+
+Physical multi-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+Multi-cluster code readiness is considered completed for the current baseline.
+
+### Final Phase 15 closure statement
+
+Phase 15 — Multi-environment / multi-cluster readiness baseline is completed as a multi-cluster code-ready baseline.
+
+The DevOps Control Plane is not claiming physical cross-cluster runtime validation at this stage.
+
+The DevOps Control Plane is claiming that the codebase, runtime model, configuration model, Secret reference model, provider selection model, fail-closed guardrails, UI visibility and documentation are ready for future real-cluster onboarding.
+
+### Validated namespace-isolated runtime baseline
+
+The runtime baseline validated during Phase 15 is namespace-isolated on the available `ocp-dev` cluster:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+This baseline was validated through the final runtime smoke matrix and published as the annotated tag:
+
+`namespace-isolated-baseline-20260709`
+
+The tag points to commit:
+
+`af6ddb3` — `Document phase 15.8.11.1 runtime smoke matrix`
+
+### Runtime validation completed
+
+The final runtime smoke matrix confirmed:
+
+- DevOps Control Plane readiness endpoint returned HTTP `200`;
+- dashboard UI returned HTTP `200`;
+- Argo CD Applications were `Synced` and `Healthy` for dev, staging and production;
+- `demo-go-color-app` deployments were ready in all three namespaces;
+- route `/healthz` returned HTTP `200` for all three environments;
+- staging Tekton PipelineRun completed with reason `Succeeded`;
+- production Tekton PipelineRun completed with reason `Succeeded`;
+- UI detail pages for `CHG-2026-0049` and `CHG-2026-0050` returned HTTP `200`.
+
+### Code readiness completed
+
+The following multi-cluster code-readiness capabilities are in place:
+
+- Environment Catalog;
+- Cluster Registry;
+- Environment Cluster Resolver;
+- Technical Runtime Target;
+- Runtime Client Provider Registry;
+- Runtime Client Provider Selection;
+- Runtime Client Secret References;
+- Kubernetes runtime client provider registry;
+- Tekton runtime client provider registry;
+- Argo CD runtime client provider registry;
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory;
+- factory-aware runtime provider wiring.
+
+### Fail-closed behavior completed
+
+The following fail-closed behavior is implemented, reviewed or tested:
+
+- disabled or unknown environments are rejected where required;
+- invalid cluster references are rejected;
+- missing runtime providers fail explicitly;
+- disabled runtime providers fail explicitly;
+- external simulated cluster targets do not silently fall back to `ocp-dev`;
+- missing Secret references prevent factory-aware client construction;
+- Secret loading is disabled by default;
+- Secret loading requires allow-listed references;
+- missing Secret getter fails closed;
+- missing required Secret keys fail closed;
+- empty runtime client factories never return clients;
+- concrete factories are gated by global and capability-specific flags;
+- unsupported kubeconfig inputs fail closed;
+- unsupported raw CA inputs fail closed;
+- missing API URL or Argo CD base URL fails closed;
+- missing token value fails closed.
+
+### Simulated external-cluster validation completed
+
+The codebase includes simulated external-cluster tests using:
+
+`ocp-nonprod-simulated`
+
+The tests prove that:
+
+- `staging` can resolve to a cluster different from `ocp-dev`;
+- the resolved `TechnicalRuntimeTarget` preserves the external cluster name;
+- the runtime target does not silently fall back to `ocp-dev`;
+- missing runtime provider selection fails closed;
+- disabled runtime provider selection fails closed.
+
+This validates the most important safety condition for future multi-cluster onboarding: an external target must either be correctly configured or fail explicitly.
+
+### Documentation completed
+
+The following Phase 15 documentation has been completed:
+
+- namespace-isolated baseline documentation;
+- UI runtime evidence closure documentation;
+- final runtime smoke matrix documentation;
+- physical cluster availability constraint documentation;
+- multi-cluster code readiness test coverage documentation;
+- Secret reference and runtime factory fail-closed coverage documentation;
+- deferred real-cluster onboarding contract;
+- final multi-cluster readiness checklist.
+
+### Deferred items
+
+The following items remain deferred because no additional OpenShift cluster is available:
+
+- physical runtime validation against a real non-production cluster;
+- physical runtime validation against a real production cluster;
+- real cross-cluster Argo CD deployment validation;
+- real cross-cluster Tekton validation;
+- real external-cluster Secret loading;
+- real external-cluster RBAC validation;
+- real rollback from a failed physical cluster onboarding attempt.
+
+These items are deferred by infrastructure availability, not by missing code-readiness foundations.
+
+### Future onboarding rule
+
+When a real additional OpenShift cluster becomes available, onboarding must follow the deferred real-cluster onboarding contract.
+
+Future onboarding must not redesign the runtime model.
+
+Future onboarding must provide the missing infrastructure inputs:
+
+- cluster identity;
+- API URL;
+- CA reference;
+- token Secret reference;
+- namespace;
+- Tekton namespace;
+- Argo CD access model;
+- RBAC;
+- readiness validation;
+- rollback plan.
+
+### Final impact
+
+Phase 15 establishes a stable and documented baseline for future multi-cluster operation.
+
+The project can now move forward without waiting for unavailable infrastructure while still preserving the long-term multi-cluster objective.
+
+The current official position is:
+
+Physical multi-cluster validation is deferred.
+
+Multi-cluster code readiness is completed for the current baseline.
+
+The namespace-isolated topology on `ocp-dev` remains the validated operational baseline until real clusters become available.
