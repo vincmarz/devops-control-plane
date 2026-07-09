@@ -18,11 +18,11 @@ La mappa serve a evitare duplicazioni, lacune e incoerenze durante la scrittura 
 
 Outline principale:
 
-- `docs/final-technical-guide-outline.md`
+- `docs/final-technical-guide/outline.md`
 
 Documento sorgente finale previsto:
 
-- `docs/final-technical-guide.md`
+- `docs/final-technical-guide/final-technical-guide.md`
 
 Output Word previsto:
 
@@ -592,7 +592,7 @@ Fonti principali:
 - `docs/phase-10-operability-closure.md`
 - `docs/runtime-evidence-dashboard-maintenance-alignment.md`
 - `docs/multi-cluster-environment-enablement-request.md`
-- `docs/final-technical-guide-outline.md`
+- `docs/final-technical-guide/outline.md`
 
 Uso previsto:
 
@@ -618,7 +618,7 @@ Uso previsto:
 
 Fonti principali:
 
-- `docs/final-technical-guide-outline.md`
+- `docs/final-technical-guide/outline.md`
 - `docs/multi-cluster-environment-enablement-request.md`
 - `docs/production-readiness-checklist.md`
 

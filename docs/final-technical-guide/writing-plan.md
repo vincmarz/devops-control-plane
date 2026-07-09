@@ -35,12 +35,12 @@ La guida finale deve essere:
 
 La scrittura della guida finale partirà da:
 
-- `docs/final-technical-guide-outline.md`;
-- `docs/final-technical-guide-source-map.md`.
+- `docs/final-technical-guide/outline.md`;
+- `docs/final-technical-guide/source-map.md`.
 
 Il documento sorgente finale previsto è:
 
-- `docs/final-technical-guide.md`.
+- `docs/final-technical-guide/final-technical-guide.md`.
 
 L’output Word finale previsto è:
 

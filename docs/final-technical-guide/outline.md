@@ -757,7 +757,7 @@ La guida finale dovrà essere scritta prima come documento Markdown versionabile
 
 Documento sorgente previsto:
 
-`docs/final-technical-guide.md`
+`docs/final-technical-guide/final-technical-guide.md`
 
 Output Word previsto:
 
