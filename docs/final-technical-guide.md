@@ -480,3 +480,103 @@ Le sezioni successive dovranno coprire:
 - operability;
 - roadmap;
 - appendici.
+
+## 12. Architettura generale
+
+Il DevOps Control Plane è costruito come una piattaforma applicativa modulare. Il suo compito non è sostituire GitLab, Argo CD, Tekton o OpenShift, ma coordinarli in un workflow controllato, persistente e auditabile.
+
+Il backend principale è scritto in Go e coordina più sistemi esterni:
+
+- PostgreSQL per persistenza, audit ed evidence;
+- GitLab per branch, commit e merge request;
+- Argo CD per osservare lo stato GitOps e la salute delle applicazioni;
+- Tekton per eseguire validazioni tecniche tramite PipelineRun;
+- Kubernetes/OpenShift per osservare lo stato runtime reale;
+- UI web per dashboard, ChangeRequest, audit log ed evidenze.
+
+Vista semplificata:
+
+```text
+Utente / UI / API
+       |
+       v
+DevOps Control Plane backend
+       |
+       +--> PostgreSQL
+       +--> GitLab API
+       +--> Argo CD API
+       +--> Kubernetes/OpenShift API
+       +--> Tekton API
+```
+
+Questa separazione permette di far evolvere il progetto in modo incrementale. Per esempio, la raccolta runtime evidence può essere migliorata senza riscrivere il lifecycle delle ChangeRequest, e il modello multi-cluster può essere predisposto nel codice anche se oggi è disponibile solo il cluster `ocp-dev`.
+
+### 12.1 Principi architetturali
+
+I principi architetturali principali sono:
+
+- API-first;
+- persistenza affidabile;
+- auditabilità;
+- adapter-based architecture;
+- GitOps come fonte di verità;
+- runtime evidence come prova operativa;
+- fail-closed per configurazioni incomplete o non sicure;
+- security-by-default;
+- evoluzione incrementale verso il multi-cluster.
+
+### 12.2 API-first
+
+Il progetto è stato costruito dando priorità al backend e alle API.
+
+Questa scelta è importante perché il valore principale del DevOps Control Plane non è solo visualizzare dati, ma orchestrare workflow tecnici affidabili.
+
+La UI è stata evoluta dopo la stabilizzazione dei workflow principali. Oggi la UI è molto più avanzata rispetto al primo MVP, ma resta costruita sopra comportamenti backend già validati.
+
+### 12.3 Adapter-based architecture
+
+Il progetto usa adapter per isolare le integrazioni esterne.
+
+Esempi:
+
+- GitLab adapter;
+- Kubernetes/OpenShift adapter;
+- Tekton adapter;
+- Argo CD adapter.
+
+Questo consente al core applicativo di ragionare in termini di dominio e workflow, senza dipendere direttamente dai dettagli implementativi di ogni API esterna.
+
+### 12.4 Stato runtime attuale
+
+La baseline runtime attuale è:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`;
+- `staging` -> `ocp-dev` / `devops-ci-staging`;
+- `production` -> `ocp-dev` / `devops-ci-production`.
+
+Questa architettura rappresenta una topologia multi-environment con namespace isolation.
+
+La validazione fisica multi-cluster resta rinviata perché non sono disponibili altri cluster OpenShift. Tuttavia il codice è stato predisposto per runtime target multi-cluster futuri.
+
+### 12.5 Implicazione per il futuro multi-cluster
+
+Il modello architetturale non è legato rigidamente a un solo cluster.
+
+Il codice include concetti come:
+
+- Environment Catalog;
+- Cluster Registry;
+- Environment Cluster Resolver;
+- Technical Runtime Target;
+- Runtime Client Provider Registry;
+- Secret reference model;
+- runtime client factories.
+
+Questo significa che, quando un cluster reale aggiuntivo sarà disponibile, il progetto dovrà eseguire onboarding e validazioni, non riprogettare l’architettura.
+
+La regola da mantenere è:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
