@@ -988,3 +988,290 @@ Runbook review:                after every incident or major maintenance
 | Date | Phase | Description |
 |---|---:|---|
 | 2026-07-03 | 10.6 | Initial maintenance operations runbook for routine and controlled DevOps Control Plane maintenance. |
+
+## Post-Phase 15 maintenance validation addendum
+
+Status: Active maintenance baseline  
+Phase reference: 13.4  
+Last updated: 2026-07-09
+
+### Purpose
+
+This section refreshes the maintenance operations runbook after completion of Phase 15 and the post-closure simulated staging and production cluster readiness validation.
+
+The current DevOps Control Plane runtime baseline is namespace-isolated on the available `ocp-dev` OpenShift cluster:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+The codebase is multi-cluster code-ready, and maintenance operations must preserve both the validated namespace-isolated runtime baseline and the fail-closed multi-cluster guardrails.
+
+### Maintenance impact after Phase 15
+
+Maintenance activities must now consider the following runtime surfaces:
+
+- DevOps Control Plane application pod;
+- PostgreSQL database;
+- OAuth proxy;
+- Environment Catalog;
+- namespace-isolated application namespaces;
+- Argo CD Applications for dev, staging and production;
+- Tekton Pipelines and PipelineRuns for staging and production;
+- runtime evidence collection;
+- Tekton validation evidence collection;
+- UI dashboard and ChangeRequest detail rendering;
+- Secret reference and runtime factory guardrails.
+
+Maintenance is no longer limited to the original dev-only runtime baseline.
+
+### Current namespace-isolated topology
+
+The current validated topology is:
+
+- `dev` -> `devops-ci-demo`
+- `staging` -> `devops-ci-staging`
+- `production` -> `devops-ci-production`
+
+All three logical environments currently run on `ocp-dev`.
+
+During maintenance, operators must validate each namespace separately.
+
+A successful check in `devops-ci-demo` does not prove that `devops-ci-staging` or `devops-ci-production` are healthy.
+
+### Pre-maintenance checks
+
+Before any maintenance activity, collect a baseline snapshot.
+
+Required checks:
+
+- repository working tree is clean;
+- DevOps Control Plane pod is running;
+- PostgreSQL pod is running;
+- `/readyz` returns HTTP `200`;
+- dashboard returns HTTP `200`;
+- Argo CD Applications are `Synced` and `Healthy`;
+- application deployments are ready in all three namespaces;
+- route `/healthz` returns HTTP `200` for all three environments;
+- staging and production Tekton validation PipelineRuns are in expected terminal state;
+- UI ChangeRequest detail pages are reachable for recent staging and production checks.
+
+Recommended evidence directory naming pattern:
+
+`/tmp/dcp-maintenance-YYYYMMDD-HHMMSS`
+
+### Post-maintenance smoke matrix
+
+After maintenance, validate the following matrix.
+
+Control Plane:
+
+- DevOps Control Plane deployment available;
+- pod containers ready;
+- application image is expected;
+- `/readyz` returns HTTP `200`;
+- dashboard returns HTTP `200`.
+
+Argo CD:
+
+- `demo-go-color-app` is `Synced` and `Healthy`;
+- `demo-go-color-app-staging` is `Synced` and `Healthy`;
+- `demo-go-color-app-production` is `Synced` and `Healthy`.
+
+Kubernetes application runtime:
+
+- `demo-go-color-app` deployment ready in `devops-ci-demo`;
+- `demo-go-color-app` deployment ready in `devops-ci-staging`;
+- `demo-go-color-app` deployment ready in `devops-ci-production`.
+
+Routes:
+
+- dev route `/healthz` returns HTTP `200`;
+- staging route `/healthz` returns HTTP `200`;
+- production route `/healthz` returns HTTP `200`.
+
+Tekton:
+
+- staging validation PipelineRun remains available and terminal;
+- production validation PipelineRun remains available and terminal;
+- new validation runs, if triggered by the maintenance activity, must complete with reason `Succeeded`.
+
+UI:
+
+- dashboard shows latest ChangeRequest;
+- dashboard shows `Environments / Namespaces`;
+- ChangeRequest detail page shows runtime evidence;
+- ChangeRequest detail page shows Tekton validation evidence when available.
+
+### Argo CD maintenance validation
+
+After Argo CD token, RBAC, TLS, Application or repository maintenance, validate:
+
+- Application status for dev;
+- Application status for staging;
+- Application status for production;
+- target namespace;
+- Git revision;
+- health status;
+- sync status;
+- Application events if health or sync is not correct.
+
+Expected result:
+
+- sync status is `Synced`;
+- health status is `Healthy`.
+
+If an Application is `OutOfSync` or `Degraded`, stop the maintenance closure and preserve evidence.
+
+### Tekton maintenance validation
+
+After Tekton Pipeline, Task, RBAC, namespace or ServiceAccount maintenance, validate:
+
+- required Tasks exist in the target namespace;
+- required Pipeline exists in the target namespace;
+- PipelineRun can be inspected;
+- TaskRuns can be inspected;
+- validation evidence can be collected;
+- failed task count is zero for successful validations.
+
+Current known validation examples:
+
+- staging PipelineRun: `devops-cp-validate-chg-2026-0049-nd7rm`;
+- production PipelineRun: `devops-cp-validate-chg-2026-0050-8wqtv`.
+
+Expected result:
+
+- PipelineRun status is `True`;
+- PipelineRun reason is `Succeeded`.
+
+### UI maintenance validation
+
+After UI, route, OAuth proxy, deployment or image maintenance, validate:
+
+- dashboard HTTP response;
+- ChangeRequest list view;
+- ChangeRequest detail view;
+- latest ChangeRequest selection;
+- `Environments / Namespaces` topbar;
+- Tekton validation evidence card;
+- runtime evidence card;
+- absence of raw Secret values in rendered evidence.
+
+If the UI does not show expected evidence, verify:
+
+- backend evidence records;
+- running pod image;
+- rollout status;
+- ChangeRequest number;
+- evidence type;
+- UI handler version.
+
+### Evidence maintenance validation
+
+After changes that affect evidence collection, validate:
+
+- evidence records are created;
+- evidence records are associated with the correct ChangeRequest;
+- target environment is correct;
+- namespace is correct;
+- validation path is correct;
+- evidence is sanitized;
+- UI renders the expected latest evidence.
+
+Evidence must not include:
+
+- raw tokens;
+- kubeconfig payloads;
+- private keys;
+- decoded Secret values;
+- sensitive credential material.
+
+### Environment Catalog maintenance
+
+After changes to the Environment Catalog, validate:
+
+- `dev` still maps to `devops-ci-demo`;
+- `staging` still maps to `devops-ci-staging` unless a controlled onboarding changes it;
+- `production` still maps to `devops-ci-production` unless a controlled onboarding changes it;
+- technical actions remain enabled only where intended;
+- validation path remains environment-specific.
+
+If an environment points to a cluster other than `ocp-dev`, verify that the change is part of an approved real-cluster onboarding activity.
+
+### Cluster Registry and provider maintenance
+
+After changes to Cluster Registry or runtime provider configuration, validate:
+
+- provider exists for the intended cluster;
+- provider is enabled only when readiness gates are satisfied;
+- missing provider fails closed;
+- disabled provider fails closed;
+- staging does not silently fall back to `ocp-dev`;
+- production does not silently fall back to `ocp-dev`.
+
+For the current physical baseline, do not claim real cross-cluster validation unless a real additional OpenShift cluster is available.
+
+### Secret and RBAC maintenance
+
+After Secret reference, allow-list or RBAC maintenance, validate:
+
+- Secret references are documented by name only;
+- Secret values are not printed;
+- allow-list entries are explicit;
+- RBAC is namespace-scoped;
+- no broad Secret read access was added;
+- runtime Secret loader remains disabled unless explicitly required;
+- runtime factories remain disabled unless explicitly required.
+
+If a Secret or factory guardrail fails closed, treat this as expected safety behavior until the missing prerequisite is resolved.
+
+### Maintenance stop conditions
+
+Stop the maintenance activity when:
+
+- `/readyz` is not HTTP `200`;
+- dashboard is not HTTP `200`;
+- target namespace cannot be proven;
+- Argo CD is not `Synced` and `Healthy`;
+- deployment readiness fails in any affected namespace;
+- route health fails in any affected environment;
+- Tekton validation fails unexpectedly;
+- UI evidence rendering is inconsistent with backend evidence;
+- a Secret value is printed;
+- provider or factory behavior indicates an unsafe fallback.
+
+### Maintenance closure criteria
+
+A maintenance activity can be closed when:
+
+- pre-maintenance evidence was captured;
+- maintenance actions were documented;
+- post-maintenance smoke matrix completed successfully;
+- affected environments were validated separately;
+- no raw Secret values were exposed;
+- fail-closed guardrails remain active;
+- evidence directory is preserved;
+- repository working tree is clean when the repository was used.
+
+### Future real multi-cluster maintenance
+
+When real clusters become available, this runbook must be extended with physical cluster-specific validation.
+
+Future maintenance must prove:
+
+- staging physical cluster target does not fall back to `ocp-dev`;
+- production physical cluster target does not fall back to `ocp-dev`;
+- cluster-specific RBAC is valid;
+- cluster-specific Secret references are allow-listed;
+- provider and factory enablement is explicit;
+- rollback to namespace-isolated baseline is documented.
+
+### Summary
+
+Maintenance operations are now aligned with the post-Phase 15 runtime model.
+
+The validated operational baseline remains namespace-isolated on `ocp-dev`.
+
+The codebase remains multi-cluster code-ready, and maintenance must preserve the fail-closed guardrails needed for future real-cluster onboarding.
