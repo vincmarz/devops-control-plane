@@ -1216,3 +1216,417 @@ Grazie a PostgreSQL, il progetto può offrire:
 - base per future esigenze di compliance.
 
 La persistenza è quindi uno dei pilastri che trasformano il DevOps Control Plane da automazione temporanea a piattaforma di controllo strutturata.
+
+## 15. Modello dati
+
+Il modello dati del DevOps Control Plane descrive le informazioni che la piattaforma deve conservare per governare un cambiamento in modo tracciabile, auditabile e verificabile.
+
+Il modello non e pensato solo per salvare dati applicativi. Il modello rappresenta il ciclo completo di una richiesta di cambiamento: richiesta, stato, eventi, workflow tecnici ed evidenze.
+
+Le entita principali sono:
+
+- `ChangeRequest`;
+- `ChangeEvent`;
+- `Evidence`.
+
+Vista semplificata:
+
+```text
+ChangeRequest
+      |
+      +--> ChangeEvent
+      |
+      +--> Evidence
+```
+
+Questa struttura permette di rispondere a tre domande fondamentali:
+
+```text
+Che cosa e stato richiesto?
+Che cosa e successo durante il workflow?
+Quali prove tecniche dimostrano lo stato osservato?
+```
+
+### 15.1 ChangeRequest
+
+`ChangeRequest` e l'entita principale del dominio.
+
+Una ChangeRequest rappresenta una richiesta di cambiamento controllata dal DevOps Control Plane. La ChangeRequest collega il mondo funzionale con il mondo tecnico: da un lato descrive cosa si vuole cambiare, dall'altro permette al sistema di eseguire workflow tecnici come GitLab, Argo CD, Tekton e runtime evidence.
+
+Informazioni concettuali tipiche:
+
+- numero della richiesta;
+- titolo;
+- descrizione;
+- applicazione target;
+- ambiente target;
+- requester;
+- stato del processo;
+- stato runtime;
+- branch Git o riferimento Git;
+- timestamp di creazione;
+- timestamp di aggiornamento.
+
+Esempi reali usati nella baseline:
+
+- `CHG-2026-0049` per staging;
+- `CHG-2026-0050` per production.
+
+Queste ChangeRequest sono importanti perche hanno validato il workflow namespace-isolated per staging e production, includendo Tekton validation evidence e UI rendering.
+
+### 15.2 Numero ChangeRequest
+
+Il numero della ChangeRequest e l'identificativo leggibile usato da operatori e UI.
+
+Esempi:
+
+```text
+CHG-2026-0049
+CHG-2026-0050
+```
+
+Il numero deve essere stabile e riconoscibile, perche compare in dashboard, pagine di dettaglio, audit, evidence, troubleshooting e runbook operativi.
+
+### 15.3 Target environment
+
+`targetEnvironment` indica l'ambiente logico richiesto per la ChangeRequest.
+
+Ambienti correnti:
+
+- `dev`;
+- `staging`;
+- `production`.
+
+Il target environment e fondamentale perche determina il runtime target tecnico.
+
+Nel baseline corrente:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Il target environment deve essere persistito perche tutte le operazioni successive devono sapere quale ambiente era stato richiesto. Senza questo campo, non sarebbe possibile distinguere correttamente una validazione staging da una validazione production.
+
+### 15.4 Stato del processo
+
+Lo stato del processo descrive l'avanzamento logico della ChangeRequest.
+
+Esempi concettuali:
+
+- creata;
+- in lavorazione;
+- in validazione;
+- completata;
+- fallita;
+- in attesa di azione.
+
+Questo stato non deve essere confuso con lo stato runtime. Una richiesta puo essere stata processata correttamente dal backend, ma il deployment puo comunque non essere pronto.
+
+### 15.5 Stato runtime
+
+Lo stato runtime descrive cosa e stato osservato nei sistemi tecnici.
+
+Puo derivare da:
+
+- Kubernetes/OpenShift;
+- Argo CD;
+- Tekton;
+- controlli interni;
+- evidence raccolte.
+
+Questa distinzione evita di dichiarare riuscito un cambiamento solo perche il processo applicativo e avanzato. Il DevOps Control Plane deve distinguere successo del processo, successo tecnico del runtime, fallimento della validazione, fallimento del deployment, evidence mancante o evidence incompleta.
+
+### 15.6 ChangeEvent
+
+`ChangeEvent` rappresenta un evento di audit collegato a una ChangeRequest.
+
+Esempi di eventi:
+
+- ChangeRequest creata;
+- branch Git creato;
+- merge request aperta;
+- merge request completata;
+- runtime evidence raccolta;
+- check deployment eseguito;
+- validazione Tekton avviata;
+- check-validation completato;
+- errore registrato.
+
+Gli eventi permettono di ricostruire la storia della richiesta.
+
+Vista concettuale:
+
+```text
+ChangeRequest CHG-2026-0050
+      |
+      +--> event: created
+      +--> event: validate requested
+      +--> event: PipelineRun created
+      +--> event: check-validation succeeded
+      +--> event: evidence stored
+```
+
+### 15.7 Audit trail
+
+L'audit trail e la sequenza degli eventi associati a una ChangeRequest.
+
+L'audit trail e utile per:
+
+- troubleshooting;
+- revisione operativa;
+- verifica dei passaggi eseguiti;
+- ricostruzione storica;
+- responsabilita e governance.
+
+Il valore dell'audit trail non e solo tecnico. L'audit trail aiuta anche a spiegare perche una richiesta si trova in un certo stato.
+
+### 15.8 Evidence
+
+`Evidence` rappresenta una prova tecnica associata a una ChangeRequest.
+
+Una evidence risponde alla domanda:
+
+```text
+Quale stato tecnico e stato osservato?
+```
+
+Esempi di evidence:
+
+- stato Argo CD Application;
+- stato Deployment;
+- replica readiness;
+- route health;
+- PipelineRun Tekton;
+- TaskRun Tekton;
+- failed task count;
+- validation path;
+- stato sanitized;
+- diagnostica runtime.
+
+La evidence deve sempre essere collegata al contesto corretto: ChangeRequest, target environment, namespace, timestamp e tipo di evidence.
+
+### 15.9 Tipi di evidence
+
+Nel progetto si possono distinguere varie famiglie di evidence:
+
+- runtime evidence;
+- deployment evidence;
+- Tekton validation evidence;
+- Argo CD deployment evidence;
+- GitLab workflow evidence;
+- diagnostic evidence;
+- raw sanitized evidence.
+
+Queste famiglie non devono essere confuse. Una Tekton validation evidence dimostra l'esito di una PipelineRun. Una runtime evidence dimostra invece lo stato osservato nel cluster.
+
+### 15.10 Evidence sanitization
+
+La evidence deve essere sanificata.
+
+Dati ammessi:
+
+- nomi di namespace;
+- nomi di risorse;
+- nomi di PipelineRun;
+- nomi di Argo CD Application;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- timestamp;
+- stato `evidence sanitized=true`.
+
+Dati vietati:
+
+- token;
+- password;
+- kubeconfig raw;
+- private key;
+- bearer token;
+- contenuto Secret decodificato;
+- raw CA non gestita in modo sicuro.
+
+La sanitizzazione e un requisito di sicurezza, non un dettaglio secondario.
+
+### 15.11 Relazione tra ChangeRequest ed Evidence
+
+Una ChangeRequest puo avere piu evidence nel tempo.
+
+Esempio:
+
+```text
+CHG-2026-0050
+      |
+      +--> Argo CD evidence
+      +--> deployment evidence
+      +--> Tekton validation evidence
+      +--> runtime diagnostics evidence
+```
+
+Questo e importante perche il workflow puo essere eseguito in piu passaggi. La UI deve mostrare le evidence piu rilevanti per l'operatore, in particolare la latest validation evidence quando disponibile.
+
+### 15.12 Latest validation evidence
+
+La latest validation evidence e l'evidenza di validazione piu recente associata a una ChangeRequest.
+
+La UI deve mostrare in modo chiaro:
+
+- PipelineRun;
+- Tekton namespace;
+- Pipeline;
+- Git revision o branch;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- stato sanitized.
+
+Esempio production validato:
+
+```text
+ChangeRequest: CHG-2026-0050
+Tekton namespace: devops-ci-production
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+validationPath: apps/demo-go-color-app/overlays/production
+failedTaskCount: 0
+evidence sanitized: true
+result: Succeeded
+```
+
+### 15.13 Relazione con Environment Catalog
+
+Il modello dati e collegato all'Environment Catalog perche la ChangeRequest contiene il target environment.
+
+Il target environment viene risolto in:
+
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application;
+- validation path.
+
+Queste informazioni possono poi comparire nelle evidence. Questo collegamento e essenziale per evitare ambiguita tra ambienti.
+
+### 15.14 Relazione con Cluster Registry
+
+Il modello dati deve essere compatibile con il Cluster Registry.
+
+Oggi dev, staging e production sono namespace-isolated su `ocp-dev`. Domani staging o production potranno puntare a cluster fisici diversi.
+
+Per questo motivo le evidence e i runtime target devono preservare informazioni come:
+
+- target environment;
+- cluster name;
+- namespace;
+- provider selection.
+
+Quando arrivera un cluster reale, sara importante dimostrare che il workflow non e ricaduto per errore su `ocp-dev`.
+
+### 15.15 Relazione con la UI
+
+La UI e una vista del modello dati e delle evidenze.
+
+La UI usa questi dati per mostrare:
+
+- dashboard;
+- lista ChangeRequest;
+- dettaglio ChangeRequest;
+- audit log;
+- runtime evidence card;
+- Tekton validation card;
+- raw sanitized evidence.
+
+La UI non deve inventare uno stato. La UI deve rappresentare lo stato persistito e le evidence raccolte.
+
+### 15.16 Relazione con operability
+
+Il modello dati sostiene anche l'operability.
+
+Durante troubleshooting o manutenzione, un operatore puo usare ChangeRequest, eventi ed evidence per capire:
+
+- quale ambiente era coinvolto;
+- quale namespace era coinvolto;
+- quale workflow e stato eseguito;
+- quale PipelineRun e stata creata;
+- quale stato Argo CD e stato osservato;
+- quale stato runtime e stato raccolto;
+- dove si e verificato un errore.
+
+Senza modello dati persistente, l'operatore dovrebbe ricostruire tutto da log e sistemi esterni.
+
+### 15.17 Relazione con security
+
+Il modello dati deve rispettare i guardrail di sicurezza.
+
+In particolare:
+
+- non deve persistere Secret raw;
+- non deve persistere token;
+- non deve persistere kubeconfig raw;
+- non deve rendere disponibili credenziali in UI;
+- deve conservare solo informazioni operative sicure;
+- deve indicare se la evidence e sanificata.
+
+La sicurezza del modello dati e parte della sicurezza della piattaforma.
+
+### 15.18 Relazione con multi-cluster readiness
+
+Il modello dati supporta la readiness multi-cluster perche conserva il target environment e le informazioni runtime correlate.
+
+I test post-Fase 15 hanno validato target simulati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+Il comportamento atteso e:
+
+- nessun fallback silenzioso verso `ocp-dev`;
+- provider mancante fail-closed;
+- provider disabled fail-closed.
+
+Il modello dati deve continuare a rendere visibile quale ambiente e quale cluster erano attesi.
+
+### 15.19 Esempio completo
+
+Esempio concettuale basato sulla validazione production:
+
+```text
+ChangeRequest
+  number: CHG-2026-0050
+  targetEnvironment: production
+
+Runtime target
+  clusterName: ocp-dev
+  kubernetesNamespace: devops-ci-production
+  tektonNamespace: devops-ci-production
+  argocdApplicationName: demo-go-color-app-production
+  validationPath: apps/demo-go-color-app/overlays/production
+
+Evidence
+  type: validation
+  pipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+  status: True
+  reason: Succeeded
+  failedTaskCount: 0
+  sanitized: true
+```
+
+Questo esempio mostra come dominio, runtime target ed evidence siano collegati.
+
+### 15.20 Sintesi
+
+Il modello dati del DevOps Control Plane permette di trasformare workflow tecnici distribuiti in una storia coerente e persistente.
+
+Le entita principali sono:
+
+- `ChangeRequest`, che rappresenta la richiesta;
+- `ChangeEvent`, che rappresenta la storia;
+- `Evidence`, che rappresenta la prova tecnica.
+
+Il modello dati collega governance, automazione, audit, runtime evidence, UI e operability.
+
+Questo e uno dei motivi per cui il DevOps Control Plane puo essere considerato una piattaforma di controllo e non una semplice raccolta di script.
