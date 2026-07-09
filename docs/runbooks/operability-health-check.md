@@ -1938,3 +1938,282 @@ When escalating, include:
 If an operator cannot prove that the operation targets the expected environment, namespace and runtime provider, the operator must stop the operation.
 
 A clear fail-closed error is safer than an implicit action against the wrong cluster or namespace.
+
+## Post-Phase 15 Secret, RBAC and factory operational guardrails
+
+Status: Active operational baseline  
+Phase reference: 10.11.1  
+Last updated: 2026-07-09
+
+### Purpose
+
+This section documents the operational guardrails that must be respected when working with Secret references, RBAC, runtime Secret loading and runtime client factories.
+
+The DevOps Control Plane is currently validated on the namespace-isolated `ocp-dev` baseline:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+The codebase is multi-cluster code-ready, but physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+These guardrails protect the platform from unsafe enablement when future real clusters are onboarded.
+
+### Golden rules
+
+Operators must follow these rules:
+
+- never print raw Secret values;
+- never decode tokens into terminal output;
+- never copy raw credentials into evidence files;
+- never copy raw credentials into tickets or documentation;
+- never grant broad permissions only to bypass an error;
+- never enable all runtime factories at once;
+- never force fallback to `ocp-dev` for an environment that should target a different cluster;
+- never treat fail-closed errors as defects without understanding the missing prerequisite.
+
+A fail-closed error is safer than an implicit operation against the wrong namespace or cluster.
+
+### Secret reference model
+
+The DevOps Control Plane uses Secret references instead of embedding Secret values directly.
+
+A Secret reference describes where credential material is stored. It must not contain the credential value itself.
+
+Operationally, this means that evidence and troubleshooting notes may include:
+
+- Secret reference name;
+- Secret reference namespace;
+- required key name;
+- target cluster name;
+- target environment name.
+
+Evidence and troubleshooting notes must not include:
+
+- token values;
+- kubeconfig content;
+- private keys;
+- raw CA bundle content;
+- decoded Secret payloads.
+
+### Runtime Secret loader posture
+
+The runtime Secret loader is disabled by default.
+
+This is intentional.
+
+The runtime Secret loader must remain disabled unless a specific onboarding activity explicitly requires it and all readiness gates have been satisfied.
+
+Before enabling runtime Secret loading, operators must confirm:
+
+- the target cluster is known;
+- the target environment is known;
+- Secret references exist;
+- Secret references are allow-listed;
+- the Kubernetes Secret getter is configured;
+- RBAC allows only the required Secret access;
+- no raw Secret values will be printed;
+- rollback is documented.
+
+### Secret allow-list requirements
+
+Secret loading must be controlled by an allow-list.
+
+The allow-list must define which cluster, namespace and Secret reference combinations are allowed.
+
+If a Secret reference is not allow-listed, the system must fail closed.
+
+Operators must not bypass the allow-list during troubleshooting.
+
+If a Secret reference is rejected, the correct remediation is to review the onboarding contract and update the allow-list through an approved change.
+
+### Minimum RBAC principle
+
+RBAC must be namespace-scoped where possible.
+
+For the current namespace-isolated baseline, RBAC must be reviewed separately for:
+
+- `devops-ci-demo`;
+- `devops-ci-staging`;
+- `devops-ci-production`.
+
+For future real-cluster onboarding, RBAC must be reviewed per physical cluster and per namespace.
+
+Minimum expected access may include:
+
+- read Deployment status;
+- read Pod status;
+- read Service status;
+- read Route status;
+- create and read PipelineRuns;
+- read TaskRuns.
+
+Operators must avoid:
+
+- cluster-admin;
+- broad wildcard permissions;
+- unrestricted Secret read access;
+- uncontrolled cross-namespace access;
+- manual permission expansion not linked to a documented requirement.
+
+### Runtime provider guardrails
+
+Runtime provider selection is based on the resolved target cluster.
+
+Expected fail-closed outcomes include:
+
+- missing runtime provider;
+- disabled runtime provider;
+- unknown cluster reference;
+- disabled cluster reference.
+
+These outcomes must not be bypassed by forcing the environment to use `ocp-dev`.
+
+If an environment is expected to target a future cluster, the provider must be configured explicitly through the onboarding contract.
+
+### Runtime factory guardrails
+
+Runtime client factories are disabled by default.
+
+This includes:
+
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory.
+
+Factory enablement must be explicit and capability-specific.
+
+Operators must not enable all factories together unless the onboarding plan explicitly requires it and all readiness gates are satisfied.
+
+Factory failures are expected when required prerequisites are missing.
+
+Expected fail-closed cases include:
+
+- factory disabled;
+- factory not configured;
+- missing API URL;
+- missing Argo CD base URL;
+- missing token value;
+- unsupported kubeconfig input;
+- unsupported raw CA input;
+- invalid factory request.
+
+### Safe enablement sequence for future clusters
+
+When a real additional cluster becomes available, enablement must follow a controlled sequence.
+
+Recommended order:
+
+1. register cluster metadata;
+2. define environment mapping;
+3. define namespace mapping;
+4. define RBAC;
+5. define Secret references;
+6. define allow-list entries;
+7. validate readiness gates;
+8. enable only required Secret loading;
+9. enable only required client factory;
+10. run smoke test;
+11. collect sanitized evidence;
+12. document result;
+13. keep rollback ready.
+
+Do not skip directly to factory enablement.
+
+### Current baseline expectations
+
+For the current validated baseline, operators should expect:
+
+- runtime Secret loader disabled;
+- runtime factories disabled unless explicitly tested;
+- namespace-isolated runtime execution on `ocp-dev`;
+- staging and production represented as separate namespaces;
+- physical cross-cluster validation deferred;
+- simulated staging and production cluster readiness validated in code.
+
+### Future real-cluster onboarding expectations
+
+When physical clusters become available, the onboarding must prove:
+
+- staging does not silently fall back to `ocp-dev`;
+- production does not silently fall back to `ocp-dev`;
+- missing provider fails closed;
+- disabled provider fails closed;
+- Secret references are allow-listed;
+- runtime Secret loader is explicitly enabled only when needed;
+- factories are explicitly enabled only when needed;
+- no raw Secret values appear in logs, evidence or UI;
+- rollback to the namespace-isolated baseline is possible.
+
+### Operator checklist before enabling Secret loading
+
+Before enabling runtime Secret loading, confirm:
+
+- target cluster is documented;
+- target environment is documented;
+- target namespace is documented;
+- Secret reference names are documented;
+- required keys are documented;
+- allow-list entries exist;
+- RBAC is approved;
+- no raw Secret output will be generated;
+- rollback procedure exists;
+- owner approval exists.
+
+If any item is missing, keep Secret loading disabled.
+
+### Operator checklist before enabling runtime factories
+
+Before enabling a runtime factory, confirm:
+
+- the global runtime client factory flag is enabled intentionally;
+- the capability-specific factory flag is enabled intentionally;
+- only the required factory is enabled;
+- API URL or base URL is configured;
+- token reference is available;
+- token value can be loaded safely;
+- unsupported kubeconfig input is not required;
+- unsupported raw CA input is not required;
+- RBAC is valid;
+- smoke test is ready;
+- rollback is documented.
+
+If any item is missing, keep the factory disabled.
+
+### Unsafe actions
+
+Operators must avoid the following actions:
+
+- granting cluster-admin to unblock a test;
+- adding Secret read access to broad namespaces;
+- enabling all factories during troubleshooting;
+- disabling fail-closed checks;
+- manually editing GitOps-managed resources without documenting drift;
+- rerunning failed automation without inspecting TaskRun or Application status;
+- assuming that a simulated target is physically validated;
+- claiming physical multi-cluster validation without a real second cluster.
+
+### Safe actions
+
+Operators may safely perform:
+
+- read-only status checks;
+- namespace-specific deployment checks;
+- Argo CD Application status checks;
+- PipelineRun and TaskRun status checks;
+- route health checks;
+- sanitized evidence collection;
+- review of Secret reference names without decoding values;
+- review of allow-list entries;
+- review of factory flags;
+- review of provider registry entries.
+
+### Summary
+
+The DevOps Control Plane must remain conservative by default.
+
+Secret loading and runtime factories are powerful mechanisms intended for future real multi-cluster onboarding.
+
+Until a real cluster is available and approved for onboarding, the validated operational baseline remains the namespace-isolated topology on `ocp-dev`.
+
+Fail-closed behavior is an operational safety feature and must be preserved.
