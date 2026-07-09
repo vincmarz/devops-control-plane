@@ -513,3 +513,131 @@ The DevOps Control Plane Phase 10 — Operability / production operations is com
 | Date | Phase | Description |
 |---|---:|---|
 | 2026-07-03 | 10 closure | Formal closure document for Phase 10 Operability / production operations. |
+
+## Post-Phase 15 operability consolidation addendum
+
+Status: Completed  
+Phase reference: 10.12.1  
+Last updated: 2026-07-09
+
+### Purpose
+
+This addendum refreshes the Phase 10 operability closure after completion of Phase 15 and the subsequent post-closure multi-cluster readiness reinforcement.
+
+The original Phase 10 closure remains valid as an advanced operational baseline. This addendum clarifies that the operational documentation has now been realigned with the current runtime state of the DevOps Control Plane.
+
+### Current operational baseline
+
+The current validated runtime baseline is namespace-isolated on the available `ocp-dev` OpenShift cluster:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+This namespace-isolated baseline has been validated through runtime smoke tests and published through the annotated tag:
+
+`namespace-isolated-baseline-20260709`
+
+### Phase 15 alignment
+
+Phase 15 is completed as a multi-cluster code-ready baseline.
+
+Physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+The following capabilities are now reflected in the operational baseline:
+
+- Environment Catalog and namespace-aware runtime model;
+- Argo CD Applications for dev, staging and production;
+- Tekton validation evidence for staging and production;
+- UI visibility for `Environments / Namespaces`;
+- runtime evidence and validation evidence on ChangeRequest detail pages;
+- simulated staging and production external-cluster readiness tests;
+- fail-closed behavior for missing or disabled runtime providers;
+- Secret reference, RBAC and runtime factory operational guardrails.
+
+### Updated runbook alignment
+
+The operability health-check runbook has been refreshed after Phase 15.
+
+The refreshed runbook now covers:
+
+- DevOps Control Plane pod readiness;
+- `/readyz` validation;
+- dashboard UI validation;
+- Argo CD Application matrix for dev, staging and production;
+- deployment readiness matrix across the three namespaces;
+- route `/healthz` matrix;
+- Tekton validation PipelineRun checks;
+- UI ChangeRequest detail checks;
+- incident triage quick-reference;
+- evidence checklist;
+- Secret, RBAC and runtime factory guardrails.
+
+Updated runbook:
+
+`docs/runbooks/operability-health-check.md`
+
+### Troubleshooting alignment
+
+The troubleshooting matrix now covers the current post-Phase 15 failure modes, including:
+
+- DevOps Control Plane pod not ready;
+- `/readyz` non-200;
+- dashboard unavailable;
+- missing latest ChangeRequest;
+- missing `Environments / Namespaces` UI section;
+- Argo CD OutOfSync or Degraded;
+- deployment not ready in one namespace;
+- route `/healthz` failure;
+- Tekton PipelineRun failure;
+- missing Tekton validation evidence in UI;
+- wrong environment or namespace mapping;
+- missing or disabled runtime provider;
+- Secret loading fail-closed behavior;
+- runtime factory fail-closed behavior.
+
+### Guardrail alignment
+
+The operational guardrails now explicitly state that operators must not bypass safety mechanisms during troubleshooting.
+
+The following behavior is expected and must be preserved:
+
+- Secret loading disabled by default;
+- runtime factories disabled by default;
+- missing provider fails closed;
+- disabled provider fails closed;
+- non allow-listed Secret reference fails closed;
+- unsupported kubeconfig input fails closed;
+- unsupported raw CA input fails closed;
+- missing token value fails closed;
+- no raw Secret value in logs, evidence, documentation or tickets;
+- no silent fallback to `ocp-dev` when a different target cluster is expected.
+
+### Current Phase 10 status
+
+Phase 10 can now be considered:
+
+`COMPLETED AS AN ADVANCED OPERABILITY BASELINE, REALIGNED AFTER PHASE 15`
+
+This does not mean that every enterprise production-hardening item is complete.
+
+It means that the project now has an operationally usable and documented baseline aligned with the current runtime model, including namespace-isolated multi-environment operations and multi-cluster code-readiness guardrails.
+
+### Remaining production-hardening topics
+
+The following items remain future production-hardening topics:
+
+- physical multi-cluster runtime validation when additional clusters are available;
+- production-grade PostgreSQL high availability, if required by the target service profile;
+- immutable image or digest pinning strategy;
+- formal SLO and SLA definitions;
+- dedicated DR procedures for GitLab, Argo CD and Tekton;
+- production-grade alerting and metrics integration;
+- periodic restore exercises with measured RPO and RTO;
+- final service-owner acceptance.
+
+### Closure statement
+
+Phase 10 is consolidated as an advanced operability baseline aligned with the current DevOps Control Plane runtime.
+
+The platform can be operated, checked and troubleshot using the refreshed runbooks while future physical multi-cluster onboarding remains deferred by infrastructure availability.
