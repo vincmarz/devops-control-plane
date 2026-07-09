@@ -1165,3 +1165,72 @@ The UI now makes the environment-to-namespace mapping explicit while the backend
 The next work should continue toward controlled real multi-cluster enablement when an additional non-production cluster becomes available.
 
 Until then, the namespace-isolated topology on `ocp-dev` remains the validated proving ground for environment-aware UI behavior, runtime target selection, evidence sanitization, provider-aware clients and future physical multi-cluster onboarding.
+
+## Phase 15.8.11.1 — Final namespace-isolated runtime smoke matrix
+
+**Status:** Completed  
+**Validation date:** 2026-07-09  
+**Evidence directory:** `/tmp/dcp-15-8-11-1-20260709-145735`
+
+### Purpose
+
+This validation step captured the final namespace-isolated runtime smoke matrix for the current multi-environment baseline running on the available `ocp-dev` OpenShift cluster.
+
+The goal was to confirm that the simulated `dev`, `staging` and `production` environments remain operational after the latest UI runtime evidence alignment and documentation updates.
+
+### Validated topology
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+### Runtime smoke results
+
+The following runtime checks completed successfully:
+
+- DevOps Control Plane readiness endpoint returned HTTP `200`.
+- Dashboard UI returned HTTP `200`.
+- Argo CD Applications were `Synced` and `Healthy` for all three environments.
+- `demo-go-color-app` deployment was ready in all three namespaces.
+- Route `/healthz` returned HTTP `200` for all three environments.
+- Final staging Tekton PipelineRun was `Succeeded`.
+- Final production Tekton PipelineRun was `Succeeded`.
+- UI detail pages for `CHG-2026-0049` and `CHG-2026-0050` returned HTTP `200`.
+
+### Detailed validation evidence
+
+Argo CD status:
+
+- `dev`: `sync=Synced`, `health=Healthy`, revision `2d66c51831c282856b27397bcd3e0aeba51e435c`
+- `staging`: `sync=Synced`, `health=Healthy`, revision `2d66c51831c282856b27397bcd3e0aeba51e435c`
+- `production`: `sync=Synced`, `health=Healthy`, revision `2d66c51831c282856b27397bcd3e0aeba51e435c`
+
+Deployment readiness:
+
+- `dev`: `ready=2/2`, `available=2`, `updated=2`
+- `staging`: `ready=2/2`, `available=2`, `updated=2`
+- `production`: `ready=2/2`, `available=2`, `updated=2`
+
+Route health checks:
+
+- `dev_healthz_http=200`
+- `staging_healthz_http=200`
+- `production_healthz_http=200`
+
+Tekton validation:
+
+- `staging`: `devops-cp-validate-chg-2026-0049-nd7rm`, `status=True`, `reason=Succeeded`
+- `production`: `devops-cp-validate-chg-2026-0050-8wqtv`, `status=True`, `reason=Succeeded`
+
+UI validation:
+
+- `CHG-2026-0049` detail page returned HTTP `200`
+- `CHG-2026-0050` detail page returned HTTP `200`
+
+### Conclusion
+
+The namespace-isolated multi-environment baseline is stable across `dev`, `staging` and `production` on `ocp-dev`.
+
+This confirms that the current simulated multi-environment topology is ready to be used as the controlled baseline for the next planning steps toward real multi-cluster enablement.
+
+This does not replace the future physical multi-cluster objective. It confirms that the environment catalog, GitOps overlays, Argo CD Applications, Tekton validation paths, runtime evidence model and UI visibility are aligned before onboarding a real non-production cluster.
