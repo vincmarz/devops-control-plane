@@ -1681,3 +1681,260 @@ For every incident, preserve:
 If the system cannot prove the intended target environment and namespace, stop the operation.
 
 For multi-cluster readiness, an explicit fail-closed error is safer than an implicit fallback to the wrong cluster or namespace.
+
+## Post-Phase 15 incident triage quick-reference
+
+Status: Active operational baseline  
+Phase reference: 10.10.2  
+Last updated: 2026-07-09
+
+### Purpose
+
+This section provides a quick-reference triage model for operators handling incidents on the current DevOps Control Plane runtime baseline.
+
+The goal is to reduce ambiguity during troubleshooting by classifying incidents by layer, expected evidence and escalation criteria.
+
+The current runtime baseline is namespace-isolated on `ocp-dev`:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical multi-cluster validation remains deferred. Multi-cluster code readiness is completed and guarded by fail-closed behavior.
+
+### Triage priority levels
+
+Use the following priority levels during operational triage.
+
+Priority 1 — Control Plane unavailable:
+
+- DevOps Control Plane pod is not ready;
+- `/readyz` is not HTTP 200;
+- PostgreSQL is unavailable;
+- users cannot access the platform UI or APIs.
+
+Required action:
+
+- stop normal validation workflows;
+- preserve evidence;
+- investigate platform availability first;
+- escalate if service cannot be restored quickly.
+
+Priority 2 — Runtime automation unavailable:
+
+- Tekton validation cannot start or complete;
+- Argo CD Applications are degraded or out of sync;
+- deployment readiness fails in one or more namespaces;
+- route health fails for an application environment.
+
+Required action:
+
+- isolate the affected environment;
+- preserve PipelineRun, TaskRun, Argo CD and deployment evidence;
+- do not assume all environments are impacted.
+
+Priority 3 — Evidence or UI inconsistency:
+
+- UI loads but does not show expected runtime evidence;
+- dashboard does not show latest ChangeRequest;
+- Tekton validation card is missing;
+- evidence appears stale or incomplete.
+
+Required action:
+
+- verify backend evidence records;
+- verify ChangeRequest number;
+- verify running image and rollout status;
+- avoid rerunning automation until the mismatch is understood.
+
+Priority 4 — Guardrail or configuration failure:
+
+- runtime provider is missing;
+- runtime provider is disabled;
+- Secret reference is not allow-listed;
+- runtime factory is disabled;
+- unsupported kubeconfig or raw CA input is rejected.
+
+Required action:
+
+- treat the failure as expected fail-closed behavior;
+- do not bypass the guardrail;
+- complete the required onboarding or configuration checklist before retrying.
+
+### Layer-based triage map
+
+Platform layer:
+
+- DevOps Control Plane Deployment;
+- OAuth proxy;
+- PostgreSQL;
+- `/readyz`;
+- `/livez`;
+- application logs.
+
+Environment runtime layer:
+
+- Environment Catalog;
+- namespace mapping;
+- Kubernetes Deployment;
+- Service;
+- Route;
+- runtime evidence.
+
+GitOps layer:
+
+- Argo CD Application;
+- Git repository revision;
+- Kustomize overlay path;
+- sync status;
+- health status.
+
+Tekton layer:
+
+- PipelineRun;
+- TaskRun;
+- validation path;
+- pipeline parameters;
+- git revision;
+- failed task count.
+
+Security and guardrail layer:
+
+- RBAC;
+- Secret references;
+- Secret reference allow-list;
+- runtime Secret loader;
+- runtime client factories;
+- provider registry.
+
+UI and evidence layer:
+
+- dashboard;
+- ChangeRequest detail;
+- Tekton validation card;
+- latest runtime evidence;
+- sanitized raw evidence view.
+
+### Minimum evidence package
+
+For every incident, collect at least the following evidence:
+
+- incident timestamp;
+- affected environment;
+- affected namespace;
+- ChangeRequest number, if applicable;
+- evidence directory path;
+- DevOps Control Plane pod status;
+- `/readyz` HTTP status;
+- dashboard HTTP status, if UI is affected;
+- Argo CD Application status, if deployment is affected;
+- Deployment readiness, if application runtime is affected;
+- Route `/healthz` HTTP status, if application runtime is affected;
+- PipelineRun and TaskRun status, if Tekton is affected;
+- sanitized application logs or controller logs, if needed;
+- final `git status --short` output if the check is executed from the repository.
+
+### Evidence naming convention
+
+Use a timestamped directory under `/tmp`.
+
+Recommended pattern:
+
+`/tmp/dcp-incident-YYYYMMDD-HHMMSS`
+
+Recommended files:
+
+- `00-git-status-before.txt`
+- `01-dcp-pods.txt`
+- `02-readyz-http.txt`
+- `03-dashboard-http.txt`
+- `10-argocd-status.txt`
+- `20-deployment-status.txt`
+- `30-route-health.txt`
+- `40-tekton-pipelinerun.txt`
+- `41-tekton-taskruns.txt`
+- `50-ui-change-detail-http.txt`
+- `90-summary.txt`
+- `99-git-status-after.txt`
+
+### Stop conditions
+
+Stop the troubleshooting flow and escalate when:
+
+- target environment or namespace cannot be proven;
+- evidence contains unexpected sensitive data;
+- a technical action appears to target the wrong namespace;
+- a runtime provider unexpectedly resolves to the wrong cluster;
+- a disabled provider or missing provider error is bypassed manually;
+- a Secret value is printed or copied into evidence;
+- production-like namespace actions are not explicitly understood.
+
+### Expected fail-closed outcomes
+
+The following outcomes are expected and should not be treated as defects by themselves:
+
+- unknown environment rejected;
+- disabled environment rejected;
+- missing runtime provider rejected;
+- disabled runtime provider rejected;
+- Secret reference not allow-listed rejected;
+- Secret getter not configured rejected;
+- runtime Secret loader disabled;
+- runtime factory disabled;
+- unsupported kubeconfig rejected;
+- unsupported raw CA rejected;
+- missing token value rejected;
+- missing API URL or Argo CD base URL rejected.
+
+These outcomes protect the platform from unsafe execution.
+
+### Unsafe remediation examples
+
+Avoid the following actions:
+
+- enabling a runtime provider only to bypass an error;
+- enabling all runtime factories at once;
+- adding broad Secret access;
+- using cluster-admin for convenience;
+- manually changing GitOps-managed resources without documenting drift;
+- decoding tokens into terminal output;
+- copying raw Secret values into tickets or evidence files;
+- forcing a fallback to `ocp-dev` for an environment that should target another cluster.
+
+### Safe remediation examples
+
+Preferred remediation actions:
+
+- verify Environment Catalog entry;
+- verify Cluster Registry entry;
+- verify RBAC in the target namespace;
+- verify Argo CD Application health;
+- verify PipelineRun and TaskRun status;
+- verify Secret reference names without decoding values;
+- verify allow-list entries;
+- verify factory flags;
+- preserve sanitized evidence;
+- create a follow-up change for configuration updates.
+
+### Escalation handoff template
+
+When escalating, include:
+
+- summary of the incident;
+- priority level;
+- affected environment;
+- affected namespace;
+- affected ChangeRequest;
+- evidence directory;
+- exact failing check;
+- expected result;
+- actual result;
+- suspected layer;
+- remediation already attempted;
+- confirmation that no raw Secret values were exposed.
+
+### Final triage rule
+
+If an operator cannot prove that the operation targets the expected environment, namespace and runtime provider, the operator must stop the operation.
+
+A clear fail-closed error is safer than an implicit action against the wrong cluster or namespace.
