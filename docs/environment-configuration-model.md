@@ -777,3 +777,28 @@ promotion metadata design
 migration impact assessment
 API/UI impact notes
 ```
+
+## Environment-specific Tekton validation path
+
+Status: Implemented
+Related phase: 15.8.9.7
+Commit: `79194cd` — `Add environment-specific Tekton validation paths`
+
+The Environment Catalog supports an optional `validationPath` field per environment. This field identifies the GitOps repository path that Tekton must validate for that specific target environment.
+
+Example:
+
+```yaml
+environments:
+  - name: dev
+    validationPath: apps/demo-go-color-app
+  - name: staging
+    validationPath: apps/demo-go-color-app/overlays/staging
+  - name: production
+    validationPath: apps/demo-go-color-app/overlays/production
+```
+
+When present, the resolved `validationPath` is carried into the technical runtime target and used when creating Tekton validation PipelineRuns. If the field is omitted, the runtime falls back to the legacy `TEKTON_VALIDATION_PATH` value.
+
+This design keeps backward compatibility for existing deployments while enabling namespace-isolated and future multi-cluster validations to target the correct environment-specific GitOps overlay.
+

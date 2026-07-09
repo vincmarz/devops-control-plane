@@ -985,3 +985,113 @@ Proceed in this order:
 ```
 
 This order keeps the DevOps Control Plane secure, auditable and production-ready while enabling progressive multi-cluster expansion.
+
+## 15.8.9.7 — Document namespace-isolated Tekton validation path fix and final runtime validation
+
+Status: Completed
+Date: 2026-07-09
+Commit: `79194cd` — `Add environment-specific Tekton validation paths`
+
+### Objective
+
+Document the final namespace-isolated Tekton validation performed for the simulated staging and simulated production environments running on the current development OpenShift cluster.
+
+This phase closes the runtime validation loop for the namespace-isolated topology:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+The validation confirmed that Tekton PipelineRuns are created in the environment-specific Tekton namespace and that the GitOps validation path is resolved from the Environment Catalog instead of using a single legacy global fallback path.
+
+### Root cause addressed
+
+During the first staging and production validation attempts, Tekton received the legacy global validation path:
+
+```text
+apps/demo-go-color-app
+```
+
+That path contained manifests and kustomization output targeting the development namespace:
+
+```text
+devops-ci-demo
+```
+
+As a result, the staging and production Tekton ServiceAccounts attempted to validate resources in the development namespace and correctly received RBAC authorization failures.
+
+The issue was not resolved by granting cross-namespace permissions. The correct fix was to make the validation path environment-specific.
+
+### Runtime fix
+
+The Environment Catalog now supports an environment-specific `validationPath` field.
+
+The value is propagated through:
+
+1. `EnvironmentDefinition`
+2. `TechnicalRuntimeTarget`
+3. Tekton PipelineRun creation
+4. Tekton validation evidence reporting
+
+The legacy `TEKTON_VALIDATION_PATH` remains available only as a fallback when an environment does not define `validationPath`.
+
+### Effective validation paths
+
+```text
+dev        -> apps/demo-go-color-app
+staging    -> apps/demo-go-color-app/overlays/staging
+production -> apps/demo-go-color-app/overlays/production
+```
+
+### Runtime validation evidence
+
+The final namespace-isolated Tekton validation completed successfully.
+
+#### Staging
+
+```text
+ChangeRequest: CHG-2026-0049
+Namespace: devops-ci-staging
+PipelineRun: devops-cp-validate-chg-2026-0049-nd7rm
+Result: Succeeded
+check-validation HTTP status: 202
+failedTaskCount: 0
+Evidence sanitized: true
+```
+
+#### Production
+
+```text
+ChangeRequest: CHG-2026-0050
+Namespace: devops-ci-production
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+Result: Succeeded
+check-validation HTTP status: 202
+failedTaskCount: 0
+Evidence sanitized: true
+```
+
+### Validation commands executed
+
+The relevant test and runtime checks completed successfully:
+
+```text
+go test ./internal/app ./cmd/devops-control-plane ./internal/adapters/tekton
+```
+
+Final repository state after commit and push:
+
+```text
+git status --short
+```
+
+Expected result:
+
+```text
+<empty>
+```
+
+### Outcome
+
+The namespace-isolated staging and production Tekton validation is now operational on the current development OpenShift cluster. The DevOps Control Plane can create and check Tekton validation PipelineRuns for all three simulated environments without requiring cross-namespace RBAC shortcuts.
+

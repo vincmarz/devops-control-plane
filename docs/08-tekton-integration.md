@@ -786,3 +786,32 @@ This preserves the original spirit of the project: validation is explicit, trace
 |---|---:|---|
 | 2026-06-25 | 0.1 | Initial Tekton integration document in Italian. |
 | 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original Tekton validation-engine intent and aligning it with the implemented validation, diagnostics and evidence baseline. |
+
+## Environment-specific GitOps validation paths
+
+Status: Implemented
+Related phase: 15.8.9.7
+Commit: `79194cd` — `Add environment-specific Tekton validation paths`
+
+Tekton validation no longer has to rely only on a single global `TEKTON_VALIDATION_PATH` value. The DevOps Control Plane can now resolve the validation path from the Environment Catalog for the target environment.
+
+The resolved path is passed to the Tekton PipelineRun through the `VALIDATION_PATH` parameter.
+
+Effective mapping validated in the namespace-isolated lab:
+
+```text
+staging    -> apps/demo-go-color-app/overlays/staging
+production -> apps/demo-go-color-app/overlays/production
+```
+
+The legacy global setting remains a fallback for environments that do not define a catalog-level `validationPath`.
+
+Final runtime validation completed successfully:
+
+```text
+CHG-2026-0049 / devops-ci-staging    / devops-cp-validate-chg-2026-0049-nd7rm / Succeeded
+CHG-2026-0050 / devops-ci-production / devops-cp-validate-chg-2026-0050-8wqtv / Succeeded
+```
+
+Both `check-validation` calls returned HTTP `202` with sanitized validation evidence and `failedTaskCount=0`.
+

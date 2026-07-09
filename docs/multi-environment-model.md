@@ -526,3 +526,31 @@ validation rules
 migration impact assessment
 implementation plan
 ```
+
+## Namespace-isolated Tekton validation closure
+
+Status: Completed
+Related phase: 15.8.9.7
+Commit: `79194cd` — `Add environment-specific Tekton validation paths`
+
+The namespace-isolated multi-environment model has been validated end-to-end for Tekton GitOps validation on the current development OpenShift cluster.
+
+The validated topology is:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+The final validation confirmed that staging and production no longer validate the root GitOps application path that renders development namespace resources. Instead, each environment validates its own overlay path.
+
+Final successful PipelineRuns:
+
+```text
+devops-ci-staging    devops-cp-validate-chg-2026-0049-nd7rm  Succeeded
+devops-ci-production devops-cp-validate-chg-2026-0050-8wqtv  Succeeded
+```
+
+This completes the namespace-isolated validation baseline before introducing a physically separate non-production cluster.
+
