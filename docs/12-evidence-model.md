@@ -1070,3 +1070,228 @@ This preserves the original evidence-first spirit of the project while aligning 
 |---|---:|---|
 | 2026-06-25 | 0.1 | Initial evidence model document in Italian. |
 | 2026-07-06 | 0.2 | Rewritten in English and refreshed while preserving the original evidence-first and sanitized-evidence model and aligning it with validation evidence, deployment evidence, diagnostics and multi-environment direction. |
+
+## Post-Phase 15 runtime and validation evidence alignment
+
+Status: Active evidence baseline  
+Phase reference: 13.2  
+Last updated: 2026-07-09
+
+### Purpose
+
+This section refreshes the Evidence Model after completion of Phase 15 and the post-closure simulated staging and production cluster readiness validation.
+
+The current DevOps Control Plane baseline is namespace-isolated on the available `ocp-dev` OpenShift cluster:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+The evidence model is now aligned with the namespace-isolated runtime baseline, the UI runtime evidence rendering, Tekton validation evidence and the multi-cluster code-ready guardrails.
+
+### Evidence categories in the current baseline
+
+The current baseline uses the following evidence categories:
+
+- ChangeRequest lifecycle evidence;
+- audit event evidence;
+- GitLab workflow evidence;
+- Argo CD deployment evidence;
+- Kubernetes/OpenShift runtime evidence;
+- Tekton validation evidence;
+- deployment diagnostics;
+- validation diagnostics;
+- sanitized raw evidence for operator review.
+
+The most important post-Phase 15 addition is that validation evidence and runtime evidence are now visible and useful in the UI, instead of being only backend records.
+
+### Runtime evidence
+
+Runtime evidence represents the observed state of the target runtime environment.
+
+For the current namespace-isolated baseline, runtime evidence may refer to:
+
+- target environment;
+- cluster name;
+- Kubernetes namespace;
+- deployment name;
+- deployment readiness;
+- available replicas;
+- updated replicas;
+- pods;
+- services;
+- routes;
+- health endpoint result;
+- Argo CD Application status.
+
+Runtime evidence must always preserve the target environment and namespace, because dev, staging and production currently share the same physical OpenShift cluster.
+
+This avoids ambiguity between:
+
+- `devops-ci-demo`;
+- `devops-ci-staging`;
+- `devops-ci-production`.
+
+### Tekton validation evidence
+
+Tekton validation evidence represents the result of a validation PipelineRun.
+
+The current model records, renders or derives the following fields:
+
+- target environment;
+- Tekton namespace;
+- Pipeline name;
+- PipelineRun name;
+- Git revision or branch;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- failed tasks, when available;
+- evidence sanitization status.
+
+The validation path is environment-specific.
+
+Validated examples:
+
+- staging validation path: `apps/demo-go-color-app/overlays/staging`;
+- production validation path: `apps/demo-go-color-app/overlays/production`.
+
+### Latest validation evidence
+
+The UI now uses the latest validation evidence associated with the selected ChangeRequest.
+
+This is important because a ChangeRequest can accumulate multiple events and multiple evidence records over time.
+
+The UI must show the most relevant validation result for the operator, especially after `check-validation`.
+
+The latest validation evidence card is expected to show:
+
+- PipelineRun;
+- Tekton namespace;
+- Pipeline;
+- Git revision;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitized evidence state.
+
+### Validated staging evidence
+
+The final namespace-isolated staging validation record is:
+
+- ChangeRequest: `CHG-2026-0049`;
+- environment: `staging`;
+- Tekton namespace: `devops-ci-staging`;
+- PipelineRun: `devops-cp-validate-chg-2026-0049-nd7rm`;
+- validation path: `apps/demo-go-color-app/overlays/staging`;
+- failed task count: `0`;
+- evidence sanitized: `true`;
+- result: `Succeeded`.
+
+### Validated production evidence
+
+The final namespace-isolated production validation record is:
+
+- ChangeRequest: `CHG-2026-0050`;
+- environment: `production`;
+- Tekton namespace: `devops-ci-production`;
+- PipelineRun: `devops-cp-validate-chg-2026-0050-8wqtv`;
+- validation path: `apps/demo-go-color-app/overlays/production`;
+- failed task count: `0`;
+- evidence sanitized: `true`;
+- result: `Succeeded`.
+
+### UI rendering expectations
+
+The ChangeRequest detail UI must render evidence in an operator-friendly way.
+
+Expected UI behavior:
+
+- runtime evidence is shown in compact cards;
+- latest Tekton validation evidence is shown when available;
+- failed task count is visible;
+- validation path is visible;
+- Tekton namespace is visible;
+- PipelineRun name is visible;
+- sanitized state is visible;
+- raw evidence remains available only as sanitized diagnostic material.
+
+The dashboard also reflects the evidence model by selecting the latest ChangeRequest and showing the current `Environments / Namespaces` mapping.
+
+### Evidence sanitization
+
+Evidence must remain sanitized.
+
+Evidence may contain operational metadata such as:
+
+- namespace names;
+- resource names;
+- PipelineRun names;
+- status values;
+- reason values;
+- Git revision or branch names;
+- validation paths.
+
+Evidence must not contain:
+
+- raw Secret values;
+- bearer tokens;
+- kubeconfig payloads;
+- private keys;
+- decoded Secret content;
+- sensitive credential material.
+
+The expected sanitized state for successful validation evidence is:
+
+`evidence sanitized=true`
+
+### Relationship with multi-cluster readiness
+
+The evidence model is now compatible with future real multi-cluster onboarding.
+
+The current physical runtime baseline is still namespace-isolated on `ocp-dev`.
+
+However, the codebase has also validated simulated external cluster targets:
+
+- `staging` -> `ocp-staging-simulated`;
+- `production` -> `ocp-production-simulated`.
+
+This means evidence must continue to preserve:
+
+- target environment;
+- resolved cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD application;
+- validation path.
+
+When real clusters become available, evidence must prove that the target did not silently fall back to `ocp-dev`.
+
+### Operational interpretation
+
+Operators should use evidence to answer the following questions:
+
+1. Which ChangeRequest was validated?
+2. Which environment was targeted?
+3. Which namespace was targeted?
+4. Which PipelineRun executed?
+5. Which GitOps path was validated?
+6. Did the validation succeed?
+7. Were there failed tasks?
+8. Was the evidence sanitized?
+9. Does the UI show the same result as the backend evidence?
+10. Is the target consistent with the expected environment mapping?
+
+### Closure statement
+
+The evidence model is aligned with the current post-Phase 15 runtime baseline.
+
+The DevOps Control Plane now provides evidence that is useful for operational validation, UI inspection, troubleshooting and future multi-cluster onboarding.
+
+Physical cross-cluster evidence remains deferred until additional OpenShift clusters are available.
+
+Namespace-isolated runtime evidence and simulated external-cluster readiness evidence are both documented and validated.
