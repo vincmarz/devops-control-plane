@@ -917,3 +917,275 @@ The following items are not blockers for the current lab/MVP baseline, but shoul
 |---|---:|---|
 | 2026-07-03 | 10.3.2 | Initial operability health-check runbook based on Phase 10.3.1 observability baseline inventory. |
 | 2026-07-03 | 10.3.4 | Added reference to the automated operability smoke-test script introduced in Phase 10.3.3. |
+
+## Post-Phase 15 runtime health-check matrix
+
+Status: Active operational baseline  
+Phase reference: 10.9.1  
+Last validated: 2026-07-09  
+Related baseline tag: `namespace-isolated-baseline-20260709`
+
+### Purpose
+
+This section refreshes the operational health-check runbook after completion of Phase 15.
+
+The current DevOps Control Plane runtime baseline is namespace-isolated on the available `ocp-dev` OpenShift cluster.
+
+Current validated topology:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical multi-cluster validation remains deferred because no additional OpenShift cluster is currently available.
+
+The codebase is multi-cluster code-ready, but operational runtime checks must use the namespace-isolated baseline until real clusters become available.
+
+### Current operational smoke matrix
+
+A complete health-check must validate:
+
+- DevOps Control Plane pod readiness;
+- `/readyz` endpoint;
+- dashboard UI HTTP response;
+- Argo CD Applications for dev, staging and production;
+- application deployment readiness in all three namespaces;
+- route `/healthz` for all three environments;
+- Tekton validation PipelineRuns for staging and production;
+- UI detail pages for latest staging and production validation ChangeRequests;
+- repository working tree cleanliness when the check is executed from the project repository.
+
+### Evidence directory convention
+
+Use a timestamped evidence directory for every operational health check.
+
+Example command sequence:
+
+- set `EVIDENCE_DIR` to a path under `/tmp`;
+- create the directory;
+- write command outputs into files under that directory;
+- keep the evidence directory if any check fails.
+
+Recommended naming pattern:
+
+`/tmp/dcp-operability-health-YYYYMMDD-HHMMSS`
+
+### Repository state check
+
+When the runbook is executed from the repository root, verify that no accidental local change exists.
+
+Command:
+
+`git status --short`
+
+Expected result: no output.
+
+### DevOps Control Plane pod check
+
+Validate the DevOps Control Plane pod in namespace `devops-control-plane`.
+
+Expected result:
+
+- DevOps Control Plane pod is `Running`;
+- both containers are ready;
+- the application image points to the DevOps Control Plane internal registry image.
+
+Recommended evidence files:
+
+- `01-dcp-pod.txt`
+- `02-dcp-pods.txt`
+- `03-dcp-images.txt`
+
+### Direct readiness check
+
+Use port-forward for direct application readiness validation.
+
+Expected result:
+
+`readyz_http=200`
+
+Recommended evidence files:
+
+- `04-port-forward.log`
+- `05-readyz.json`
+- `06-readyz-http.txt`
+
+The port-forward process must be stopped at the end of the runbook.
+
+### Dashboard UI check
+
+Validate the dashboard through the direct application port.
+
+Expected result:
+
+`dashboard_http=200`
+
+The dashboard should show:
+
+- latest ChangeRequest;
+- `Environments / Namespaces`;
+- namespace mapping for dev, staging and production;
+- user box in the topbar;
+- runtime evidence card when available.
+
+Recommended evidence files:
+
+- `10-dashboard.html`
+- `11-dashboard-http.txt`
+
+### Argo CD application matrix
+
+Validate the following Argo CD Applications:
+
+- `demo-go-color-app`
+- `demo-go-color-app-staging`
+- `demo-go-color-app-production`
+
+Expected result for all environments:
+
+- sync status: `Synced`
+- health status: `Healthy`
+
+Recommended evidence files:
+
+- `20-argocd-dev.txt`
+- `21-argocd-staging.txt`
+- `22-argocd-production.txt`
+
+### Deployment readiness matrix
+
+Validate `demo-go-color-app` deployment readiness in:
+
+- `devops-ci-demo`
+- `devops-ci-staging`
+- `devops-ci-production`
+
+Expected result:
+
+- ready replicas match desired replicas;
+- available replicas are present;
+- updated replicas are present.
+
+Recommended evidence files:
+
+- `30-deploy-dev.txt`
+- `31-deploy-staging.txt`
+- `32-deploy-production.txt`
+
+### Route health matrix
+
+Validate route `/healthz` for all three environments.
+
+Expected result:
+
+- `dev_healthz_http=200`
+- `staging_healthz_http=200`
+- `production_healthz_http=200`
+
+Recommended evidence files:
+
+- `40-route-hosts.txt`
+- `42-dev-healthz-http.txt`
+- `44-staging-healthz-http.txt`
+- `46-production-healthz-http.txt`
+
+### Tekton validation matrix
+
+Final known validated PipelineRuns:
+
+- staging: `devops-cp-validate-chg-2026-0049-nd7rm`
+- production: `devops-cp-validate-chg-2026-0050-8wqtv`
+
+Expected result:
+
+- status: `True`
+- reason: `Succeeded`
+
+Recommended evidence files:
+
+- `50-tekton-staging.txt`
+- `51-tekton-production.txt`
+
+### UI ChangeRequest detail checks
+
+Validate the ChangeRequest detail pages:
+
+- `CHG-2026-0049`
+- `CHG-2026-0050`
+
+Expected result:
+
+- `chg0049_ui_http=200`
+- `chg0050_ui_http=200`
+
+Recommended evidence files:
+
+- `60-ui-chg-0049.html`
+- `61-ui-chg-0049-http.txt`
+- `70-ui-chg-0050.html`
+- `71-ui-chg-0050-http.txt`
+
+### Summary file
+
+Each execution should produce a final summary file named:
+
+`90-summary.txt`
+
+The summary should include:
+
+- evidence directory path;
+- readiness HTTP result;
+- dashboard HTTP result;
+- Argo CD matrix;
+- deployment readiness matrix;
+- route health matrix;
+- Tekton validation matrix;
+- UI ChangeRequest detail HTTP results.
+
+### Pass criteria
+
+The runbook passes when:
+
+- `/readyz` returns HTTP `200`;
+- dashboard returns HTTP `200`;
+- Argo CD is `Synced` and `Healthy` for dev, staging and production;
+- deployments are ready in all three namespaces;
+- route `/healthz` returns HTTP `200` for all three environments;
+- staging and production Tekton validation PipelineRuns are `Succeeded`;
+- ChangeRequest detail pages return HTTP `200`;
+- no sensitive Secret material is printed;
+- the repository working tree remains clean if the check is executed from the repository.
+
+### Failure handling
+
+If one of the checks fails:
+
+1. stop the runbook;
+2. preserve the evidence directory;
+3. do not rerun destructive commands;
+4. identify the failing layer:
+   - DevOps Control Plane pod;
+   - PostgreSQL dependency;
+   - Argo CD Application;
+   - application deployment;
+   - route health;
+   - Tekton PipelineRun;
+   - UI rendering;
+   - authentication or forwarded groups;
+5. open a follow-up remediation task with the evidence directory path.
+
+### Notes for future real multi-cluster onboarding
+
+This runbook validates the current namespace-isolated operational baseline.
+
+When real clusters become available, this matrix must be extended with physical cluster-specific checks.
+
+The future real-cluster checks must validate that:
+
+- staging does not silently fall back to `ocp-dev`;
+- production does not silently fall back to `ocp-dev`;
+- missing runtime provider fails closed;
+- disabled runtime provider fails closed;
+- Secret references are allow-listed;
+- runtime Secret loader and factories are explicitly enabled only when safe;
+- no raw Secret values appear in logs, evidence or UI.
