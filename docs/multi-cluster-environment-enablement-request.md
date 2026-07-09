@@ -1095,3 +1095,73 @@ Expected result:
 
 The namespace-isolated staging and production Tekton validation is now operational on the current development OpenShift cluster. The DevOps Control Plane can create and check Tekton validation PipelineRuns for all three simulated environments without requiring cross-namespace RBAC shortcuts.
 
+## Phase 15.8.10 — UI runtime evidence alignment and multi-environment visibility closure
+
+**Status:** Completed  
+**Completion date:** 2026-07-09  
+**Code commit:** `58805ef` — `Align UI with namespace-isolated runtime evidence`
+
+### Summary
+
+Phase 15.8.10 closed the Web UI alignment gap after the namespace-isolated `dev`, `staging` and `production` runtime validation flows were completed on the shared `ocp-dev` OpenShift cluster.
+
+The phase did not change the backend execution model. It made the UI accurately reflect the runtime evidence already produced by the DevOps Control Plane.
+
+### Completed outcomes
+
+- The dashboard now selects the most recent `ChangeRequest` instead of the historical hardcoded `CHG-2026-0005`.
+- The static `Environment dev` topbar placeholder was removed.
+- The topbar now shows `Environments / Namespaces` for:
+  - `dev` -> `devops-ci-demo`;
+  - `staging` -> `devops-ci-staging`;
+  - `production` -> `devops-ci-production`.
+- The user indicator is displayed in an adjacent topbar segment aligned with the environment summary.
+- The `ChangeRequest` detail view now loads all evidence types for the selected change.
+- The UI renders Tekton validation evidence when available.
+- The Tekton validation card shows PipelineRun, Tekton namespace, Pipeline, Git revision, validation path, status, reason, failed task count and sanitization state.
+
+### Runtime validation
+
+The UI was validated with namespace-isolated staging and production records.
+
+Validated staging record:
+
+- `CHG-2026-0049`;
+- Tekton namespace: `devops-ci-staging`;
+- PipelineRun: `devops-cp-validate-chg-2026-0049-nd7rm`;
+- validation path: `apps/demo-go-color-app/overlays/staging`;
+- failed task count: `0`;
+- evidence sanitized: `true`.
+
+Validated production record:
+
+- `CHG-2026-0050`;
+- Tekton namespace: `devops-ci-production`;
+- PipelineRun: `devops-cp-validate-chg-2026-0050-8wqtv`;
+- validation path: `apps/demo-go-color-app/overlays/production`;
+- failed task count: `0`;
+- evidence sanitized: `true`.
+
+Automated validation completed successfully with:
+
+`go test ./internal/api ./internal/app ./cmd/devops-control-plane`
+
+### Multi-cluster objective alignment
+
+This phase preserves the broader multi-cluster objective.
+
+The current topology remains intentionally namespace-isolated on the available `ocp-dev` cluster:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`;
+- `staging` -> `ocp-dev` / `devops-ci-staging`;
+- `production` -> `ocp-dev` / `devops-ci-production`.
+
+This is still a simulated multi-environment model, not yet a physical multi-cluster deployment.
+
+The UI now makes the environment-to-namespace mapping explicit while the backend remains aligned with the provider-aware runtime design, environment catalog, cluster registry, runtime target resolution and controlled Secret-loader/factory enablement model.
+
+### Next direction
+
+The next work should continue toward controlled real multi-cluster enablement when an additional non-production cluster becomes available.
+
+Until then, the namespace-isolated topology on `ocp-dev` remains the validated proving ground for environment-aware UI behavior, runtime target selection, evidence sanitization, provider-aware clients and future physical multi-cluster onboarding.
