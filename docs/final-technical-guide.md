@@ -580,3 +580,298 @@ La regola da mantenere è:
 Physical cross-cluster runtime validation is deferred by infrastructure availability.
 Multi-cluster code readiness is completed, tested, documented and fail-closed.
 ```
+
+## 13. Backend Go
+
+Il backend Go è il cuore applicativo del DevOps Control Plane.
+
+Il backend espone API, coordina i workflow tecnici, conserva lo stato applicativo, produce eventi di audit e raccoglie evidenze dai sistemi integrati. La UI e gli operatori non devono orchestrare direttamente GitLab, Tekton, Argo CD o Kubernetes/OpenShift: questa responsabilità viene centralizzata nel backend.
+
+In termini pratici, il backend riceve una richiesta, la interpreta nel contesto di una `ChangeRequest`, determina l’ambiente target, esegue o controlla le integrazioni tecniche necessarie e persiste il risultato.
+
+Vista semplificata:
+
+```text
+API / UI request
+      |
+      v
+Go backend
+      |
+      +--> ChangeService
+      +--> Repositories
+      +--> Runtime target resolution
+      +--> Provider selection
+      +--> External adapters
+      +--> Evidence persistence
+```
+
+### 13.1 Ruolo del backend
+
+Il backend svolge diverse responsabilità fondamentali:
+
+- validare input applicativi;
+- creare e aggiornare `ChangeRequest`;
+- registrare `ChangeEvent` di audit;
+- coordinare workflow GitLab;
+- avviare o controllare workflow Tekton;
+- leggere stato Argo CD;
+- raccogliere runtime evidence Kubernetes/OpenShift;
+- applicare regole di environment awareness;
+- applicare guardrail fail-closed;
+- fornire dati alla UI.
+
+Questa centralizzazione evita che ogni operatore o script debba conoscere direttamente tutti i dettagli tecnici dei sistemi integrati.
+
+### 13.2 ChangeService
+
+`ChangeService` è uno dei componenti principali del backend.
+
+Il suo ruolo è orchestrare le operazioni legate alle ChangeRequest.
+
+Esempi di operazioni coordinate da `ChangeService`:
+
+- creazione di una nuova ChangeRequest;
+- aggiornamento dello stato lifecycle;
+- aggiornamento dello stato runtime;
+- salvataggio degli eventi di audit;
+- raccolta evidence;
+- controllo deployment;
+- avvio validazione Tekton;
+- controllo risultato validazione;
+- preparazione dei dati che saranno poi mostrati in UI.
+
+Vista concettuale:
+
+```text
+ChangeService
+      |
+      +--> ChangeRepository
+      +--> ChangeEventRepository
+      +--> EvidenceRepository
+      +--> GitLab workflow adapter
+      +--> Kubernetes runtime adapter
+      +--> Tekton runtime adapter
+      +--> Argo CD runtime adapter
+```
+
+La logica applicativa rimane quindi concentrata in un servizio coerente, mentre i dettagli tecnici restano delegati ad adapter e interfacce.
+
+### 13.3 Repository layer
+
+Il repository layer astrae la persistenza.
+
+Questo significa che il resto del codice non deve conoscere direttamente tutti i dettagli SQL o la struttura fisica delle tabelle.
+
+Il repository layer gestisce principalmente:
+
+- `ChangeRequest`;
+- `ChangeEvent`;
+- `Evidence`.
+
+Questa separazione rende il codice più leggibile, testabile e manutenibile.
+
+Per esempio, quando il workflow produce una nuova evidenza, il servizio applicativo non deve sapere come viene scritta esattamente nel database. Deve solo passare i dati al repository corretto.
+
+### 13.4 Service options e dependency injection
+
+Il backend usa opzioni di configurazione per collegare resolver, registry e adapter.
+
+Esempi di opzioni già presenti nel codice:
+
+- `WithTechnicalRuntimeTargetResolver`;
+- `WithRuntimeClientProviderRegistry`;
+- `WithRuntimeClientSecretRefsRegistry`;
+- `WithKubernetesRuntimeClientProviderRegistry`.
+
+Questo approccio è utile perché permette di iniettare implementazioni diverse in base al contesto.
+
+Durante i test, per esempio, è possibile usare resolver o provider simulati. In runtime, invece, vengono collegati provider e adapter reali o conservativi.
+
+Il vantaggio principale è che il codice può essere validato anche senza avere a disposizione un cluster fisico aggiuntivo.
+
+### 13.5 Runtime target resolution
+
+La runtime target resolution è il processo con cui il backend traduce un ambiente logico in un target tecnico.
+
+Esempio logico:
+
+```text
+targetEnvironment = staging
+```
+
+Target tecnico risultante nella baseline corrente:
+
+```text
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-staging
+tektonNamespace = devops-ci-staging
+argocdApplicationName = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Questo modello è fondamentale perché evita hardcoding e rende esplicito dove deve essere eseguita ogni azione tecnica.
+
+La stessa logica vale per production:
+
+```text
+targetEnvironment = production
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-production
+tektonNamespace = devops-ci-production
+argocdApplicationName = demo-go-color-app-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+### 13.6 EnvironmentClusterResolver
+
+`EnvironmentClusterResolver` collega l’Environment Catalog al Cluster Registry.
+
+Il suo compito è rispondere alla domanda:
+
+```text
+Dato un ambiente, quale cluster e quale configurazione runtime devo usare?
+```
+
+Nel modello corrente:
+
+- `dev` risolve verso `ocp-dev` e `devops-ci-demo`;
+- `staging` risolve verso `ocp-dev` e `devops-ci-staging`;
+- `production` risolve verso `ocp-dev` e `devops-ci-production`.
+
+Nei test di readiness multi-cluster, staging e production sono stati anche simulati come target esterni distinti:
+
+- `staging` -> `ocp-staging-simulated`;
+- `production` -> `ocp-production-simulated`.
+
+Questa simulazione dimostra che il codice non è vincolato rigidamente a `ocp-dev`.
+
+### 13.7 TechnicalRuntimeTarget
+
+`TechnicalRuntimeTarget` è il risultato della risoluzione del target runtime.
+
+Contiene le informazioni tecniche che servono alle operazioni successive, tra cui:
+
+- target environment;
+- environment name;
+- cluster name;
+- cluster display name;
+- cluster enabled flag;
+- Kubernetes namespace;
+- Tekton namespace;
+- Tekton pipeline name;
+- Argo CD Application name;
+- Git target branch;
+- validation path.
+
+Questo oggetto è importante perché rende esplicita la destinazione tecnica di ogni workflow.
+
+Un’operazione come `check-deployment` o `validate` non deve decidere autonomamente dove andare. Deve usare il target tecnico risolto.
+
+### 13.8 RuntimeClientProviderRegistry
+
+`RuntimeClientProviderRegistry` collega un cluster risolto a un provider runtime.
+
+Un provider runtime descrive come costruire o selezionare i client necessari per operare su un cluster.
+
+Nel baseline corrente, `ocp-dev` è il provider runtime principale.
+
+Il comportamento corretto per i cluster non configurati è fail-closed.
+
+Questo significa:
+
+- se il provider manca, l’operazione fallisce;
+- se il provider è disabled, l’operazione fallisce;
+- il sistema non deve ricadere silenziosamente su `ocp-dev`.
+
+Questa regola è fondamentale per il futuro multi-cluster.
+
+Se domani `staging` dovesse puntare a un cluster fisico dedicato, un errore di configurazione non deve causare un’esecuzione involontaria su `ocp-dev`.
+
+### 13.9 Secret reference registry
+
+Il backend supporta anche un modello di Secret references.
+
+Una Secret reference non contiene il valore del Secret. Contiene solo riferimenti a dove il Secret si trova e quali chiavi devono essere lette.
+
+Questo approccio consente di predisporre il runtime per cluster futuri senza esporre credenziali nel codice, nei log, nella documentazione o nelle evidence.
+
+La regola operativa è semplice:
+
+```text
+reference sì, valore raw no
+```
+
+Il backend può quindi associare a un provider runtime informazioni come:
+
+- cluster name;
+- namespace del Secret;
+- nome del Secret;
+- chiave token;
+- eventuali chiavi tecniche richieste.
+
+Il caricamento dei valori reali resta protetto da loader, allow-list e flag disabled-by-default.
+
+### 13.10 Fail-closed come principio applicativo
+
+Nel DevOps Control Plane, fail-closed significa che una configurazione incompleta o non sicura deve bloccare l’operazione.
+
+Esempi:
+
+- ambiente sconosciuto;
+- cluster sconosciuto;
+- cluster disabled;
+- provider mancante;
+- provider disabled;
+- Secret reference non allow-listed;
+- factory disabled;
+- token mancante;
+- API URL mancante;
+- raw CA non supportata;
+- kubeconfig non supportato.
+
+Questo comportamento non è un difetto. È un guardrail di sicurezza.
+
+Un errore esplicito è preferibile a un’azione eseguita nel namespace o nel cluster sbagliato.
+
+### 13.11 Relazione con i test
+
+Il backend è stato validato con test unitari e test di non regressione.
+
+Esempi di aspetti coperti:
+
+- Environment Catalog;
+- Cluster Registry;
+- EnvironmentClusterResolver;
+- TechnicalRuntimeTarget;
+- RuntimeClientProviderRegistry;
+- provider missing fail-closed;
+- provider disabled fail-closed;
+- simulazione staging e production cluster;
+- Secret reference model;
+- factory disabled-by-default.
+
+I test più recenti rafforzano la readiness multi-cluster simulando:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+e verificando che non ci sia fallback verso `ocp-dev`.
+
+### 13.12 Sintesi
+
+Il backend Go è la parte che trasforma il DevOps Control Plane da semplice dashboard a vero control plane applicativo.
+
+Le sue responsabilità principali sono:
+
+- orchestrare workflow;
+- persistere stato;
+- produrre audit;
+- risolvere target runtime;
+- selezionare provider;
+- raccogliere evidence;
+- applicare guardrail;
+- alimentare la UI.
+
+Grazie a questa architettura, il progetto può oggi operare sulla baseline namespace-isolated e, allo stesso tempo, essere pronto a supportare il futuro multi-cluster reale quando l’infrastruttura sarà disponibile.
