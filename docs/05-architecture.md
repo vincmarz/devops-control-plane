@@ -951,3 +951,252 @@ Each component has a clear responsibility. Each workflow must produce useful evi
 |---|---:|---|
 | 2026-06-25 | 0.1 | Initial architecture document in Italian. |
 | 2026-07-06 | 0.2 | Rewritten in English and refreshed to align with the current advanced MVP, security, operability, UI, multi-developer and multi-environment baseline. |
+
+## Post-Phase 15 dashboard and UI architecture alignment
+
+Status: Active architecture baseline  
+Phase reference: 13.3  
+Last updated: 2026-07-09
+
+### Purpose
+
+This section refreshes the dashboard and UI architecture after completion of Phase 15 and the post-closure simulated staging and production cluster readiness validation.
+
+The UI is no longer only an advanced MVP dashboard. It is now an environment-aware and evidence-aware operational surface for the current DevOps Control Plane runtime baseline.
+
+The current validated runtime topology is namespace-isolated on the available `ocp-dev` OpenShift cluster:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical cross-cluster runtime validation remains deferred because no additional OpenShift cluster is currently available.
+
+The codebase is multi-cluster code-ready, and the UI now exposes enough runtime context to make the current namespace-isolated model visible to operators.
+
+### Dashboard responsibilities
+
+The dashboard is responsible for presenting a concise operational summary of the DevOps Control Plane state.
+
+After Phase 15, the dashboard must support the following responsibilities:
+
+- show the latest relevant ChangeRequest instead of a historical hardcoded ChangeRequest;
+- show current runtime and validation evidence when available;
+- expose the current environment-to-namespace mapping;
+- support operator understanding of dev, staging and production runtime boundaries;
+- provide a fast entry point into ChangeRequest detail pages;
+- remain consistent with the backend evidence model.
+
+### Latest ChangeRequest selection
+
+The dashboard now selects the most recent ChangeRequest available in the backend data instead of relying on a historical hardcoded record.
+
+This is important because the dashboard is used as an operational status view.
+
+Expected behavior:
+
+- the dashboard highlights the latest ChangeRequest;
+- older changes remain available through the Change Requests list;
+- the selected dashboard change can expose runtime evidence and validation evidence;
+- the UI must not depend on a fixed ChangeRequest number.
+
+This behavior was validated during the Phase 15 UI runtime evidence alignment work.
+
+### Environment and namespace visibility
+
+The dashboard topbar now exposes the current environment-to-namespace mapping through the `Environments / Namespaces` section.
+
+The expected visible mapping is:
+
+- `dev` -> `devops-ci-demo`;
+- `staging` -> `devops-ci-staging`;
+- `production` -> `devops-ci-production`.
+
+This makes the namespace-isolated runtime model explicit.
+
+The UI must not hide staging and production behind a static `dev` label.
+
+This is especially important because all three logical environments currently share the same physical OpenShift cluster.
+
+### User indicator
+
+The user indicator is rendered as a topbar segment adjacent to the environment summary.
+
+The current UI uses a compact user representation such as:
+
+- avatar letter;
+- username;
+- aligned segment next to the environment summary.
+
+This is a UI-level presentation detail, but the architecture expectation is that user context remains visible and does not interfere with environment visibility.
+
+### ChangeRequest detail evidence rendering
+
+The ChangeRequest detail page is now an evidence-aware view.
+
+Expected evidence rendering includes:
+
+- runtime evidence cards;
+- deployment evidence;
+- latest Tekton validation evidence;
+- sanitized raw evidence diagnostics when needed.
+
+The UI must present evidence in a way that helps an operator answer:
+
+- which environment was targeted;
+- which namespace was used;
+- which deployment was checked;
+- which Tekton PipelineRun executed;
+- which validation path was used;
+- whether validation succeeded;
+- whether the evidence was sanitized.
+
+### Tekton validation evidence card
+
+The UI now renders the latest Tekton validation evidence when available.
+
+Expected fields include:
+
+- PipelineRun name;
+- Tekton namespace;
+- Pipeline name;
+- Git revision or branch;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitization state.
+
+Validated examples include:
+
+- `CHG-2026-0049` for staging;
+- `CHG-2026-0050` for production.
+
+For staging, the validation path is:
+
+`apps/demo-go-color-app/overlays/staging`
+
+For production, the validation path is:
+
+`apps/demo-go-color-app/overlays/production`
+
+### Runtime evidence UI
+
+Runtime evidence shown in the UI must remain compact and operator-friendly.
+
+The UI should favor summaries and cards over raw JSON for normal operation.
+
+Raw evidence may remain available for diagnostics, but it must be sanitized and must not expose raw Secret values.
+
+Runtime evidence should preserve:
+
+- target environment;
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application name;
+- deployment status;
+- route or health status;
+- relevant diagnostic status.
+
+### Namespace-isolated baseline representation
+
+The UI represents a logical multi-environment topology even though the current physical runtime is one OpenShift cluster.
+
+Current physical cluster:
+
+- `ocp-dev`
+
+Current logical environments:
+
+- `dev`;
+- `staging`;
+- `production`.
+
+Current namespace isolation:
+
+- `devops-ci-demo`;
+- `devops-ci-staging`;
+- `devops-ci-production`.
+
+This distinction must remain visible in the UI until physical clusters become available.
+
+### Multi-cluster code-ready posture
+
+The UI sits on top of a backend that is now multi-cluster code-ready.
+
+The following backend capabilities support future real-cluster onboarding:
+
+- Environment Catalog;
+- Cluster Registry;
+- Environment Cluster Resolver;
+- Technical Runtime Target;
+- Runtime Client Provider Registry;
+- Runtime Client Secret References;
+- provider-aware runtime factories;
+- fail-closed behavior for missing or disabled providers.
+
+The UI does not claim physical multi-cluster validation.
+
+The UI must accurately reflect the current target model and must avoid suggesting that staging or production are physically separate clusters when they are currently namespace-isolated on `ocp-dev`.
+
+### Simulated staging and production external-cluster readiness
+
+After Phase 15 closure, additional tests validated simulated external cluster targets:
+
+- `staging` -> `ocp-staging-simulated`;
+- `production` -> `ocp-production-simulated`.
+
+These tests validated that:
+
+- staging does not silently fall back to `ocp-dev`;
+- production does not silently fall back to `ocp-dev`;
+- missing runtime providers fail closed;
+- disabled runtime providers fail closed.
+
+This strengthens the architectural claim that the backend model is ready for future physical cluster onboarding.
+
+### UI security expectations
+
+The UI must not expose sensitive credential material.
+
+The following data must never be rendered:
+
+- raw Secret values;
+- bearer tokens;
+- kubeconfig payloads;
+- private keys;
+- decoded Secret content.
+
+The UI may render safe operational metadata such as:
+
+- namespace names;
+- ChangeRequest numbers;
+- PipelineRun names;
+- Argo CD Application names;
+- validation paths;
+- status and reason fields;
+- sanitized evidence state.
+
+### Architecture implications
+
+The current UI architecture is part of the operational control surface.
+
+It is no longer only a visual MVP.
+
+Its responsibilities include:
+
+- helping operators understand current runtime state;
+- making environment boundaries visible;
+- rendering sanitized evidence;
+- supporting troubleshooting;
+- making namespace-isolated staging and production visible;
+- preparing users for a future physical multi-cluster topology.
+
+### Closure statement
+
+The dashboard and UI architecture are aligned with the current post-Phase 15 runtime baseline.
+
+The UI is environment-aware, namespace-aware and evidence-aware.
+
+Physical multi-cluster UI validation remains deferred until additional clusters are available, but the current UI correctly presents the validated namespace-isolated runtime model and the multi-cluster code-ready posture.
