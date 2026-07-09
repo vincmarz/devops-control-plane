@@ -875,3 +875,344 @@ Le sue responsabilità principali sono:
 - alimentare la UI.
 
 Grazie a questa architettura, il progetto può oggi operare sulla baseline namespace-isolated e, allo stesso tempo, essere pronto a supportare il futuro multi-cluster reale quando l’infrastruttura sarà disponibile.
+
+## 14. PostgreSQL e persistenza
+
+PostgreSQL è il database relazionale usato dal DevOps Control Plane per conservare lo stato applicativo della piattaforma.
+
+La persistenza è una parte fondamentale del progetto perché il DevOps Control Plane non deve limitarsi a invocare API esterne. Il sistema deve ricordare cosa è stato richiesto, cosa è stato eseguito, quali eventi sono avvenuti e quali evidenze sono state raccolte.
+
+Senza persistenza, una ChangeRequest sarebbe solo un’operazione temporanea. Con PostgreSQL, invece, una ChangeRequest diventa un oggetto tracciabile, consultabile e auditabile nel tempo.
+
+Vista semplificata:
+
+```text
+ChangeRequest
+      |
+      +--> ChangeEvent
+      |
+      +--> Evidence
+      |
+      +--> PostgreSQL
+```
+
+PostgreSQL rappresenta quindi la memoria applicativa del control plane.
+
+### 14.1 Perché PostgreSQL
+
+PostgreSQL è stato scelto perché offre caratteristiche adatte a una piattaforma di controllo e audit:
+
+- modello relazionale;
+- transazioni;
+- consistenza dei dati;
+- interrogazioni affidabili;
+- supporto a dati strutturati;
+- maturità operativa;
+- strumenti consolidati per backup e restore.
+
+Nel progetto, PostgreSQL conserva lo stato delle ChangeRequest e delle informazioni correlate. Questo permette alla UI, alle API e ai runbook operativi di lavorare su dati persistenti e non su informazioni volatili.
+
+### 14.2 Cosa viene persistito
+
+Le entità principali persistite sono:
+
+- `ChangeRequest`;
+- `ChangeEvent`;
+- `Evidence`.
+
+Queste tre entità rispondono a tre domande diverse.
+
+`ChangeRequest` risponde alla domanda:
+
+```text
+Quale cambiamento è stato richiesto e qual è il suo stato corrente?
+```
+
+`ChangeEvent` risponde alla domanda:
+
+```text
+Quali eventi sono avvenuti durante il ciclo di vita della richiesta?
+```
+
+`Evidence` risponde alla domanda:
+
+```text
+Quali prove tecniche sono state raccolte per dimostrare lo stato osservato?
+```
+
+### 14.3 ChangeRequest persistence
+
+Una `ChangeRequest` rappresenta una richiesta di cambiamento applicativo o tecnico.
+
+Esempi di informazioni associate a una ChangeRequest:
+
+- numero della richiesta;
+- titolo;
+- descrizione;
+- applicazione target;
+- ambiente target;
+- requester;
+- stato del processo;
+- stato runtime;
+- riferimenti Git;
+- timestamp di creazione e aggiornamento.
+
+La persistenza della ChangeRequest permette di ricostruire lo stato corrente del workflow anche dopo riavvii applicativi, rollout del pod o nuove sessioni utente.
+
+Esempi reali usati durante la validazione:
+
+- `CHG-2026-0049` per staging;
+- `CHG-2026-0050` per production.
+
+Questi record sono stati usati dalla UI per mostrare runtime evidence e Tekton validation evidence.
+
+### 14.4 ChangeEvent persistence
+
+Un `ChangeEvent` rappresenta un evento di audit collegato a una ChangeRequest.
+
+Esempi di eventi:
+
+- ChangeRequest creata;
+- workflow GitLab avviato;
+- branch creato;
+- merge request creata;
+- validazione Tekton avviata;
+- validazione Tekton completata;
+- evidence raccolta;
+- deployment controllato;
+- errore registrato.
+
+La persistenza degli eventi permette di ricostruire la storia della richiesta.
+
+Questo è importante perché un operatore non deve vedere solo lo stato finale. Deve anche poter capire quali passaggi hanno portato a quello stato.
+
+Gli eventi sono quindi la base dell’audit trail applicativo.
+
+### 14.5 Evidence persistence
+
+`Evidence` rappresenta una prova tecnica raccolta dal sistema.
+
+Le evidenze possono provenire da più fonti:
+
+- Kubernetes/OpenShift;
+- Argo CD;
+- Tekton;
+- GitLab;
+- workflow interni del DevOps Control Plane.
+
+Esempi di evidenze:
+
+- stato di una Argo CD Application;
+- stato di un Deployment;
+- replica readiness;
+- route health;
+- PipelineRun Tekton;
+- TaskRun fallite;
+- validation path;
+- failed task count;
+- stato sanitized.
+
+Le evidenze devono essere associate alla ChangeRequest corretta.
+
+Questo collegamento è fondamentale perché consente alla UI di mostrare, nel dettaglio di una ChangeRequest, esattamente le prove tecniche relative a quella richiesta.
+
+### 14.6 Sanitizzazione delle evidenze
+
+Le evidenze devono essere sanificate prima di essere considerate sicure per persistenza, visualizzazione o condivisione.
+
+Le evidenze possono contenere metadati tecnici sicuri, come:
+
+- namespace;
+- nomi di risorse;
+- nomi di PipelineRun;
+- nomi di Argo CD Application;
+- validation path;
+- status;
+- reason;
+- failed task count.
+
+Le evidenze non devono contenere:
+
+- token;
+- password;
+- kubeconfig raw;
+- private key;
+- contenuto Secret decodificato;
+- credenziali applicative;
+- bearer token;
+- materiale sensibile non necessario.
+
+La regola operativa è:
+
+```text
+persist readable evidence, never persist raw credentials
+```
+
+### 14.7 Relazione tra PostgreSQL e UI
+
+La UI non deve ricostruire lo stato operativo interrogando direttamente tutti i sistemi esterni.
+
+La UI legge lo stato applicativo dal backend, che a sua volta usa PostgreSQL per recuperare dati persistiti.
+
+Questo vale per:
+
+- lista ChangeRequest;
+- dettaglio ChangeRequest;
+- audit events;
+- runtime evidence;
+- Tekton validation evidence;
+- dashboard latest ChangeRequest.
+
+La UI può quindi presentare una vista coerente anche quando le evidenze sono state raccolte in momenti diversi.
+
+### 14.8 Relazione tra PostgreSQL e runtime evidence
+
+La runtime evidence osserva il mondo esterno, ma viene conservata nel mondo applicativo.
+
+Esempio:
+
+```text
+OpenShift Deployment status
+       |
+       v
+runtime evidence
+       |
+       v
+PostgreSQL
+       |
+       v
+ChangeRequest detail UI
+```
+
+Questo flusso permette di conservare una fotografia dello stato osservato durante una specifica fase del workflow.
+
+La stessa logica vale per Tekton validation evidence:
+
+```text
+Tekton PipelineRun
+       |
+       v
+check-validation
+       |
+       v
+validation evidence
+       |
+       v
+PostgreSQL
+       |
+       v
+UI evidence card
+```
+
+### 14.9 Backup e restore
+
+PostgreSQL è incluso nella baseline operativa del progetto.
+
+Sono disponibili runbook dedicati per:
+
+- backup;
+- restore;
+- restore isolato;
+- disaster recovery;
+- validazione post-restore;
+- limiti e raccomandazioni per produzione.
+
+Il backup di PostgreSQL è importante perché il database contiene:
+
+- stato delle richieste;
+- eventi di audit;
+- evidenze raccolte;
+- storico utile per troubleshooting e compliance.
+
+La perdita del database non cancella necessariamente lo stato GitOps presente nel repository o nel cluster, ma compromette la memoria applicativa del DevOps Control Plane.
+
+Per questo motivo il database deve essere trattato come componente critico.
+
+### 14.10 Restore isolato
+
+Il restore isolato è preferibile durante test e verifiche.
+
+Un restore isolato permette di validare un backup senza sovrascrivere l’istanza runtime attiva.
+
+Questo approccio riduce il rischio operativo.
+
+La regola generale è:
+
+```text
+validate restore safely before considering active replacement
+```
+
+Un restore in ambiente attivo deve essere eseguito solo con procedura approvata, evidenze raccolte e chiara responsabilità operativa.
+
+### 14.11 Relazione con operability
+
+PostgreSQL è parte della Fase 10 di operability.
+
+Gli operatori devono verificare:
+
+- pod PostgreSQL running;
+- connettività dal backend;
+- readiness del DevOps Control Plane;
+- assenza di errori di connessione;
+- validità dei backup;
+- possibilità di restore isolato.
+
+La readiness applicativa `/readyz` dipende anche dalla possibilità del backend di usare correttamente le proprie dipendenze.
+
+Se PostgreSQL non è disponibile, il DevOps Control Plane può perdere la capacità di leggere o aggiornare ChangeRequest, eventi ed evidenze.
+
+### 14.12 Relazione con audit e compliance
+
+La persistenza su PostgreSQL supporta audit e compliance applicativa.
+
+Il sistema può dimostrare:
+
+- chi ha richiesto un cambiamento;
+- quale ambiente è stato scelto;
+- quali eventi sono avvenuti;
+- quali evidenze sono state raccolte;
+- quale validazione Tekton è stata eseguita;
+- quale stato Argo CD è stato osservato;
+- quale stato runtime è stato rilevato.
+
+Questo rende il DevOps Control Plane più di un semplice orchestratore tecnico.
+
+Il sistema diventa anche una fonte di tracciabilità.
+
+### 14.13 Limiti attuali
+
+La baseline attuale include PostgreSQL funzionante e runbook operativi, ma non rappresenta ancora necessariamente una configurazione enterprise definitiva per ogni contesto produttivo.
+
+Restano possibili evoluzioni future:
+
+- alta disponibilità PostgreSQL;
+- retention policy più articolate;
+- archiviazione storica delle evidenze;
+- metriche specifiche database;
+- alerting dedicato;
+- restore periodici misurati con RPO e RTO formali.
+
+Questi aspetti fanno parte del percorso di production hardening e non invalidano la baseline attuale.
+
+### 14.14 Sintesi
+
+PostgreSQL è la memoria persistente del DevOps Control Plane.
+
+Conserva:
+
+- richieste;
+- eventi;
+- evidenze;
+- storia operativa.
+
+Grazie a PostgreSQL, il progetto può offrire:
+
+- auditabilità;
+- consultazione storica;
+- UI coerente;
+- troubleshooting;
+- operability;
+- backup e restore;
+- base per future esigenze di compliance.
+
+La persistenza è quindi uno dei pilastri che trasformano il DevOps Control Plane da automazione temporanea a piattaforma di controllo strutturata.
