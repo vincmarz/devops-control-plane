@@ -1563,3 +1563,249 @@ However, the codebase continues to be prepared for multi-cluster operation throu
 Phase 15.9.3.2 confirms that Secret reference and runtime factory guardrails are in place and validated.
 
 The project remains physically validated on the namespace-isolated `ocp-dev` topology, while code-level multi-cluster readiness continues to be actively consolidated.
+
+## Phase 15.9.4 — Deferred real-cluster onboarding contract
+
+Status: Completed as deferred onboarding contract  
+Date: 2026-07-09  
+Scope: Future physical multi-cluster onboarding
+
+### Purpose
+
+Phase 15.9.4 defines the onboarding contract that must be used when a real additional OpenShift cluster becomes available.
+
+This phase does not assume that a non-production cluster or a production cluster will be available soon.
+
+The purpose is to ensure that future real-cluster onboarding is a controlled configuration and validation activity, not a new architecture or refactoring effort.
+
+### Current constraint
+
+Only the `ocp-dev` OpenShift cluster is currently available.
+
+The validated baseline remains:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> `ocp-dev` / `devops-ci-staging`
+- `production` -> `ocp-dev` / `devops-ci-production`
+
+Physical cross-cluster runtime validation remains deferred by infrastructure availability.
+
+### Deferred onboarding principle
+
+When a real additional cluster becomes available, onboarding must start from the validated namespace-isolated baseline and from the multi-cluster-ready code model already implemented.
+
+The future onboarding must not introduce raw Secret values in configuration, logs, evidence or UI.
+
+The future onboarding must not silently fall back to `ocp-dev`.
+
+The future onboarding must preserve the existing `dev` baseline.
+
+### Required cluster identity
+
+A real cluster cannot be registered until the following data is available:
+
+- logical cluster name;
+- physical cluster name;
+- provider type;
+- OpenShift version;
+- API server URL;
+- console URL, if available;
+- network reachability from the DevOps Control Plane runtime;
+- target environment;
+- target namespace;
+- Tekton namespace;
+- Argo CD access model;
+- rollback owner and rollback procedure.
+
+Example future candidate:
+
+- environment: `staging`
+- logical cluster name: `ocp-nonprod`
+- namespace: `devops-ci-staging`
+
+This is only an example. It is not an active target until the infrastructure exists.
+
+### Required Environment Catalog changes
+
+The Environment Catalog must explicitly map the environment to the real cluster.
+
+For a future staging onboarding, the intended mapping would become:
+
+- `dev` -> `ocp-dev` / `devops-ci-demo`
+- `staging` -> real non-production cluster / `devops-ci-staging`
+- `production` -> current validated fallback until a real production cluster exists
+
+The implementation must reject incomplete mappings.
+
+A missing or invalid cluster reference must fail closed.
+
+### Required Cluster Registry changes
+
+The Cluster Registry entry must include:
+
+- cluster name;
+- display name;
+- enabled flag;
+- API URL;
+- default namespace;
+- allowed namespaces;
+- CA reference;
+- token Secret reference;
+- description.
+
+The cluster must remain disabled until all readiness gates are satisfied.
+
+### Secret reference contract
+
+Real-cluster credentials must be represented only through Secret references.
+
+Required references may include:
+
+- Kubernetes token Secret reference;
+- Kubernetes CA reference;
+- Tekton token Secret reference, if separate;
+- Argo CD token Secret reference, if required.
+
+Rules:
+
+- runtime Secret loader remains disabled by default;
+- Secret references must be allow-listed;
+- missing Secret references must fail closed;
+- non allow-listed Secret references must fail closed;
+- raw Secret values must not appear in logs;
+- raw Secret values must not appear in evidence;
+- raw Secret values must not appear in UI.
+
+### Minimum RBAC contract
+
+The runtime identity used by the DevOps Control Plane must receive only the minimum required permissions.
+
+Expected namespace-scoped permissions:
+
+- get and list Deployments;
+- get and list Pods;
+- get and list Services;
+- get and list Routes;
+- create and get PipelineRuns;
+- list PipelineRuns;
+- get and list TaskRuns.
+
+Optional permissions depend on the Argo CD topology.
+
+Forbidden by default:
+
+- cluster-admin;
+- broad wildcard permissions;
+- unrestricted Secret read access;
+- uncontrolled cross-namespace access.
+
+### Tekton requirements
+
+The target namespace must provide or allow access to:
+
+- required Tasks;
+- `validate-gitops` Pipeline;
+- ServiceAccount allowed to create PipelineRuns;
+- GitOps repository access;
+- required workspaces;
+- runtime configuration required by the validation Pipeline.
+
+Expected validation result:
+
+- PipelineRun status is `True`;
+- PipelineRun reason is `Succeeded`;
+- failed task count is `0`;
+- evidence sanitized is `true`.
+
+### Argo CD requirements
+
+The Argo CD deployment model must be known before onboarding.
+
+Required information:
+
+- Argo CD namespace;
+- Application name;
+- target cluster;
+- target namespace;
+- Git repository URL;
+- GitOps overlay path;
+- sync policy;
+- expected health state.
+
+Expected result:
+
+- sync is `Synced`;
+- health is `Healthy`.
+
+### Readiness gates
+
+A real cluster target can be enabled only when all readiness checks pass.
+
+Readiness must fail closed when:
+
+- the Environment Catalog entry is incomplete;
+- the Cluster Registry entry is incomplete;
+- the cluster is disabled;
+- Secret references are missing;
+- Secret references are not allow-listed;
+- runtime Secret loader is disabled while real Secret values are required;
+- runtime client factories are disabled while real clients are required;
+- the provider is missing;
+- the provider is disabled;
+- required RBAC is missing;
+- Tekton is not available;
+- Argo CD cannot observe the target application.
+
+### First real-cluster smoke test
+
+The first real-cluster onboarding must validate:
+
+1. `/readyz`;
+2. target environment resolution;
+3. runtime provider selection;
+4. Secret reference validation;
+5. Argo CD deployment check;
+6. Tekton validation start;
+7. Tekton validation result;
+8. runtime evidence collection;
+9. UI ChangeRequest detail;
+10. absence of raw Secret exposure;
+11. no regression on `dev`;
+12. rollback readiness.
+
+### Rollback contract
+
+If onboarding fails, rollback must be explicit.
+
+Rollback actions:
+
+- disable the real cluster target;
+- restore the affected environment to the namespace-isolated fallback topology;
+- disable runtime Secret loader if it was enabled only for onboarding;
+- disable runtime client factories if they were enabled only for onboarding;
+- preserve sanitized failure evidence;
+- document failure and remediation;
+- verify that `dev` remains operational.
+
+### Exit criteria
+
+The deferred onboarding contract is complete when:
+
+- required cluster identity is defined;
+- Environment Catalog changes are defined;
+- Cluster Registry changes are defined;
+- Secret reference rules are defined;
+- RBAC minimum is defined;
+- Tekton requirements are defined;
+- Argo CD requirements are defined;
+- readiness gates are defined;
+- smoke test requirements are defined;
+- rollback requirements are defined.
+
+### Closure statement
+
+Phase 15.9.4 completes the deferred real-cluster onboarding contract.
+
+The DevOps Control Plane remains physically validated on the namespace-isolated `ocp-dev` topology.
+
+The codebase and process remain prepared for future real multi-cluster onboarding when additional infrastructure becomes available.
