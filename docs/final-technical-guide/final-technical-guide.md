@@ -7912,3 +7912,459 @@ Il proxy protegge la superficie HTTP e propaga il contesto utente.
 Il backend deve applicare autorizzazione fail-closed per le azioni sensibili.
 
 Insieme a RBAC, Secret references, evidence sanitization e runtime factories disabled-by-default, AuthN/AuthZ completa il modello di sicurezza applicativa della piattaforma.
+
+## 37. Error handling
+
+L'error handling del DevOps Control Plane definisce come il sistema deve comportarsi quando un'operazione non puo essere completata correttamente.
+
+Nel progetto, un errore non deve essere considerato solo come una condizione tecnica da stampare nei log. Un errore deve essere interpretato, classificato, reso comprensibile, collegato alla `ChangeRequest` quando possibile e gestito in modo sicuro.
+
+Il principio generale e:
+
+```text
+fail clearly, fail safely, preserve evidence
+```
+
+Questo significa che il sistema deve preferire un errore esplicito e sicuro rispetto a un comportamento implicito, ambiguo o potenzialmente pericoloso.
+
+### 37.1 Perche l'error handling e importante
+
+Il DevOps Control Plane coordina piu sistemi:
+
+- PostgreSQL;
+- GitLab;
+- Argo CD;
+- Tekton;
+- Kubernetes/OpenShift;
+- OAuth proxy;
+- runtime provider;
+- Secret references;
+- runtime factories.
+
+Ogni integrazione puo fallire per motivi diversi.
+
+Senza una gestione coerente degli errori, l'operatore rischia di non capire:
+
+- quale componente ha fallito;
+- quale ambiente era coinvolto;
+- quale namespace era target;
+- se l'errore e applicativo, infrastrutturale o di autorizzazione;
+- se il fallimento e atteso come guardrail fail-closed;
+- se e sicuro riprovare;
+- quali evidenze preservare.
+
+### 37.2 Categorie principali di errore
+
+Gli errori possono essere raggruppati in categorie operative.
+
+Categorie principali:
+
+- input validation error;
+- authorization error;
+- environment resolution error;
+- runtime provider error;
+- Secret reference error;
+- runtime factory error;
+- GitLab workflow error;
+- Argo CD evidence error;
+- Tekton validation error;
+- Kubernetes/OpenShift runtime error;
+- persistence error;
+- UI rendering error;
+- operational or maintenance error.
+
+Questa classificazione aiuta a capire quale layer analizzare.
+
+### 37.3 Input validation error
+
+Un input validation error si verifica quando una richiesta contiene dati incompleti o non validi.
+
+Esempi:
+
+- `targetEnvironment` mancante;
+- ambiente non riconosciuto;
+- application name mancante;
+- ChangeRequest number non valido;
+- action non supportata;
+- validation path non determinabile.
+
+Comportamento atteso:
+
+```text
+reject the request before executing technical actions
+```
+
+Il sistema non deve tentare di correggere automaticamente input ambigui.
+
+### 37.4 Authorization error
+
+Un authorization error si verifica quando un utente autenticato non puo eseguire una certa azione.
+
+Esempi:
+
+- utente senza gruppo richiesto;
+- ruolo non autorizzato;
+- azione tecnica non permessa;
+- header utente mancanti;
+- header gruppi non validi;
+- percorso non autorizzato.
+
+Comportamento atteso:
+
+```text
+fail closed with explicit authorization denial
+```
+
+La UI puo nascondere azioni non consentite, ma il backend deve comunque applicare autorizzazione.
+
+### 37.5 Environment resolution error
+
+Un environment resolution error si verifica quando il backend non riesce a trasformare un ambiente logico in un target tecnico.
+
+Esempi:
+
+- ambiente sconosciuto;
+- ambiente disabled;
+- mapping incompleto;
+- namespace mancante;
+- Argo CD Application mancante;
+- validation path mancante;
+- cluster reference non valida.
+
+Comportamento atteso:
+
+```text
+stop the workflow and report the missing mapping
+```
+
+Non deve esserci fallback implicito verso `dev` o `ocp-dev`.
+
+### 37.6 Runtime provider error
+
+Un runtime provider error si verifica quando il sistema non trova un provider valido per il cluster target.
+
+Esempi:
+
+- provider mancante;
+- provider disabled;
+- provider non compatibile;
+- provider non configurato per il cluster risolto.
+
+Comportamento atteso:
+
+```text
+fail closed and do not use another provider
+```
+
+Questa regola e fondamentale per il futuro multi-cluster.
+
+Un provider mancante per un cluster staging futuro non deve causare un'azione su `ocp-dev`.
+
+### 37.7 Secret reference error
+
+Un Secret reference error si verifica quando una credenziale richiesta non e rappresentata o autorizzata correttamente.
+
+Esempi:
+
+- Secret reference mancante;
+- Secret reference non allow-listed;
+- namespace Secret errato;
+- key richiesta mancante;
+- Secret getter non configurato;
+- RBAC insufficiente per leggere il Secret.
+
+Comportamento atteso:
+
+```text
+fail closed without printing secret values
+```
+
+L'errore puo citare il nome della reference, ma non deve mai mostrare il valore del Secret.
+
+### 37.8 Runtime factory error
+
+Un runtime factory error si verifica quando una factory non puo costruire un client runtime.
+
+Esempi:
+
+- factory disabled;
+- global factory flag disabled;
+- capability-specific flag disabled;
+- API URL mancante;
+- Argo CD base URL mancante;
+- token value mancante;
+- kubeconfig non supportato;
+- raw CA non supportata.
+
+Comportamento atteso:
+
+```text
+fail closed and preserve configuration context without exposing credentials
+```
+
+Questi errori sono spesso guardrail desiderati, non bug.
+
+### 37.9 GitLab workflow error
+
+Un GitLab workflow error si verifica durante branch, commit, merge request o merge.
+
+Esempi:
+
+- repository non raggiungibile;
+- token GitLab non valido;
+- branch gia esistente;
+- merge request non creata;
+- merge request non mergeabile;
+- errore TLS;
+- permessi insufficienti.
+
+Comportamento atteso:
+
+- registrare l'errore nel contesto della ChangeRequest;
+- produrre ChangeEvent quando possibile;
+- non esporre token;
+- rendere l'errore comprensibile all'operatore.
+
+### 37.10 Argo CD error
+
+Un Argo CD error puo verificarsi quando il sistema non riesce a leggere o interpretare lo stato GitOps.
+
+Esempi:
+
+- Application non trovata;
+- status `OutOfSync`;
+- status `Degraded`;
+- API Argo CD non raggiungibile;
+- token Argo CD non valido;
+- repository o path errato;
+- target namespace non coerente.
+
+Comportamento atteso:
+
+- distinguere errore di lettura da stato applicativo non sano;
+- raccogliere evidence sanificata;
+- mostrare sync e health quando disponibili;
+- non dichiarare completato un workflow se lo stato non e coerente.
+
+### 37.11 Tekton validation error
+
+Un Tekton validation error si verifica quando la validazione tecnica non parte o non termina con successo.
+
+Esempi:
+
+- Pipeline non trovata;
+- Task non trovata;
+- PipelineRun fallita;
+- TaskRun fallita;
+- validation path errato;
+- Git clone fallito;
+- workspace mancante;
+- RBAC insufficiente;
+- ServiceAccount non autorizzato.
+
+Comportamento atteso:
+
+- preservare PipelineRun name;
+- preservare TaskRun fallite, se disponibili;
+- preservare status e reason;
+- calcolare failed task count;
+- produrre validation evidence sanificata;
+- non copiare log sensibili.
+
+### 37.12 Kubernetes/OpenShift runtime error
+
+Un runtime error Kubernetes/OpenShift si verifica quando lo stato osservato nel cluster non e quello atteso.
+
+Esempi:
+
+- deployment non trovato;
+- deployment non ready;
+- pod in CrashLoopBackOff;
+- immagine non scaricabile;
+- service assente;
+- route assente;
+- `/healthz` non HTTP 200;
+- namespace non accessibile.
+
+Comportamento atteso:
+
+- raccogliere runtime evidence;
+- indicare namespace e ambiente;
+- distinguere errore di readiness da errore di accesso;
+- mantenere output sanificato.
+
+### 37.13 Persistence error
+
+Un persistence error si verifica quando PostgreSQL non e disponibile o una scrittura fallisce.
+
+Esempi:
+
+- database non raggiungibile;
+- credenziali database errate;
+- schema non allineato;
+- errore di transazione;
+- errore nel salvataggio di ChangeRequest, ChangeEvent o Evidence.
+
+Comportamento atteso:
+
+- evitare perdita silenziosa di stato;
+- restituire errore esplicito;
+- registrare log sicuri;
+- non dichiarare completata un'azione se evidence o stato non sono stati persistiti quando richiesto.
+
+### 37.14 UI rendering error
+
+Un UI rendering error si verifica quando il backend ha dati ma la UI non li mostra correttamente.
+
+Esempi:
+
+- dashboard non mostra latest ChangeRequest;
+- `Environments / Namespaces` assente;
+- ChangeRequest detail non carica;
+- Tekton validation card assente;
+- runtime evidence card assente;
+- raw evidence non mostrata o non sanificata.
+
+Comportamento atteso:
+
+- verificare backend data;
+- verificare evidence persistite;
+- verificare pod image e rollout;
+- verificare UI handler;
+- verificare autorizzazione e proxy.
+
+### 37.15 Errori fail-closed attesi
+
+Non tutti gli errori indicano un difetto.
+
+Alcuni errori sono risultati attesi di guardrail fail-closed.
+
+Esempi:
+
+- provider mancante;
+- provider disabled;
+- Secret reference non allow-listed;
+- factory disabled;
+- RBAC insufficiente;
+- ambiente disabled;
+- cluster disabled.
+
+In questi casi il sistema sta proteggendo la piattaforma.
+
+L'operatore deve completare la configurazione mancante, non bypassare il controllo.
+
+### 37.16 Evidence per errori
+
+Quando un errore avviene durante un workflow, bisogna preservare evidence sanificata.
+
+Evidence utile:
+
+- ChangeRequest number;
+- target environment;
+- cluster name;
+- namespace;
+- action richiesta;
+- componente che ha fallito;
+- messaggio di errore non sensibile;
+- status;
+- reason;
+- timestamp;
+- correlation con PipelineRun, Application o Deployment.
+
+Evidence da non salvare:
+
+- token;
+- password;
+- kubeconfig;
+- Secret raw;
+- bearer token;
+- private key.
+
+### 37.17 Messaggi di errore per operatori
+
+Un buon messaggio di errore deve essere utile ma sicuro.
+
+Esempio utile:
+
+```text
+runtime provider for cluster ocp-staging-simulated is not configured
+```
+
+Esempio non utile:
+
+```text
+something went wrong
+```
+
+Esempio non sicuro:
+
+```text
+failed with token actual-token-value
+```
+
+Il messaggio deve indicare il problema senza esporre segreti.
+
+### 37.18 Retry e idempotenza
+
+Non tutti gli errori devono essere risolti con retry immediato.
+
+Prima di riprovare, bisogna capire la categoria di errore.
+
+Retry puo avere senso per:
+
+- problemi temporanei di rete;
+- API momentaneamente indisponibile;
+- stato transient di rollout.
+
+Retry non risolve:
+
+- provider mancante;
+- Secret non allow-listed;
+- RBAC assente;
+- validation path errato;
+- factory disabled.
+
+### 37.19 Relazione con troubleshooting
+
+L'error handling alimenta il troubleshooting.
+
+Il runbook deve aiutare a identificare il layer coinvolto:
+
+- UI;
+- backend;
+- database;
+- GitLab;
+- Argo CD;
+- Tekton;
+- Kubernetes/OpenShift;
+- RBAC;
+- Secret;
+- provider/factory.
+
+Un errore classificato correttamente riduce il tempo di diagnosi.
+
+### 37.20 Relazione con multi-cluster readiness
+
+Nel futuro multi-cluster, l'error handling diventa ancora piu importante.
+
+Un errore di target o provider non deve portare a un'azione sul cluster sbagliato.
+
+Il comportamento corretto e:
+
+```text
+if the intended target cannot be proven, stop the operation
+```
+
+Questo protegge staging, production e cluster futuri da azioni involontarie.
+
+### 37.21 Sintesi
+
+L'error handling del DevOps Control Plane deve essere esplicito, sicuro e orientato all'operatore.
+
+Il sistema deve distinguere errori applicativi, errori runtime, errori di autorizzazione, errori di provider, errori Secret e fallimenti di validazione.
+
+La regola finale e:
+
+```text
+an explicit fail-closed error is safer than an implicit unsafe action
+```
