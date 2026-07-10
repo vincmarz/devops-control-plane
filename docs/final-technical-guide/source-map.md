@@ -509,7 +509,7 @@ Uso previsto:
 
 ## 11. Parte 8 — Security e guardrail
 
-Nota di allineamento: la guida tecnica finale ha introdotto un capitolo aggiuntivo dedicato a `Error handling`. Per questo motivo la numerazione della Parte 8 e delle parti successive e stata riallineata alla struttura corrente del documento sorgente `docs/final-technical-guide/final-technical-guide.md`.
+Nota di allineamento: la guida tecnica finale ha introdotto un capitolo aggiuntivo dedicato a `Error handling`. Per questo motivo la numerazione della Parte 8 e delle parti successive e stata riallineata alla struttura corrente del documento sorgente `docs/final-technical-guide/final-technical-guide-it.md`.
 
 ### Capitolo 32 — RBAC
 
@@ -702,7 +702,7 @@ Fonti principali:
 - `docs/multi-cluster-environment-enablement-request.md`
 - `docs/runbooks/operability-health-check.md`
 - `docs/12-evidence-model.md`
-- `docs/final-technical-guide/final-technical-guide.md`
+- `docs/final-technical-guide/final-technical-guide-it.md`
 
 Uso previsto:
 

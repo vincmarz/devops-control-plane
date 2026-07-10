@@ -10057,7 +10057,7 @@ Risultati già ottenuti:
 - `outline.md`;
 - `source-map.md`;
 - `writing-plan.md`;
-- documento sorgente `final-technical-guide.md`;
+- documento sorgente `final-technical-guide-it.md`;
 - capitoli introduttivi;
 - architettura;
 - backend;
@@ -10555,7 +10555,7 @@ Attività residue:
 Il documento sorgente resta:
 
 ```text
-docs/final-technical-guide/final-technical-guide.md
+docs/final-technical-guide/final-technical-guide-it.md
 ```
 
 Il Word sarà un output derivato.
@@ -11502,7 +11502,7 @@ Questa limitazione e un requisito di sicurezza.
 La sorgente primaria della guida finale e:
 
 ```text
-docs/final-technical-guide/final-technical-guide.md
+docs/final-technical-guide/final-technical-guide-it.md
 ```
 
 Il Word e un output derivato.
