@@ -9742,3 +9742,426 @@ PostgreSQL e il componente centrale da proteggere per ChangeRequest, ChangeEvent
 GitOps, Argo CD, Tekton e GitLab hanno ruoli importanti, ma non sostituiscono il backup del database e la validazione post-restore.
 
 Una strategia DR completa deve essere provata, documentata e sanificata.
+
+## 42. Stato delle fasi
+
+Questo capitolo riepiloga lo stato delle fasi principali del progetto DevOps Control Plane.
+
+Lo scopo non e solo elencare avanzamenti, ma dare una fotografia coerente del percorso svolto, delle baseline validate, delle attivita completate e di cio che resta intenzionalmente deferred.
+
+Il progetto e arrivato a una baseline avanzata, con componenti backend, workflow, UI, operability, evidence model e readiness multi-cluster a livello codice gia consolidati.
+
+La guida tecnica finale, invece, e la Fase 12 ed e ancora in produzione incrementale.
+
+### 42.1 Sintesi generale
+
+Lo stato generale del progetto puo essere riassunto cosi:
+
+```text
+Backend core                         completato
+PostgreSQL persistence               completata
+ChangeRequest lifecycle              completato
+GitLab workflow                      completato
+Tekton integration                   completata
+Argo CD integration                  completata
+Runtime evidence                     completata e rafforzata
+UI evidence-aware                    completata e rafforzata
+Security baseline                    completata come baseline avanzata
+Operability baseline                 completata e riallineata post-Fase 15
+CLI devopsctl                        standby
+Final technical guide                in corso
+Runtime evidence/dashboard alignment completato
+Environment Catalog                  completato
+Multi-cluster code readiness         completata
+Physical multi-cluster validation    deferred
+```
+
+Questa sintesi deve essere letta distinguendo sempre tra baseline validata e roadmap futura.
+
+### 42.2 Fase 0 — Documentazione e ADR
+
+Stato:
+
+```text
+PARZIALE / IN AGGIORNAMENTO CONTINUO
+```
+
+La documentazione e gli ADR sono stati prodotti lungo tutto il progetto.
+
+La Fase 0 non e una fase chiusa una volta per tutte, perche la documentazione evolve insieme al sistema.
+
+Elementi documentali importanti:
+
+- visione;
+- scope MVP;
+- architettura;
+- integrazione GitLab;
+- integrazione Argo CD;
+- integrazione Tekton;
+- security e RBAC;
+- data model;
+- change workflows;
+- evidence model;
+- API design;
+- runbook operativi;
+- documentazione multi-cluster readiness.
+
+La guida tecnica finale consolida questo patrimonio documentale.
+
+### 42.3 Fase 1 — Backend foundation Go/PostgreSQL
+
+Stato:
+
+```text
+COMPLETATA
+```
+
+La fase ha introdotto il backend Go e la persistenza PostgreSQL.
+
+Risultati principali:
+
+- struttura backend;
+- repository layer;
+- persistenza `ChangeRequest`;
+- persistenza `ChangeEvent`;
+- base per evidence persistence;
+- test di integrazione e non regressione.
+
+PostgreSQL e diventato la memoria applicativa del DevOps Control Plane.
+
+### 42.4 Fase 2 — Change lifecycle e audit
+
+Stato:
+
+```text
+COMPLETATA
+```
+
+La fase ha consolidato il ciclo di vita della ChangeRequest e gli eventi di audit.
+
+Risultati principali:
+
+- stati lifecycle;
+- ChangeEvent;
+- audit trail;
+- transizioni controllate;
+- base per UI e workflow successivi.
+
+Questa fase e fondamentale perche ogni azione tecnica successiva resta collegata a una ChangeRequest.
+
+### 42.5 Fase 3 — GitLab Merge Request workflow
+
+Stato:
+
+```text
+COMPLETATA
+```
+
+La fase ha introdotto il workflow GitLab end-to-end.
+
+Risultati principali:
+
+- branch workflow;
+- commit workflow;
+- Merge Request;
+- merge;
+- collegamento con ChangeRequest;
+- audit degli eventi GitLab;
+- integrazione con modello GitOps.
+
+GitLab rappresenta la dimensione versionata e revisionabile del cambiamento.
+
+### 42.6 Fase 4 — Tekton technical integration
+
+Stato:
+
+```text
+COMPLETATA
+```
+
+La fase ha introdotto l'integrazione tecnica con Tekton.
+
+Risultati principali:
+
+- Task;
+- Pipeline;
+- PipelineRun;
+- TaskRun;
+- validazione tecnica;
+- raccolta stato PipelineRun;
+- base per validation evidence.
+
+Tekton e diventato il motore di validazione tecnica del progetto.
+
+### 42.7 Fase 5 — Tekton GitOps validation pipeline
+
+Stato:
+
+```text
+COMPLETATA / RAFFORZATA
+```
+
+La fase ha rafforzato il workflow di validazione GitOps tramite Tekton.
+
+Risultati principali:
+
+- validazione overlay GitOps;
+- validation path environment-specific;
+- PipelineRun staging;
+- PipelineRun production;
+- failed task count;
+- validation evidence sanificata.
+
+La correzione dei validation path environment-specific e stata essenziale per evitare validazioni sull'overlay sbagliato.
+
+### 42.8 Fase 6 — Argo CD check e runtime/evidence
+
+Stato:
+
+```text
+COMPLETATA / RAFFORZATA
+```
+
+La fase ha collegato Argo CD, runtime check ed evidence.
+
+Risultati principali:
+
+- lettura Argo CD Application;
+- sync status;
+- health status;
+- deployment evidence;
+- runtime evidence;
+- relazione tra GitOps state e runtime state.
+
+Argo CD fornisce la vista GitOps della piattaforma.
+
+### 42.9 Fase 7 — UI MVP avanzata
+
+Stato:
+
+```text
+COMPLETATA / RAFFORZATA CON EVIDENCE RUNTIME
+```
+
+La UI e partita come MVP, ma e stata successivamente rafforzata.
+
+Risultati principali:
+
+- dashboard;
+- lista ChangeRequest;
+- ChangeRequest detail;
+- audit log;
+- runtime evidence card;
+- Tekton validation card;
+- latest ChangeRequest;
+- `Environments / Namespaces`;
+- user box.
+
+La UI e oggi una superficie operativa evidence-aware ed environment-aware.
+
+### 42.10 Fase 8 — Deploy DevOps Control Plane su OpenShift
+
+Stato:
+
+```text
+COMPLETATA MVP FUNZIONANTE
+```
+
+La fase ha portato il DevOps Control Plane su OpenShift.
+
+Risultati principali:
+
+- deployment applicativo;
+- route;
+- readiness;
+- OAuth proxy;
+- integrazione runtime con il cluster;
+- validazione base della UI.
+
+Questa fase ha reso il progetto eseguibile come piattaforma runtime.
+
+### 42.11 Fase 9 — Security hardening / production readiness
+
+Stato:
+
+```text
+COMPLETATA COME BASELINE AVANZATA
+```
+
+La fase ha consolidato guardrail di sicurezza e readiness produttiva iniziale.
+
+Risultati principali:
+
+- AuthN/AuthZ;
+- OAuth proxy;
+- RBAC;
+- Secret handling;
+- security baseline;
+- runbook di sicurezza;
+- produzione avanzata ma non production-hardening esaustivo.
+
+La fase non equivale a produzione enterprise definitiva, ma rappresenta una baseline solida.
+
+### 42.12 Fase 10 — Operability / production operations
+
+Stato:
+
+```text
+COMPLETATA COME BASELINE OPERATIVA AVANZATA RIALLINEATA POST-FASE 15
+```
+
+La Fase 10 e stata inizialmente completata e poi riallineata dopo la Fase 15.
+
+Risultati principali:
+
+- health-check runbook;
+- troubleshooting matrix;
+- incident triage;
+- evidence checklist;
+- Secret/RBAC/factory guardrails;
+- maintenance operations;
+- operability closure post-Fase 15.
+
+Questa fase fornisce la base operativa per mantenere e diagnosticare il sistema.
+
+### 42.13 Fase 11 — CLI devopsctl
+
+Stato:
+
+```text
+STANDBY / NON PRIORITARIA AL MOMENTO
+```
+
+La CLI `devopsctl` resta una possibile evoluzione futura.
+
+Non e necessaria per completare la baseline attuale.
+
+La priorita corrente e la guida tecnica finale e il consolidamento documentale.
+
+### 42.14 Fase 12 — Documento tecnico finale
+
+Stato:
+
+```text
+IN PRODUZIONE INCREMENTALE
+```
+
+Questa guida e il prodotto principale della Fase 12.
+
+Risultati gia ottenuti:
+
+- directory dedicata `docs/final-technical-guide/`;
+- `README.md`;
+- `outline.md`;
+- `source-map.md`;
+- `writing-plan.md`;
+- documento sorgente `final-technical-guide.md`;
+- capitoli introduttivi;
+- architettura;
+- backend;
+- PostgreSQL;
+- modello dati;
+- workflow;
+- evidence model;
+- UI;
+- multi-cluster readiness;
+- security;
+- operability.
+
+La Fase 12 proseguira fino alla revisione finale e alla generazione del documento Word.
+
+### 42.15 Fase 13 — Runtime evidence, dashboard e maintenance refinement
+
+Stato:
+
+```text
+COMPLETATA E RIALLINEATA POST-FASE 15
+```
+
+La fase ha riallineato la documentazione su evidence, UI, dashboard e manutenzione.
+
+Risultati principali:
+
+- evidence model post-Fase 15;
+- dashboard e UI architecture alignment;
+- maintenance operations alignment;
+- change workflow alignment;
+- documento di chiusura Fase 13.
+
+Questa fase ha preparato molte fonti usate nella guida finale.
+
+### 42.16 Fase 14 — Environment Catalog e UI/API environment awareness
+
+Stato:
+
+```text
+COMPLETATA
+```
+
+La fase ha introdotto consapevolezza degli ambienti nella piattaforma.
+
+Risultati principali:
+
+- Environment Catalog;
+- mapping dev/staging/production;
+- UI environment awareness;
+- API environment-aware;
+- namespace visibility;
+- base per runtime target resolution.
+
+La Fase 14 e alla base della readiness multi-environment.
+
+### 42.17 Fase 15 — Multi-environment / multi-cluster readiness baseline
+
+Stato:
+
+```text
+COMPLETATA COME MULTI-CLUSTER CODE-READY BASELINE
+```
+
+La Fase 15 ha consolidato la baseline piu importante del progetto.
+
+Risultati principali:
+
+- namespace-isolated baseline validata;
+- dev, staging e production su `ocp-dev` con namespace separati;
+- Argo CD Applications staging e production;
+- Tekton validation staging e production;
+- UI aggiornata con evidence e namespace awareness;
+- tag `namespace-isolated-baseline-20260709`;
+- chiusura come multi-cluster code-ready baseline;
+- test fail-closed per provider missing e disabled;
+- simulazione cluster staging e production.
+
+La validazione fisica cross-cluster resta deferred per indisponibilita di cluster aggiuntivi.
+
+### 42.18 Stato dei tag e commit rilevanti
+
+Riferimenti importanti:
+
+```text
+namespace-isolated-baseline-20260709
+af6ddb3
+052c446
+9b72931
+215a790
+b6c7c61
+e8e33e9
+```
+
+Questi riferimenti aiutano a ricostruire le milestone principali.
+
+### 42.19 Sintesi
+
+Il progetto ha completato le parti applicative, operative e di readiness piu importanti.
+
+La situazione corrente e:
+
+```text
+baseline runtime namespace-isolated validata
+multi-cluster code readiness completata
+physical multi-cluster validation deferred
+final technical guide in corso
+```
+
+Questa guida serve a consolidare tutto il lavoro svolto in un documento organico, utile per onboarding, handover e operativita futura.
