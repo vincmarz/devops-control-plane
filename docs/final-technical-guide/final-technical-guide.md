@@ -2208,3 +2208,316 @@ Il GitLab Merge Request workflow fornisce la dimensione Git del DevOps Control P
 Il workflow collega una richiesta di cambiamento a una modifica versionata, revisionabile e compatibile con GitOps.
 
 Grazie a questo collegamento, il DevOps Control Plane puo dimostrare non solo che una validazione e stata eseguita, ma anche quale contenuto Git e stato validato e da quale ChangeRequest e nato il cambiamento.
+
+## 19. Workflow runtime
+
+Il workflow runtime e l'insieme delle azioni tecniche che il DevOps Control Plane esegue o coordina dopo la creazione di una `ChangeRequest`.
+
+Lo scopo del workflow runtime e verificare lo stato reale della modifica richiesta: non basta sapere che una richiesta esiste, o che un branch Git e stato creato. Il sistema deve anche osservare il runtime, validare il contenuto GitOps, raccogliere evidenze e rendere il risultato leggibile nella UI.
+
+Nel progetto, il workflow runtime e composto principalmente da queste azioni:
+
+- `collect-evidence`;
+- `check-deployment`;
+- `validate`;
+- `check-validation`.
+
+Vista semplificata:
+
+```text
+ChangeRequest
+      |
+      +--> resolve runtime target
+      |
+      +--> collect-evidence
+      |
+      +--> check-deployment
+      |
+      +--> validate
+      |
+      +--> check-validation
+      |
+      +--> persist evidence
+      |
+      +--> render evidence in UI
+```
+
+### 19.1 Obiettivo del workflow runtime
+
+Il workflow runtime risponde a domande operative concrete:
+
+- quale ambiente e stato scelto;
+- quale namespace e stato controllato;
+- quale Argo CD Application e stata osservata;
+- quale deployment e stato verificato;
+- quale validazione Tekton e stata eseguita;
+- quale validation path e stato usato;
+- quale PipelineRun ha prodotto il risultato;
+- se il risultato e stato sanificato;
+- se la UI mostra correttamente le informazioni raccolte.
+
+Questo rende il DevOps Control Plane una piattaforma di controllo e non solo un frontend verso strumenti esistenti.
+
+### 19.2 Risoluzione del runtime target
+
+Prima di eseguire un'azione tecnica, il backend deve risolvere il runtime target.
+
+Il runtime target deriva dal `targetEnvironment` della ChangeRequest.
+
+Esempio staging:
+
+```text
+targetEnvironment = staging
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-staging
+tektonNamespace = devops-ci-staging
+argocdApplicationName = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Esempio production:
+
+```text
+targetEnvironment = production
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-production
+tektonNamespace = devops-ci-production
+argocdApplicationName = demo-go-color-app-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+Questo passaggio e fondamentale per evitare che un'azione venga eseguita nel namespace sbagliato.
+
+### 19.3 collect-evidence
+
+`collect-evidence` raccoglie informazioni tecniche dal runtime.
+
+Nel baseline corrente, l'azione osserva risorse Kubernetes/OpenShift e stato Argo CD associati al target environment.
+
+Esempi di dati raccolti:
+
+- namespace target;
+- deployment name;
+- ready replicas;
+- available replicas;
+- updated replicas;
+- pod status;
+- service status;
+- route status;
+- Argo CD sync status;
+- Argo CD health status.
+
+L'evidence deve essere collegata alla ChangeRequest corretta.
+
+L'evidence deve anche indicare l'ambiente e il namespace, perche dev, staging e production condividono oggi lo stesso cluster fisico `ocp-dev`.
+
+### 19.4 check-deployment
+
+`check-deployment` verifica se l'applicazione target risulta pronta nel namespace dell'ambiente selezionato.
+
+Nel progetto, l'applicazione dimostrativa e `demo-go-color-app`.
+
+La verifica deve essere environment-specific:
+
+- dev viene verificato in `devops-ci-demo`;
+- staging viene verificato in `devops-ci-staging`;
+- production viene verificato in `devops-ci-production`.
+
+Un risultato positivo in un namespace non dimostra lo stato degli altri namespace.
+
+Per esempio, un deployment pronto in `devops-ci-demo` non prova che il deployment sia pronto anche in `devops-ci-production`.
+
+### 19.5 validate
+
+`validate` avvia una validazione Tekton.
+
+La validazione deve usare il namespace Tekton corretto e il validation path corretto per l'ambiente.
+
+Esempi validati:
+
+```text
+staging validationPath = apps/demo-go-color-app/overlays/staging
+production validationPath = apps/demo-go-color-app/overlays/production
+```
+
+La validazione Tekton produce una PipelineRun.
+
+Esempi reali:
+
+```text
+staging PipelineRun = devops-cp-validate-chg-2026-0049-nd7rm
+production PipelineRun = devops-cp-validate-chg-2026-0050-8wqtv
+```
+
+### 19.6 check-validation
+
+`check-validation` legge lo stato della PipelineRun Tekton e produce validation evidence.
+
+Questa azione e importante perche trasforma un risultato tecnico Tekton in una evidence persistita e leggibile dal DevOps Control Plane.
+
+Campi importanti della validation evidence:
+
+- target environment;
+- Tekton namespace;
+- pipeline name;
+- PipelineRun name;
+- Git revision o branch;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitization state.
+
+Un risultato positivo atteso e:
+
+```text
+status=True
+reason=Succeeded
+failedTaskCount=0
+evidence sanitized=true
+```
+
+### 19.7 Persistenza delle evidence
+
+Le evidence prodotte dal workflow runtime vengono persistite in PostgreSQL.
+
+Questo consente di consultarle successivamente tramite UI o API.
+
+La persistenza e fondamentale perche i risultati runtime e Tekton possono cambiare nel tempo. Salvare una evidence significa conservare una fotografia del risultato osservato durante una certa fase del workflow.
+
+### 19.8 Rendering nella UI
+
+La UI rende visibili le evidence raccolte.
+
+Nel dettaglio ChangeRequest, l'operatore deve poter vedere:
+
+- runtime evidence;
+- deployment evidence;
+- Tekton validation evidence;
+- failed task count;
+- validation path;
+- PipelineRun;
+- Tekton namespace;
+- stato sanitized.
+
+La UI aiuta l'operatore a capire se il workflow e davvero riuscito dal punto di vista tecnico.
+
+### 19.9 Relazione con Argo CD
+
+Argo CD fornisce informazioni su sync e health.
+
+Nel workflow runtime, Argo CD aiuta a rispondere a domande come:
+
+- l'applicazione e allineata al repository GitOps;
+- l'applicazione e healthy;
+- la revisione osservata e quella attesa;
+- l'overlay corretto e stato applicato.
+
+Esempi di stato atteso:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+### 19.10 Relazione con Tekton
+
+Tekton fornisce la validazione tecnica.
+
+Nel workflow runtime, Tekton dimostra che il contenuto GitOps associato alla ChangeRequest e stato validato.
+
+La PipelineRun e il risultato tecnico principale.
+
+Le TaskRun aiutano nel troubleshooting quando una validazione fallisce.
+
+### 19.11 Relazione con Kubernetes/OpenShift
+
+Kubernetes/OpenShift rappresenta lo stato runtime reale.
+
+Il workflow runtime osserva:
+
+- deployment;
+- pod;
+- service;
+- route;
+- namespace;
+- readiness.
+
+Queste informazioni servono a verificare che l'applicazione non sia solo dichiarata in Git, ma anche eseguita correttamente nel cluster.
+
+### 19.12 Fail-closed nel workflow runtime
+
+Il workflow runtime deve rispettare i guardrail fail-closed.
+
+Esempi:
+
+- runtime target non risolto;
+- provider mancante;
+- provider disabled;
+- Secret reference non allow-listed;
+- factory disabled;
+- API URL mancante;
+- token mancante.
+
+In questi casi il workflow deve fermarsi con errore esplicito.
+
+Non deve eseguire fallback silenzioso verso `ocp-dev`.
+
+### 19.13 Relazione con multi-cluster readiness
+
+Il workflow runtime e attualmente validato sulla baseline namespace-isolated.
+
+Tuttavia il codice e stato rafforzato con target simulati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+I test confermano:
+
+- nessun fallback silenzioso verso `ocp-dev`;
+- provider mancante fail-closed;
+- provider disabled fail-closed.
+
+Questo dimostra che il workflow runtime puo essere esteso a cluster fisici futuri senza riprogettare il modello.
+
+### 19.14 Esempio staging
+
+Esempio riassuntivo staging:
+
+```text
+ChangeRequest: CHG-2026-0049
+targetEnvironment: staging
+kubernetesNamespace: devops-ci-staging
+tektonNamespace: devops-ci-staging
+validationPath: apps/demo-go-color-app/overlays/staging
+PipelineRun: devops-cp-validate-chg-2026-0049-nd7rm
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+### 19.15 Esempio production
+
+Esempio riassuntivo production:
+
+```text
+ChangeRequest: CHG-2026-0050
+targetEnvironment: production
+kubernetesNamespace: devops-ci-production
+tektonNamespace: devops-ci-production
+validationPath: apps/demo-go-color-app/overlays/production
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+### 19.16 Sintesi
+
+Il workflow runtime e la parte del DevOps Control Plane che collega la richiesta di cambiamento allo stato reale dei sistemi tecnici.
+
+Attraverso `collect-evidence`, `check-deployment`, `validate` e `check-validation`, il sistema produce una vista coerente e persistente del risultato tecnico.
+
+Questo workflow rende possibile osservare, validare e spiegare lo stato di dev, staging e production nella baseline namespace-isolated e prepara il progetto al futuro multi-cluster reale.
