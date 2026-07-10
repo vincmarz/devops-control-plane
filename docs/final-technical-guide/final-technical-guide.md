@@ -6680,3 +6680,282 @@ Il deferred real-cluster onboarding contract consente al progetto di essere pron
 Il DevOps Control Plane e multi-cluster code-ready, ma la validazione fisica cross-cluster resta deferred.
 
 Quando un cluster reale sara disponibile, l'onboarding dovra seguire questo contratto per mantenere sicurezza, tracciabilita, fail-closed behavior e operability.
+
+## 33. RBAC
+
+RBAC, cioe Role-Based Access Control, e il modello con cui Kubernetes e OpenShift controllano quali azioni possono essere eseguite da utenti, gruppi e ServiceAccount.
+
+Nel DevOps Control Plane, RBAC e un guardrail fondamentale. La piattaforma deve poter osservare runtime, leggere stati, creare o controllare PipelineRun e raccogliere evidence, ma non deve ricevere permessi piu ampi del necessario.
+
+Il principio guida e:
+
+```text
+grant the minimum permissions required for the workflow
+```
+
+RBAC deve quindi essere progettato per supportare le azioni tecniche necessarie e, allo stesso tempo, ridurre il rischio operativo.
+
+### 33.1 Perche RBAC e importante
+
+Il DevOps Control Plane interagisce con piu sistemi e namespace.
+
+Esempi:
+
+- namespace `devops-ci-demo` per dev;
+- namespace `devops-ci-staging` per staging;
+- namespace `devops-ci-production` per production;
+- namespace `devops-control-plane` per la piattaforma;
+- namespace `openshift-gitops` per Argo CD Applications.
+
+Senza RBAC controllato, un errore di configurazione potrebbe permettere accessi troppo ampi o azioni nel namespace sbagliato.
+
+RBAC protegge da questi scenari.
+
+### 33.2 Principio del minimo privilegio
+
+Il principio del minimo privilegio significa concedere solo i permessi necessari.
+
+Per il DevOps Control Plane, questo significa evitare scorciatoie come:
+
+- `cluster-admin`;
+- wildcard troppo ampie;
+- accesso a tutti i namespace;
+- lettura indiscriminata dei Secret;
+- permessi di scrittura non necessari;
+- grant temporanei non documentati.
+
+Ogni permesso deve essere collegato a una necessita operativa chiara.
+
+### 33.3 Namespace-scoped RBAC
+
+Nel baseline corrente, dev, staging e production sono separati per namespace sul cluster `ocp-dev`.
+
+Mappatura:
+
+```text
+dev        -> devops-ci-demo
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+Per questo motivo RBAC deve essere verificato per namespace.
+
+Un permesso valido in `devops-ci-demo` non implica che lo stesso permesso sia valido in `devops-ci-staging` o `devops-ci-production`.
+
+### 33.4 ServiceAccount
+
+Un ServiceAccount rappresenta l'identita tecnica usata da un workload o da una pipeline.
+
+Il DevOps Control Plane e Tekton possono usare ServiceAccount per eseguire azioni controllate.
+
+Esempi di azioni:
+
+- leggere Deployment;
+- leggere Pod;
+- leggere Service;
+- leggere Route;
+- creare PipelineRun;
+- leggere PipelineRun;
+- leggere TaskRun;
+- raccogliere evidence.
+
+Il ServiceAccount deve avere solo i permessi necessari per queste azioni.
+
+### 33.5 Role e RoleBinding
+
+In Kubernetes/OpenShift, una `Role` descrive i permessi in un namespace.
+
+Una `RoleBinding` collega una Role a un soggetto, come un utente, gruppo o ServiceAccount.
+
+Schema concettuale:
+
+```text
+Role
+  rules: allowed actions
+
+RoleBinding
+  subject: ServiceAccount
+  roleRef: Role
+```
+
+Il modello preferito per il DevOps Control Plane e namespace-scoped:
+
+```text
+Role in target namespace
+RoleBinding in target namespace
+```
+
+Questo riduce il rischio di accessi cross-namespace non controllati.
+
+### 33.6 Permessi per runtime evidence
+
+Per raccogliere runtime evidence, il sistema puo avere bisogno di permessi read-only su risorse applicative.
+
+Permessi tipici:
+
+- get/list Deployment;
+- get/list Pod;
+- get/list Service;
+- get/list Route;
+- get/list ReplicaSet, se necessario;
+- leggere eventi non sensibili, se previsto.
+
+Questi permessi servono a osservare lo stato runtime.
+
+Non devono implicare modifiche al workload, salvo che una specifica azione approvata lo richieda.
+
+### 33.7 Permessi per Tekton
+
+Per la validazione Tekton, il sistema puo avere bisogno di permessi nel namespace Tekton target.
+
+Permessi tipici:
+
+- create PipelineRun;
+- get/list PipelineRun;
+- get/list TaskRun;
+- leggere stato e condizioni;
+- leggere log solo se previsto e in modo sicuro.
+
+La creazione di PipelineRun deve essere autorizzata solo nei namespace previsti.
+
+Esempi:
+
+```text
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+### 33.8 Permessi per Argo CD
+
+Argo CD puo essere consultato per leggere lo stato delle Application.
+
+Il DevOps Control Plane deve poter ottenere informazioni come:
+
+- Application name;
+- sync status;
+- health status;
+- revision;
+- target namespace.
+
+I permessi devono essere limitati alla lettura dello stato necessario.
+
+Non devono includere privilegi amministrativi non necessari su Argo CD.
+
+### 33.9 Permessi sui Secret
+
+I permessi sui Secret sono tra i piu delicati.
+
+Il modello preferito e usare Secret references e allow-list.
+
+La lettura dei Secret deve essere:
+
+- disabilitata di default;
+- limitata ai Secret necessari;
+- limitata alle chiavi necessarie;
+- controllata da allow-list;
+- collegata a un onboarding approvato.
+
+Da evitare:
+
+- list su tutti i Secret del namespace;
+- get su Secret non necessari;
+- accesso cross-namespace non motivato;
+- stampa di valori Secret nei log;
+- copia di token in evidence o ticket.
+
+### 33.10 RBAC e fail-closed
+
+Se RBAC non consente una azione, il sistema deve fallire in modo esplicito.
+
+Un errore RBAC non deve essere risolto concedendo permessi troppo ampi senza analisi.
+
+Esempi di fail-closed accettabili:
+
+- impossibile leggere un namespace non autorizzato;
+- impossibile creare PipelineRun senza RoleBinding corretto;
+- impossibile leggere Secret non allow-listed;
+- impossibile osservare una risorsa fuori scope.
+
+Questi errori proteggono la piattaforma.
+
+### 33.11 RBAC e UI
+
+La UI deve rispettare il modello di autorizzazione.
+
+Gli utenti non autorizzati non devono poter attivare azioni tecniche sensibili.
+
+La UI puo mostrare o nascondere azioni in base al ruolo, ma il backend deve restare il punto di enforcement.
+
+La regola e:
+
+```text
+UI visibility helps the user, backend authorization protects the system
+```
+
+### 33.12 RBAC e operability
+
+Durante health check e manutenzione, RBAC deve essere validato indirettamente dai risultati operativi.
+
+Se un controllo fallisce per permessi insufficienti, l'operatore deve verificare:
+
+- ServiceAccount usato;
+- Role associata;
+- RoleBinding;
+- namespace target;
+- verbo richiesto;
+- risorsa richiesta.
+
+Non bisogna risolvere il problema assegnando subito `cluster-admin`.
+
+### 33.13 RBAC e multi-cluster readiness
+
+In futuro, quando saranno disponibili cluster fisici diversi, RBAC dovra essere verificato per ogni cluster.
+
+Esempio futuro:
+
+```text
+staging -> ocp-nonprod / devops-ci-staging
+```
+
+In quel caso bisognera validare RBAC nel cluster `ocp-nonprod`, non solo su `ocp-dev`.
+
+Questo fa parte del deferred real-cluster onboarding contract.
+
+### 33.14 Cosa evitare
+
+Errori da evitare:
+
+- usare `cluster-admin` per comodita;
+- usare wildcard su tutte le risorse;
+- concedere accesso a tutti i namespace;
+- concedere lettura globale dei Secret;
+- ignorare errori RBAC;
+- confondere un errore di permesso con un bug applicativo;
+- aggirare RBAC modificando manualmente risorse GitOps-managed;
+- copiare credenziali in evidence per debug.
+
+### 33.15 Checklist RBAC per un ambiente
+
+Checklist minima:
+
+- ambiente identificato;
+- namespace Kubernetes identificato;
+- namespace Tekton identificato;
+- ServiceAccount identificato;
+- Role presente;
+- RoleBinding presente;
+- permessi read-only runtime presenti;
+- permessi Tekton necessari presenti;
+- permessi Secret limitati o assenti;
+- nessun permesso broad non motivato;
+- smoke test completato.
+
+### 33.16 Sintesi
+
+RBAC e uno dei pilastri di sicurezza del DevOps Control Plane.
+
+Permette al sistema di osservare e validare il runtime senza concedere privilegi eccessivi.
+
+Nella baseline namespace-isolated, RBAC deve essere verificato per dev, staging e production.
+
+Nel futuro multi-cluster, RBAC dovra essere validato per ogni cluster reale, mantenendo il principio del minimo privilegio e il comportamento fail-closed.
