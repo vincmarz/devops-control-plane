@@ -7286,3 +7286,324 @@ Il Secret reference model permette al DevOps Control Plane di prepararsi al mult
 Il modello conserva riferimenti, non valori.
 
 Insieme a allow-list, RBAC, runtime Secret loader disabled-by-default e evidence sanitization, rappresenta uno dei guardrail di sicurezza piu importanti della piattaforma.
+
+## 35. Runtime factories
+
+Le runtime factories sono i componenti che preparano o costruiscono client runtime per interagire con sistemi esterni come Kubernetes/OpenShift, Tekton e Argo CD.
+
+Nel DevOps Control Plane, le runtime factories sono un elemento importante della readiness multi-cluster, ma sono anche un punto delicato dal punto di vista della sicurezza. Una factory puo trasformare configurazioni, Secret references e parametri runtime in un client capace di comunicare con un cluster o con un servizio esterno.
+
+Per questo motivo il principio operativo e conservativo:
+
+```text
+runtime factories are disabled by default and must fail closed
+```
+
+Una factory non configurata o non abilitata non deve produrre client reali.
+
+### 35.1 Perche servono le runtime factories
+
+Il DevOps Control Plane deve poter evolvere da una baseline namespace-isolated su `ocp-dev` verso un modello futuro multi-cluster.
+
+Per operare su cluster reali diversi, il backend avra bisogno di client runtime configurati correttamente.
+
+Esempi:
+
+- client Kubernetes/OpenShift per leggere deployment, pod, service e route;
+- client Tekton per creare o leggere PipelineRun e TaskRun;
+- client Argo CD per leggere Application, sync e health;
+- client provider-aware per cluster futuri.
+
+Le runtime factories permettono di costruire questi client in modo controllato.
+
+### 35.2 Factory Kubernetes
+
+La Kubernetes runtime client factory e responsabile della costruzione di client verso Kubernetes/OpenShift.
+
+Un client Kubernetes puo essere usato per:
+
+- leggere Deployment;
+- leggere Pod;
+- leggere Service;
+- leggere Route;
+- raccogliere runtime evidence;
+- verificare readiness applicativa.
+
+Per costruire un client reale servono dati sicuri e completi, come API URL, token e trust configuration.
+
+Se questi dati mancano, la factory deve fallire fail-closed.
+
+### 35.3 Factory Tekton
+
+La Tekton runtime client factory e responsabile della costruzione di client o adapter per interagire con Tekton.
+
+Un client Tekton puo essere usato per:
+
+- creare PipelineRun;
+- leggere PipelineRun;
+- leggere TaskRun;
+- raccogliere validation evidence;
+- controllare status e reason;
+- verificare failed task count.
+
+Anche in questo caso, il client deve essere costruito solo se il contesto e sicuro e completo.
+
+### 35.4 Factory Argo CD
+
+La Argo CD runtime client factory e responsabile della costruzione di client verso Argo CD.
+
+Un client Argo CD puo essere usato per:
+
+- leggere Application;
+- leggere sync status;
+- leggere health status;
+- leggere revision;
+- raccogliere deployment evidence.
+
+La factory deve richiedere una configurazione esplicita, come base URL, token reference e parametri necessari.
+
+Se la configurazione e incompleta, la factory deve fallire.
+
+### 35.5 Disabled by default
+
+Le runtime factories devono restare disabled by default.
+
+Questo significa che il sistema non deve costruire client reali verso cluster o servizi esterni senza abilitazione esplicita.
+
+Questo comportamento protegge da:
+
+- uso accidentale di cluster non pronti;
+- credenziali incomplete;
+- RBAC non verificato;
+- Secret references mancanti;
+- fallback non voluti;
+- connessioni verso endpoint sbagliati.
+
+Il default conservativo e parte della sicurezza della piattaforma.
+
+### 35.6 Capability-specific enablement
+
+Le factory devono essere abilitate per capacita specifica.
+
+Esempi:
+
+- abilitare solo Kubernetes factory;
+- abilitare solo Tekton factory;
+- abilitare solo Argo CD factory;
+- non abilitare tutto insieme senza motivo.
+
+Questa granularita riduce il rischio operativo.
+
+Se un onboarding richiede solo lettura Kubernetes, non bisogna abilitare anche Argo CD o Tekton senza necessita.
+
+### 35.7 Relazione con Secret references
+
+Le runtime factories possono richiedere valori sensibili, ma non devono riceverli in modo non controllato.
+
+Il modello corretto e:
+
+```text
+Secret reference -> allow-list -> controlled loader -> factory input
+```
+
+La factory non deve leggere token hardcoded.
+
+La factory non deve ricevere token raw da file di documentazione o configurazioni non sicure.
+
+La factory deve essere alimentata da un percorso controllato, sanificato e approvato.
+
+### 35.8 Relazione con RBAC
+
+Anche se una factory costruisce correttamente un client, il client deve operare con permessi minimi.
+
+RBAC deve limitare cosa puo fare quel client.
+
+Esempi:
+
+- leggere risorse runtime nel namespace target;
+- creare PipelineRun solo nei namespace previsti;
+- leggere TaskRun solo dove necessario;
+- non leggere Secret se non esplicitamente previsto;
+- non agire su namespace fuori scope.
+
+Factory configurata non significa permessi illimitati.
+
+### 35.9 Relazione con provider registry
+
+Le runtime factories sono collegate al provider registry.
+
+Il provider registry seleziona il provider associato al cluster risolto.
+
+La factory puo poi costruire i client necessari per quel provider.
+
+Flusso concettuale:
+
+```text
+TechnicalRuntimeTarget
+      |
+      v
+RuntimeClientProviderRegistry
+      |
+      v
+Provider selection
+      |
+      v
+Runtime factory
+      |
+      v
+Runtime client
+```
+
+Se il provider manca o e disabled, la factory non deve essere usata per aggirare il problema.
+
+### 35.10 Fail-closed cases
+
+Le factory devono fallire in modo esplicito in caso di configurazione incompleta o non supportata.
+
+Esempi:
+
+- factory disabled;
+- global factory enablement disabled;
+- capability-specific flag disabled;
+- API URL mancante;
+- Argo CD base URL mancante;
+- token value mancante;
+- Secret reference mancante;
+- Secret reference non allow-listed;
+- kubeconfig non supportato;
+- raw CA non supportata;
+- provider disabled;
+- provider mancante.
+
+Questi errori sono guardrail.
+
+Non devono essere trattati come problemi da aggirare rapidamente.
+
+### 35.11 Kubeconfig non supportato
+
+Nel modello corrente, l'uso di kubeconfig raw non deve essere considerato il percorso preferito.
+
+Il kubeconfig puo contenere credenziali, endpoint, certificati e informazioni sensibili.
+
+La piattaforma deve preferire token references e configurazioni controllate.
+
+Se una factory riceve kubeconfig non supportato, il comportamento corretto e fail-closed.
+
+### 35.12 Raw CA non supportata
+
+Anche la raw CA deve essere gestita con cautela.
+
+Materiale CA non controllato o non referenziato correttamente puo introdurre rischi di sicurezza e configurazione.
+
+Se la raw CA non e supportata nel modello corrente, la factory deve fallire in modo esplicito.
+
+### 35.13 Token mancante
+
+Un client runtime reale spesso richiede un token.
+
+Se il token non e disponibile attraverso il percorso sicuro previsto, la factory deve fallire.
+
+Non deve usare token di fallback.
+
+Non deve cercare token in variabili o file non approvati.
+
+Non deve stampare informazioni sensibili per debug.
+
+### 35.14 Relazione con multi-cluster readiness
+
+Le runtime factories sono essenziali per il futuro multi-cluster reale.
+
+Oggi la baseline fisica e namespace-isolated su `ocp-dev`.
+
+Domani staging o production potrebbero puntare a cluster fisici diversi.
+
+In quel caso le factories dovranno costruire client per il cluster corretto, usando Secret references, RBAC e provider configuration approvati.
+
+Il sistema deve continuare a impedire fallback silenziosi verso `ocp-dev`.
+
+### 35.15 Relazione con deferred onboarding
+
+Il deferred real-cluster onboarding contract definisce quando una factory puo essere realmente abilitata.
+
+Prima di abilitare una factory, devono essere disponibili:
+
+- cluster identity;
+- Cluster Registry aggiornato;
+- Environment Catalog aggiornato;
+- Secret references;
+- allow-list;
+- RBAC;
+- provider runtime;
+- readiness gates;
+- smoke test;
+- rollback.
+
+Senza questi prerequisiti, la factory deve restare disabilitata.
+
+### 35.16 Relazione con evidence
+
+Quando una factory viene usata correttamente, il risultato delle operazioni puo produrre evidence.
+
+Esempi:
+
+- Kubernetes runtime evidence;
+- Tekton validation evidence;
+- Argo CD deployment evidence.
+
+Le evidence devono indicare il contesto operativo, ma non devono mostrare credenziali o input sensibili usati dalla factory.
+
+### 35.17 Relazione con UI
+
+La UI puo mostrare errori fail-closed legati alle factory, se utili all'operatore.
+
+Esempi:
+
+- factory disabled;
+- provider missing;
+- provider disabled;
+- API URL missing;
+- Secret reference missing.
+
+La UI non deve mostrare token, Secret raw o dettagli sensibili.
+
+### 35.18 Errori da evitare
+
+Errori da evitare:
+
+- abilitare tutte le factories insieme;
+- abilitare una factory senza RBAC;
+- abilitare una factory senza Secret references;
+- usare token hardcoded;
+- usare kubeconfig raw non controllato;
+- ignorare provider disabled;
+- usare `ocp-dev` come fallback;
+- stampare token nei log;
+- considerare un errore fail-closed come semplice ostacolo da bypassare.
+
+### 35.19 Checklist prima di abilitare una factory
+
+Checklist minima:
+
+- cluster target documentato;
+- ambiente target documentato;
+- provider configurato;
+- provider enabled solo se pronto;
+- RBAC minimo verificato;
+- Secret references definite;
+- allow-list configurata;
+- loader controllato;
+- API URL configurato;
+- token disponibile tramite percorso sicuro;
+- smoke test pronto;
+- rollback documentato;
+- nessun raw Secret esposto.
+
+### 35.20 Sintesi
+
+Le runtime factories sono componenti potenti e delicati.
+
+Permettono al DevOps Control Plane di costruire client runtime verso Kubernetes/OpenShift, Tekton e Argo CD.
+
+Per questo devono essere disabilitate per default, abilitate solo in modo esplicito, e progettate per fallire in modo sicuro quando mancano prerequisiti.
+
+Questo comportamento e essenziale per la sicurezza attuale e per il futuro multi-cluster reale.
