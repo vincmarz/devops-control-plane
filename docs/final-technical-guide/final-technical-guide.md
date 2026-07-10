@@ -8368,3 +8368,320 @@ La regola finale e:
 ```text
 an explicit fail-closed error is safer than an implicit unsafe action
 ```
+
+## 38. Health check
+
+Il capitolo Health check descrive come verificare rapidamente lo stato operativo del DevOps Control Plane e della baseline runtime corrente.
+
+Un health check non e una sostituzione del troubleshooting completo. E una procedura rapida e ripetibile per capire se i componenti principali sono disponibili, se la UI risponde, se Argo CD vede le applicazioni sane, se i deployment sono pronti, se le route applicative rispondono e se le evidenze principali sono accessibili.
+
+Nel progetto, gli health check sono stati riallineati dopo la Fase 15 per riflettere la baseline corrente:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+La validazione fisica multi-cluster resta deferred. Gli health check operativi devono quindi validare la baseline namespace-isolated fino a disponibilita di cluster reali aggiuntivi.
+
+### 38.1 Obiettivo dell'health check
+
+L'obiettivo dell'health check e rispondere rapidamente a domande come:
+
+- il DevOps Control Plane e disponibile?
+- il backend risponde a `/readyz`?
+- la dashboard risponde?
+- Argo CD vede le Application come `Synced` e `Healthy`?
+- i deployment applicativi sono pronti nei tre namespace?
+- le route `/healthz` rispondono?
+- le PipelineRun Tekton principali risultano `Succeeded`?
+- la UI mostra le pagine di dettaglio ChangeRequest?
+- il repository e pulito, se il controllo viene eseguito dalla root del repo?
+
+Queste verifiche permettono di ottenere una prima fotografia operativa della piattaforma.
+
+### 38.2 Evidence directory
+
+Ogni health check deve produrre una evidence directory.
+
+La evidence directory conserva output, summary e risultati dei controlli.
+
+Pattern consigliato:
+
+```text
+/tmp/dcp-operability-health-YYYYMMDD-HHMMSS
+```
+
+Esempio di comando:
+
+```bash
+EVIDENCE_DIR="/tmp/dcp-operability-health-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$EVIDENCE_DIR"
+echo "$EVIDENCE_DIR"
+```
+
+La directory deve essere preservata se un controllo fallisce.
+
+### 38.3 Repository hygiene
+
+Quando l'health check viene eseguito dalla root del repository, il primo controllo deve verificare che non ci siano modifiche locali accidentali.
+
+Comando:
+
+```bash
+git status --short
+```
+
+Output atteso:
+
+```text
+nessun output
+```
+
+Un working tree sporco non significa necessariamente che la piattaforma non funzioni, ma puo rendere ambigua la raccolta di evidenze o la riproducibilita dei comandi.
+
+### 38.4 DevOps Control Plane pod check
+
+Il primo controllo runtime riguarda il pod del DevOps Control Plane.
+
+Il pod deve essere in stato `Running` e i container devono essere ready.
+
+Informazioni utili da raccogliere:
+
+- pod name;
+- stato pod;
+- container readiness;
+- immagine applicativa;
+- eventi rilevanti se il pod non e pronto.
+
+Esempi di comandi:
+
+```bash
+oc get pod -n devops-control-plane
+```
+
+```bash
+oc describe pod "$POD" -n devops-control-plane
+```
+
+### 38.5 Readiness endpoint
+
+L'endpoint `/readyz` indica se il backend e pronto a servire richieste.
+
+Controllo atteso:
+
+```text
+readyz_http=200
+```
+
+Il controllo puo essere eseguito tramite port-forward o route, in base alla procedura operativa.
+
+Esempio tramite port-forward:
+
+```bash
+curl -s -o "$EVIDENCE_DIR/readyz.json" -w "readyz_http=%{http_code}
+" http://127.0.0.1:18091/readyz
+```
+
+Se `/readyz` non restituisce HTTP 200, bisogna analizzare backend, PostgreSQL, configurazione e log applicativi.
+
+### 38.6 Dashboard check
+
+La dashboard deve rispondere HTTP 200.
+
+Risultato atteso:
+
+```text
+dashboard_http=200
+```
+
+La dashboard deve mostrare elementi coerenti con lo stato corrente:
+
+- latest ChangeRequest;
+- `Environments / Namespaces`;
+- user box;
+- link o accesso al dettaglio ChangeRequest;
+- evidenze sintetiche se disponibili.
+
+Se la dashboard non risponde, bisogna distinguere tra errore backend, errore OAuth proxy, problema route, problema UI o problema di autorizzazione.
+
+### 38.7 Argo CD Application matrix
+
+La matrice Argo CD verifica lo stato GitOps degli ambienti.
+
+Application principali:
+
+```text
+dev        demo-go-color-app
+staging    demo-go-color-app-staging
+production demo-go-color-app-production
+```
+
+Stato atteso:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+Se una Application e `OutOfSync` o `Degraded`, l'health check non deve essere considerato pienamente superato.
+
+### 38.8 Deployment readiness matrix
+
+La deployment readiness matrix verifica che l'applicazione sia pronta nei tre namespace.
+
+Namespace coinvolti:
+
+```text
+devops-ci-demo
+devops-ci-staging
+devops-ci-production
+```
+
+Il deployment principale e:
+
+```text
+demo-go-color-app
+```
+
+La verifica deve controllare che le repliche pronte siano coerenti con le repliche desiderate.
+
+Un deployment pronto in dev non dimostra che staging o production siano pronti.
+
+### 38.9 Route health matrix
+
+La route health matrix verifica l'endpoint `/healthz` dell'applicazione nei tre ambienti.
+
+Risultato atteso:
+
+```text
+dev_healthz_http=200
+staging_healthz_http=200
+production_healthz_http=200
+```
+
+Questo controllo dimostra che l'applicazione non e solo presente nel cluster, ma anche raggiungibile tramite route.
+
+### 38.10 Tekton validation matrix
+
+La matrice Tekton verifica lo stato delle PipelineRun di validazione principali.
+
+Esempi validati:
+
+```text
+staging    devops-cp-validate-chg-2026-0049-nd7rm
+production devops-cp-validate-chg-2026-0050-8wqtv
+```
+
+Risultato atteso:
+
+```text
+status=True
+reason=Succeeded
+```
+
+Se una PipelineRun non e `Succeeded`, bisogna analizzare TaskRun, validation path, namespace Tekton, RBAC e accesso Git.
+
+### 38.11 UI ChangeRequest detail checks
+
+L'health check deve verificare che le pagine di dettaglio delle ChangeRequest principali siano raggiungibili.
+
+Esempi:
+
+```text
+CHG-2026-0049
+CHG-2026-0050
+```
+
+Risultato atteso:
+
+```text
+chg0049_ui_http=200
+chg0050_ui_http=200
+```
+
+La pagina di dettaglio deve mostrare runtime evidence, Tekton validation evidence e informazioni environment-aware quando disponibili.
+
+### 38.12 Summary file
+
+Ogni esecuzione dell'health check dovrebbe produrre un summary finale.
+
+Il summary deve includere:
+
+- evidence directory;
+- readiness HTTP result;
+- dashboard HTTP result;
+- Argo CD matrix;
+- deployment readiness matrix;
+- route health matrix;
+- Tekton validation matrix;
+- UI ChangeRequest detail check;
+- git status finale, se eseguito dal repository.
+
+File consigliato:
+
+```text
+90-summary.txt
+```
+
+### 38.13 Pass criteria
+
+L'health check passa quando:
+
+- `/readyz` restituisce HTTP 200;
+- dashboard restituisce HTTP 200;
+- Argo CD e `Synced` e `Healthy` per dev, staging e production;
+- i deployment sono ready nei tre namespace;
+- route `/healthz` restituisce HTTP 200 nei tre ambienti;
+- PipelineRun staging e production sono `Succeeded`;
+- pagine ChangeRequest detail rispondono HTTP 200;
+- non vengono esposti Secret o token;
+- il working tree resta pulito, se il check e eseguito dal repository.
+
+### 38.14 Failure handling
+
+Se un controllo fallisce:
+
+1. fermare la procedura;
+2. preservare la evidence directory;
+3. identificare il layer coinvolto;
+4. evitare retry ciechi;
+5. non eseguire azioni distruttive;
+6. non stampare Secret;
+7. aprire una remediation task o seguire il runbook di troubleshooting.
+
+Layer tipici:
+
+- pod DevOps Control Plane;
+- PostgreSQL;
+- OAuth proxy;
+- Argo CD;
+- Kubernetes/OpenShift runtime;
+- Tekton;
+- UI;
+- RBAC;
+- Secret/provider/factory guardrails.
+
+### 38.15 Health check e multi-cluster readiness
+
+L'health check corrente valida la baseline namespace-isolated.
+
+Non valida cluster fisici separati.
+
+Quando saranno disponibili cluster reali, la matrice dovra essere estesa con controlli cross-cluster.
+
+Per il momento la posizione corretta resta:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+### 38.16 Sintesi
+
+L'health check e il controllo operativo rapido del DevOps Control Plane.
+
+Verifica backend, UI, Argo CD, deployment, route, Tekton e ChangeRequest detail.
+
+E il primo strumento da usare per capire se la piattaforma e operativa e coerente con la baseline validata.
