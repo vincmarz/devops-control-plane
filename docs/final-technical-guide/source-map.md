@@ -65,7 +65,7 @@ Uso previsto:
 - chiarire cosa è rinviato;
 - introdurre baseline namespace-isolated e multi-cluster code-ready baseline.
 
-### Capitolo 2 — Visione del progetto
+### Capitolo 3 — Visione del progetto
 
 Fonti principali:
 
@@ -79,7 +79,7 @@ Uso previsto:
 - descrivere la centralizzazione del ciclo ChangeRequest;
 - introdurre GitOps, audit, evidence e workflow controllato.
 
-### Capitolo 3 — Scope del progetto
+### Capitolo 4 — Scope del progetto
 
 Fonti principali:
 
@@ -95,7 +95,7 @@ Uso previsto:
 
 ## 5. Parte 2 — Concetti fondamentali
 
-### Capitolo 4 — Kubernetes e OpenShift in breve
+### Capitolo 6 — Kubernetes e OpenShift in breve
 
 Fonti principali:
 
@@ -108,7 +108,7 @@ Uso previsto:
 - spiegare cluster, namespace, pod, deployment, service, route, secret, configmap, RBAC;
 - usare esempi dal progetto.
 
-### Capitolo 5 — Namespace isolation
+### Capitolo 7 — Namespace isolation
 
 Fonti principali:
 
@@ -125,7 +125,7 @@ Uso previsto:
 - chiarire differenza tra ambiente logico e cluster fisico;
 - spiegare perché questa baseline è validata.
 
-### Capitolo 6 — GitOps
+### Capitolo 8 — GitOps
 
 Fonti principali:
 
@@ -141,7 +141,7 @@ Uso previsto:
 - spiegare il ruolo dei repository GitOps;
 - collegare GitOps a ChangeRequest, Argo CD e audit.
 
-### Capitolo 7 — Kustomize base e overlays
+### Capitolo 9 — Kustomize base e overlays
 
 Fonti principali:
 
@@ -157,7 +157,7 @@ Uso previsto:
   - `apps/demo-go-color-app/overlays/production`
 - collegare gli overlay alla validazione Tekton.
 
-### Capitolo 8 — Argo CD
+### Capitolo 10 — Argo CD
 
 Fonti principali:
 
@@ -172,7 +172,7 @@ Uso previsto:
 - descrivere Applications dev, staging e production;
 - spiegare stato `Synced` e `Healthy`.
 
-### Capitolo 9 — Tekton
+### Capitolo 11 — Tekton
 
 Fonti principali:
 
@@ -189,7 +189,7 @@ Uso previsto:
 
 ## 6. Parte 3 — Architettura
 
-### Capitolo 10 — Architettura generale
+### Capitolo 12 — Architettura generale
 
 Fonti principali:
 
@@ -203,7 +203,7 @@ Uso previsto:
 - spiegare adapter pattern;
 - spiegare separazione tra applicazione, domain e adapter.
 
-### Capitolo 11 — Backend Go
+### Capitolo 13 — Backend Go
 
 Fonti principali:
 
@@ -218,7 +218,7 @@ Uso previsto:
 - descrivere service options;
 - descrivere runtime target resolver e provider registry.
 
-### Capitolo 12 — PostgreSQL e persistenza
+### Capitolo 14 — PostgreSQL e persistenza
 
 Fonti principali:
 
@@ -233,7 +233,7 @@ Uso previsto:
 - spiegare audit trail;
 - collegare persistenza a backup e restore.
 
-### Capitolo 13 — Modello dati
+### Capitolo 15 — Modello dati
 
 Fonti principali:
 
@@ -249,7 +249,7 @@ Uso previsto:
 
 ## 7. Parte 4 — Workflow applicativi
 
-### Capitolo 14 — ChangeRequest lifecycle
+### Capitolo 16 — ChangeRequest lifecycle
 
 Fonti principali:
 
@@ -261,7 +261,7 @@ Uso previsto:
 
 - spiegare creazione, validazione, eventi, transizioni e audit.
 
-### Capitolo 15 — GitLab Merge Request workflow
+### Capitolo 17 — GitLab Merge Request workflow
 
 Fonti principali:
 
@@ -273,7 +273,7 @@ Uso previsto:
 
 - spiegare branch, commit, MR, merge e relazione con GitOps.
 
-### Capitolo 16 — Workflow runtime
+### Capitolo 18 — Workflow runtime
 
 Fonti principali:
 
@@ -290,7 +290,7 @@ Uso previsto:
 - spiegare `check-validation`;
 - collegare workflow e UI.
 
-### Capitolo 17 — Workflow dev, staging e production
+### Capitolo 19 — Workflow dev, staging e production
 
 Fonti principali:
 
@@ -307,7 +307,7 @@ Uso previsto:
 
 ## 8. Parte 5 — Evidence model
 
-### Capitolo 18 — Runtime evidence
+### Capitolo 20 — Runtime evidence
 
 Fonti principali:
 
@@ -320,7 +320,7 @@ Uso previsto:
 - descrivere stato osservato del runtime;
 - descrivere deployment, pod, route, namespace e Argo CD.
 
-### Capitolo 19 — Tekton validation evidence
+### Capitolo 21 — Tekton validation evidence
 
 Fonti principali:
 
@@ -332,7 +332,7 @@ Uso previsto:
 
 - descrivere PipelineRun, validation path, failed task count e sanitized evidence.
 
-### Capitolo 20 — Argo CD deployment evidence
+### Capitolo 22 — Argo CD deployment evidence
 
 Fonti principali:
 
@@ -344,7 +344,7 @@ Uso previsto:
 
 - spiegare sync, health, revision, namespace e overlay.
 
-### Capitolo 21 — Evidence sanitization
+### Capitolo 23 — Evidence sanitization
 
 Fonti principali:
 
@@ -359,7 +359,7 @@ Uso previsto:
 
 ## 9. Parte 6 — UI e dashboard
 
-### Capitolo 22 — Dashboard
+### Capitolo 24 — Dashboard
 
 Fonti principali:
 
@@ -373,7 +373,7 @@ Uso previsto:
 - spiegare Environments / Namespaces;
 - spiegare KPI e cards.
 
-### Capitolo 23 — ChangeRequest detail
+### Capitolo 25 — ChangeRequest detail
 
 Fonti principali:
 
@@ -387,7 +387,7 @@ Uso previsto:
 - spiegare Tekton validation card;
 - spiegare audit log e raw sanitized evidence.
 
-### Capitolo 24 — UI environment awareness
+### Capitolo 26 — UI environment awareness
 
 Fonti principali:
 
@@ -402,7 +402,7 @@ Uso previsto:
 
 ## 10. Parte 7 — Environment Catalog e multi-cluster readiness
 
-### Capitolo 25 — Environment Catalog
+### Capitolo 27 — Environment Catalog
 
 Fonti principali:
 
@@ -414,7 +414,7 @@ Uso previsto:
 
 - descrivere ambiente logico, namespace, Tekton namespace, Argo CD Application e validation path.
 
-### Capitolo 26 — Cluster Registry
+### Capitolo 28 — Cluster Registry
 
 Fonti principali:
 
@@ -426,7 +426,7 @@ Uso previsto:
 
 - descrivere cluster definition, enabled flag, allowed namespaces e Secret references.
 
-### Capitolo 27 — Runtime target resolution
+### Capitolo 29 — Runtime target resolution
 
 Fonti principali:
 
@@ -441,7 +441,7 @@ Uso previsto:
 - spiegare TechnicalRuntimeTarget;
 - spiegare provider selection.
 
-### Capitolo 28 — Multi-cluster code-ready baseline
+### Capitolo 30 — Multi-cluster code-ready baseline
 
 Fonti principali:
 
@@ -456,7 +456,7 @@ Uso previsto:
 - spiegare staging e production simulated;
 - spiegare no fallback to ocp-dev.
 
-### Capitolo 29 — Deferred real-cluster onboarding contract
+### Capitolo 31 — Deferred real-cluster onboarding contract
 
 Fonti principali:
 
@@ -473,7 +473,7 @@ Uso previsto:
 
 Nota di allineamento: la guida tecnica finale ha introdotto un capitolo aggiuntivo dedicato a `Error handling`. Per questo motivo la numerazione della Parte 8 e delle parti successive e stata riallineata alla struttura corrente del documento sorgente `docs/final-technical-guide/final-technical-guide.md`.
 
-### Capitolo 33 — RBAC
+### Capitolo 32 — RBAC
 
 Fonti principali:
 
@@ -490,7 +490,7 @@ Uso previsto:
 - spiegare cosa evitare, inclusi `cluster-admin`, wildcard e accessi cross-namespace non controllati;
 - collegare RBAC al futuro onboarding reale multi-cluster.
 
-### Capitolo 34 — Secret reference model
+### Capitolo 33 — Secret reference model
 
 Fonti principali:
 
@@ -507,7 +507,7 @@ Uso previsto:
 - spiegare no raw Secret in log, evidence, UI o documentazione;
 - collegare il modello al futuro multi-cluster e al deferred onboarding contract.
 
-### Capitolo 35 — Runtime factories
+### Capitolo 34 — Runtime factories
 
 Fonti principali:
 
@@ -528,7 +528,7 @@ Uso previsto:
 - spiegare unsupported kubeconfig, unsupported raw CA, missing token e missing API URL;
 - collegare le factories al Secret reference model e al provider registry.
 
-### Capitolo 36 — AuthN/AuthZ e OAuth proxy
+### Capitolo 35 — AuthN/AuthZ e OAuth proxy
 
 Fonti principali:
 
@@ -550,7 +550,7 @@ Uso previsto:
 - spiegare fail-closed authorization;
 - collegare il modello alla sicurezza delle azioni tecniche e della UI.
 
-### Capitolo 37 — Error handling
+### Capitolo 36 — Error handling
 
 Fonti principali:
 
@@ -578,7 +578,7 @@ Uso previsto:
 
 ## 12. Parte 9 — Operability
 
-### Capitolo 38 — Health check
+### Capitolo 37 — Health check
 
 Fonti principali:
 
@@ -593,7 +593,7 @@ Uso previsto:
 - spiegare `/readyz`, dashboard HTTP, Argo CD matrix, deployment readiness matrix, route health matrix, Tekton validation matrix e UI ChangeRequest detail checks;
 - spiegare pass criteria e failure handling.
 
-### Capitolo 39 — Maintenance operations
+### Capitolo 38 — Maintenance operations
 
 Fonti principali:
 
@@ -607,7 +607,7 @@ Uso previsto:
 - spiegare Argo CD, Tekton, UI, Secret/RBAC/factory checks;
 - spiegare maintenance stop conditions e closure criteria.
 
-### Capitolo 40 — Troubleshooting
+### Capitolo 39 — Troubleshooting
 
 Fonti principali:
 
@@ -622,7 +622,7 @@ Uso previsto:
 - spiegare stop conditions;
 - spiegare come distinguere errori runtime, UI, Tekton, Argo CD, provider, Secret e factory.
 
-### Capitolo 41 — Backup, restore e disaster recovery
+### Capitolo 40 — Backup, restore e disaster recovery
 
 Fonti principali:
 
@@ -641,7 +641,7 @@ Uso previsto:
 
 ## 13. Parte 10 — Stato corrente e roadmap
 
-### Capitolo 42 — Stato delle fasi
+### Capitolo 41 — Stato delle fasi
 
 Fonti principali:
 
@@ -657,7 +657,7 @@ Uso previsto:
 - esplicitare Fase 11 standby;
 - esplicitare Fase 12 come documento tecnico finale in produzione incrementale.
 
-### Capitolo 43 — Stato finale corrente
+### Capitolo 42 — Stato finale corrente
 
 Fonti principali:
 
@@ -674,7 +674,7 @@ Uso previsto:
 - sintetizzare cosa e pronto a livello codice;
 - ribadire baseline namespace-isolated e multi-cluster code-ready baseline.
 
-### Capitolo 44 — Roadmap futura
+### Capitolo 43 — Roadmap futura
 
 Fonti principali:
 

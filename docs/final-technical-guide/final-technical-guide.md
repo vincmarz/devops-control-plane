@@ -451,7 +451,7 @@ La validazione finale ha confermato:
 - failed task count pari a `0`;
 - evidence sanitized pari a `true`.
 
-## 12. Stato della Parte 1 e Parte 2
+## Stato della Parte 1 e Parte 2
 
 Questa prima versione del documento finale copre:
 
@@ -1631,7 +1631,7 @@ Il modello dati collega governance, automazione, audit, runtime evidence, UI e o
 
 Questo e uno dei motivi per cui il DevOps Control Plane puo essere considerato una piattaforma di controllo e non una semplice raccolta di script.
 
-## 17. ChangeRequest lifecycle
+## 16. ChangeRequest lifecycle
 
 Una `ChangeRequest` rappresenta il punto centrale del DevOps Control Plane.
 
@@ -1955,7 +1955,7 @@ La ChangeRequest collega:
 
 Questo modello consente di trasformare operazioni tecniche distribuite in un processo unico, persistente, verificabile e comprensibile.
 
-## 18. GitLab Merge Request workflow
+## 17. GitLab Merge Request workflow
 
 Il workflow GitLab collega una `ChangeRequest` al ciclo di vita del codice e della configurazione GitOps.
 
@@ -2209,7 +2209,7 @@ Il workflow collega una richiesta di cambiamento a una modifica versionata, revi
 
 Grazie a questo collegamento, il DevOps Control Plane puo dimostrare non solo che una validazione e stata eseguita, ma anche quale contenuto Git e stato validato e da quale ChangeRequest e nato il cambiamento.
 
-## 19. Workflow runtime
+## 18. Workflow runtime
 
 Il workflow runtime e l'insieme delle azioni tecniche che il DevOps Control Plane esegue o coordina dopo la creazione di una `ChangeRequest`.
 
@@ -2522,7 +2522,7 @@ Attraverso `collect-evidence`, `check-deployment`, `validate` e `check-validatio
 
 Questo workflow rende possibile osservare, validare e spiegare lo stato di dev, staging e production nella baseline namespace-isolated e prepara il progetto al futuro multi-cluster reale.
 
-## 20. Workflow dev, staging e production
+## 19. Workflow dev, staging e production
 
 Il DevOps Control Plane supporta un modello multi-environment basato su tre ambienti logici:
 
@@ -2835,7 +2835,7 @@ La baseline corrente e namespace-isolated su `ocp-dev`, ma include tutti gli ele
 
 Questo capitolo chiude la parte dedicata ai workflow applicativi e prepara la guida ai capitoli sull'evidence model.
 
-## 21. Runtime evidence
+## 20. Runtime evidence
 
 La runtime evidence e l'insieme delle prove tecniche raccolte osservando lo stato reale dei sistemi runtime.
 
@@ -3166,7 +3166,7 @@ Permette di collegare una ChangeRequest allo stato reale osservato in OpenShift,
 
 Grazie alla runtime evidence, il sistema puo spiegare non solo che una richiesta e stata elaborata, ma anche cosa e stato osservato nel runtime e quali prove sono disponibili per verificarlo.
 
-## 22. Tekton validation evidence
+## 21. Tekton validation evidence
 
 La Tekton validation evidence e l'evidenza che descrive il risultato di una validazione tecnica eseguita tramite Tekton.
 
@@ -3513,7 +3513,7 @@ Essa collega ChangeRequest, PipelineRun, validation path, stato, reason, failed 
 
 Insieme alla runtime evidence, permette al DevOps Control Plane di fornire una vista completa e auditabile del cambiamento.
 
-## 23. Argo CD deployment evidence
+## 22. Argo CD deployment evidence
 
 La Argo CD deployment evidence descrive lo stato GitOps osservato da Argo CD per una applicazione gestita.
 
@@ -3842,7 +3842,7 @@ Essa collega repository Git, Application Argo CD, namespace target, stato di syn
 
 Insieme a runtime evidence e Tekton validation evidence, permette al DevOps Control Plane di fornire una vista completa del cambiamento: codice validato, GitOps sincronizzato e runtime osservato.
 
-## 24. Evidence sanitization
+## 23. Evidence sanitization
 
 La evidence sanitization e il processo con cui il DevOps Control Plane conserva e mostra solo informazioni tecniche sicure, evitando di esporre credenziali, token, Secret o altri dati sensibili.
 
@@ -4160,7 +4160,7 @@ La regola finale e semplice:
 le evidenze devono spiegare cosa e successo, non rivelare credenziali
 ```
 
-## 25. Dashboard
+## 24. Dashboard
 
 La dashboard del DevOps Control Plane e la superficie operativa principale per avere una vista sintetica dello stato della piattaforma.
 
@@ -4408,7 +4408,7 @@ Essa mostra lo stato recente, la visibilita degli ambienti, il contesto utente e
 
 La dashboard non e piu solo una UI MVP iniziale. E una vista evidence-aware ed environment-aware, coerente con la baseline namespace-isolated e con la readiness multi-cluster a livello codice.
 
-## 26. ChangeRequest detail
+## 25. ChangeRequest detail
 
 La pagina di dettaglio della `ChangeRequest` e la vista piu importante per analizzare una richiesta specifica.
 
@@ -4754,7 +4754,7 @@ Essa collega dati di dominio, audit trail, runtime evidence, Tekton validation e
 
 Questa vista e essenziale per trasformare il control plane in uno strumento operativo reale, non solo in un archivio di richieste.
 
-## 27. UI environment awareness
+## 26. UI environment awareness
 
 La UI environment awareness e la capacita della UI del DevOps Control Plane di rappresentare chiaramente gli ambienti logici, i namespace e il contesto runtime associato a una ChangeRequest.
 
@@ -5035,7 +5035,7 @@ Essa consente agli operatori di distinguere dev, staging e production, di vedere
 
 Questa funzionalita e essenziale nella baseline namespace-isolated e sara ancora piu importante quando saranno disponibili cluster fisici separati.
 
-## 28. Environment Catalog
+## 27. Environment Catalog
 
 L'Environment Catalog e il modello con cui il DevOps Control Plane descrive gli ambienti logici supportati dalla piattaforma.
 
@@ -5292,7 +5292,7 @@ Collega ChangeRequest, namespace, Argo CD, Tekton, validation path, UI e runtime
 
 Grazie a questo modello, il progetto puo operare oggi con namespace isolation e prepararsi domani a un vero multi-cluster senza riprogettare il workflow.
 
-## 29. Cluster Registry
+## 28. Cluster Registry
 
 Il Cluster Registry e il modello con cui il DevOps Control Plane descrive i cluster disponibili o previsti.
 
@@ -5631,7 +5631,7 @@ Insieme all'Environment Catalog, permette di trasformare un ambiente logico in u
 
 Oggi rappresenta la baseline `ocp-dev` namespace-isolated. Domani permettera l'onboarding controllato di cluster fisici aggiuntivi, mantenendo fail-closed, Secret references e guardrail operativi.
 
-## 30. Runtime target resolution
+## 29. Runtime target resolution
 
 La runtime target resolution e il processo con cui il DevOps Control Plane trasforma un ambiente logico dichiarato in una `ChangeRequest` in un target tecnico utilizzabile dai workflow runtime.
 
@@ -5968,7 +5968,7 @@ Trasforma una ChangeRequest con `targetEnvironment` in un `TechnicalRuntimeTarge
 
 Questo meccanismo e essenziale per la baseline namespace-isolated attuale e per il futuro multi-cluster reale.
 
-## 31. Multi-cluster code-ready baseline
+## 30. Multi-cluster code-ready baseline
 
 La multi-cluster code-ready baseline rappresenta lo stato in cui il DevOps Control Plane e pronto, a livello di codice e modello operativo, per supportare cluster fisici separati in futuro.
 
@@ -6316,7 +6316,7 @@ Physical cross-cluster runtime validation is deferred by infrastructure availabi
 Multi-cluster code readiness is completed, tested, documented and fail-closed.
 ```
 
-## 32. Deferred real-cluster onboarding contract
+## 31. Deferred real-cluster onboarding contract
 
 Il deferred real-cluster onboarding contract descrive le regole da seguire quando sara disponibile un cluster OpenShift reale aggiuntivo.
 
@@ -6681,7 +6681,7 @@ Il DevOps Control Plane e multi-cluster code-ready, ma la validazione fisica cro
 
 Quando un cluster reale sara disponibile, l'onboarding dovra seguire questo contratto per mantenere sicurezza, tracciabilita, fail-closed behavior e operability.
 
-## 33. RBAC
+## 32. RBAC
 
 RBAC, cioe Role-Based Access Control, e il modello con cui Kubernetes e OpenShift controllano quali azioni possono essere eseguite da utenti, gruppi e ServiceAccount.
 
@@ -6960,7 +6960,7 @@ Nella baseline namespace-isolated, RBAC deve essere verificato per dev, staging 
 
 Nel futuro multi-cluster, RBAC dovra essere validato per ogni cluster reale, mantenendo il principio del minimo privilegio e il comportamento fail-closed.
 
-## 34. Secret reference model
+## 33. Secret reference model
 
 Il Secret reference model e il modello con cui il DevOps Control Plane rappresenta credenziali e materiali sensibili senza salvarne o mostrarne i valori raw.
 
@@ -7287,7 +7287,7 @@ Il modello conserva riferimenti, non valori.
 
 Insieme a allow-list, RBAC, runtime Secret loader disabled-by-default e evidence sanitization, rappresenta uno dei guardrail di sicurezza piu importanti della piattaforma.
 
-## 35. Runtime factories
+## 34. Runtime factories
 
 Le runtime factories sono i componenti che preparano o costruiscono client runtime per interagire con sistemi esterni come Kubernetes/OpenShift, Tekton e Argo CD.
 
@@ -7608,7 +7608,7 @@ Per questo devono essere disabilitate per default, abilitate solo in modo esplic
 
 Questo comportamento e essenziale per la sicurezza attuale e per il futuro multi-cluster reale.
 
-## 36. AuthN/AuthZ e OAuth proxy
+## 35. AuthN/AuthZ e OAuth proxy
 
 AuthN e AuthZ rappresentano due aspetti distinti della sicurezza applicativa.
 
@@ -7913,7 +7913,7 @@ Il backend deve applicare autorizzazione fail-closed per le azioni sensibili.
 
 Insieme a RBAC, Secret references, evidence sanitization e runtime factories disabled-by-default, AuthN/AuthZ completa il modello di sicurezza applicativa della piattaforma.
 
-## 37. Error handling
+## 36. Error handling
 
 L'error handling del DevOps Control Plane definisce come il sistema deve comportarsi quando un'operazione non puo essere completata correttamente.
 
@@ -8369,7 +8369,7 @@ La regola finale e:
 an explicit fail-closed error is safer than an implicit unsafe action
 ```
 
-## 38. Health check
+## 37. Health check
 
 Il capitolo Health check descrive come verificare rapidamente lo stato operativo del DevOps Control Plane e della baseline runtime corrente.
 
@@ -8686,7 +8686,7 @@ Verifica backend, UI, Argo CD, deployment, route, Tekton e ChangeRequest detail.
 
 E il primo strumento da usare per capire se la piattaforma e operativa e coerente con la baseline validata.
 
-## 39. Maintenance operations
+## 38. Maintenance operations
 
 Le maintenance operations descrivono come eseguire attivita controllate di manutenzione sul DevOps Control Plane senza compromettere la baseline validata, le evidenze operative, la UI, i workflow Tekton, lo stato Argo CD o i guardrail di sicurezza.
 
@@ -9024,7 +9024,7 @@ Ogni manutenzione deve produrre evidence, rispettare guardrail, verificare dev, 
 
 La manutenzione e parte integrante dell'operability della piattaforma.
 
-## 40. Troubleshooting
+## 39. Troubleshooting
 
 Il troubleshooting del DevOps Control Plane e il processo con cui un operatore identifica, classifica e risolve problemi che possono emergere durante il normale funzionamento della piattaforma.
 
@@ -9414,7 +9414,7 @@ L'operatore deve identificare il layer coinvolto, preservare evidence sanificata
 
 Un errore esplicito e sicuro e preferibile a una correzione rapida ma ambigua.
 
-## 41. Backup, restore e disaster recovery
+## 40. Backup, restore e disaster recovery
 
 Backup, restore e disaster recovery sono le pratiche che permettono di proteggere la memoria applicativa e la continuita operativa del DevOps Control Plane.
 
@@ -9743,7 +9743,7 @@ GitOps, Argo CD, Tekton e GitLab hanno ruoli importanti, ma non sostituiscono il
 
 Una strategia DR completa deve essere provata, documentata e sanificata.
 
-## 42. Stato delle fasi
+## 41. Stato delle fasi
 
 Questo capitolo riepiloga lo stato delle fasi principali del progetto DevOps Control Plane.
 
@@ -10166,7 +10166,7 @@ final technical guide in corso
 
 Questa guida serve a consolidare tutto il lavoro svolto in un documento organico, utile per onboarding, handover e operativita futura.
 
-## 43. Stato finale corrente
+## 42. Stato finale corrente
 
 Questo capitolo descrive lo stato finale corrente del progetto DevOps Control Plane alla data di redazione della guida tecnica finale.
 
@@ -10526,7 +10526,7 @@ Il progetto e anche pronto a livello codice per il futuro multi-cluster, ma atte
 
 Questa distinzione e la chiave per descrivere correttamente lo stato del progetto.
 
-## 44. Roadmap futura
+## 43. Roadmap futura
 
 La roadmap futura descrive le evoluzioni successive alla baseline corrente del DevOps Control Plane.
 
