@@ -1,19 +1,19 @@
 package domain
 
 type Application struct {
-	Name              string            `json:"name"`
-	ArgoCDNamespace   string            `json:"argocdNamespace"`
-	Project           string            `json:"project"`
-	TargetNamespace   string            `json:"targetNamespace"`
-	RepoURL           string            `json:"repoUrl"`
-	TargetRevision    string            `json:"targetRevision"`
-	Path              string            `json:"path"`
-	SyncStatus        string            `json:"syncStatus"`
-	HealthStatus      string            `json:"healthStatus"`
-	CurrentRevision   string            `json:"currentRevision"`
-	Source            map[string]string `json:"source,omitempty"`
-	Destination       map[string]string `json:"destination,omitempty"`
-	Conditions        []map[string]any  `json:"conditions,omitempty"`
+	Name            string            `json:"name"`
+	ArgoCDNamespace string            `json:"argocdNamespace"`
+	Project         string            `json:"project"`
+	TargetNamespace string            `json:"targetNamespace"`
+	RepoURL         string            `json:"repoUrl"`
+	TargetRevision  string            `json:"targetRevision"`
+	Path            string            `json:"path"`
+	SyncStatus      string            `json:"syncStatus"`
+	HealthStatus    string            `json:"healthStatus"`
+	CurrentRevision string            `json:"currentRevision"`
+	Source          map[string]string `json:"source,omitempty"`
+	Destination     map[string]string `json:"destination,omitempty"`
+	Conditions      []map[string]any  `json:"conditions,omitempty"`
 }
 
 type ApplicationResource struct {
