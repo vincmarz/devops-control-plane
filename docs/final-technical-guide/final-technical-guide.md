@@ -9023,3 +9023,393 @@ Le maintenance operations permettono di eseguire interventi controllati sul DevO
 Ogni manutenzione deve produrre evidence, rispettare guardrail, verificare dev, staging e production e chiudersi solo dopo smoke test positivo.
 
 La manutenzione e parte integrante dell'operability della piattaforma.
+
+## 40. Troubleshooting
+
+Il troubleshooting del DevOps Control Plane e il processo con cui un operatore identifica, classifica e risolve problemi che possono emergere durante il normale funzionamento della piattaforma.
+
+Il DevOps Control Plane integra backend Go, PostgreSQL, GitLab, Argo CD, Tekton, Kubernetes/OpenShift, OAuth proxy, UI, RBAC, Secret references e runtime factories. Un problema operativo puo quindi nascere in layer diversi.
+
+Lo scopo del troubleshooting e ridurre l'ambiguita:
+
+```text
+capire cosa non funziona, dove non funziona, perche non funziona e quale evidence lo dimostra
+```
+
+Il troubleshooting deve essere eseguito in modo sicuro, preservando evidenze e rispettando i guardrail fail-closed.
+
+### 40.1 Principi generali
+
+Durante troubleshooting bisogna seguire alcuni principi:
+
+- preservare la evidence directory;
+- non eseguire comandi distruttivi senza procedura approvata;
+- non stampare Secret o token;
+- non decodificare Secret in output salvati;
+- isolare il layer coinvolto;
+- verificare l'ambiente target;
+- verificare il namespace target;
+- distinguere errore tecnico da guardrail atteso;
+- non forzare fallback verso `ocp-dev`;
+- documentare il risultato.
+
+Un errore esplicito fail-closed puo essere il comportamento corretto.
+
+### 40.2 Classificazione per layer
+
+Il primo passo e classificare il problema.
+
+Layer principali:
+
+- UI;
+- OAuth proxy;
+- backend Go;
+- PostgreSQL;
+- GitLab;
+- Argo CD;
+- Tekton;
+- Kubernetes/OpenShift runtime;
+- Environment Catalog;
+- Cluster Registry;
+- runtime provider;
+- Secret references;
+- runtime factories;
+- RBAC.
+
+Una classificazione corretta riduce il rischio di remediation sbagliata.
+
+### 40.3 Evidence package minimo
+
+Per ogni incidente bisogna raccogliere un evidence package minimo.
+
+Contenuti consigliati:
+
+- timestamp;
+- ambiente target;
+- namespace target;
+- ChangeRequest number, se applicabile;
+- evidence directory;
+- pod DevOps Control Plane;
+- `/readyz` result;
+- dashboard result;
+- Argo CD Application status;
+- deployment readiness;
+- route health;
+- PipelineRun status;
+- TaskRun status, se applicabile;
+- UI detail HTTP status;
+- log sanificati;
+- `git status --short`, se si opera dal repository.
+
+L'evidence package deve rimanere sanificato.
+
+### 40.4 Problemi UI
+
+Sintomi tipici:
+
+- dashboard non risponde;
+- dashboard non mostra latest ChangeRequest;
+- sezione `Environments / Namespaces` mancante;
+- pagina ChangeRequest detail non carica;
+- runtime evidence card assente;
+- Tekton validation card assente;
+- errore HTTP 401, 403 o 500.
+
+Controlli:
+
+- verificare `/readyz`;
+- verificare dashboard HTTP;
+- verificare OAuth proxy;
+- verificare pod image;
+- verificare rollout;
+- verificare backend logs;
+- verificare dati persistiti in PostgreSQL;
+- verificare evidence associate alla ChangeRequest.
+
+Una UI che non mostra evidence non significa necessariamente che la evidence non esista. Potrebbe essere un problema di rendering, di handler, di versione immagine o di autorizzazione.
+
+### 40.5 Problemi OAuth proxy e autorizzazione
+
+Sintomi tipici:
+
+- UI restituisce 401;
+- UI restituisce 403;
+- header utente mancanti;
+- gruppi non propagati;
+- azioni tecniche non disponibili;
+- accesso negato a utenti attesi.
+
+Controlli:
+
+- verificare route;
+- verificare configurazione OAuth proxy;
+- verificare `X-Forwarded-User`;
+- verificare `X-Forwarded-Groups`;
+- verificare mapping ruoli;
+- verificare backend authorization;
+- verificare runbook AuthN/AuthZ.
+
+Il backend deve restare fail-closed: se identita o ruolo non sono validi, l'azione deve essere negata.
+
+### 40.6 Problemi backend Go
+
+Sintomi tipici:
+
+- `/readyz` non HTTP 200;
+- endpoint API fallisce;
+- workflow tecnico non parte;
+- errori nei log applicativi;
+- UI riceve HTTP 500;
+- ChangeRequest non aggiornata.
+
+Controlli:
+
+- pod status;
+- container logs;
+- configurazione applicativa;
+- connettivita PostgreSQL;
+- adapter configurati;
+- runtime target resolver;
+- provider registry;
+- feature flags o factory flags.
+
+Un errore backend deve essere correlato alla ChangeRequest, se possibile.
+
+### 40.7 Problemi PostgreSQL
+
+Sintomi tipici:
+
+- `/readyz` fallisce;
+- ChangeRequest non salvata;
+- evidence non persistita;
+- audit log incompleto;
+- dashboard senza dati attesi.
+
+Controlli:
+
+- pod PostgreSQL running;
+- credenziali database;
+- connessione dal backend;
+- schema;
+- log database;
+- backup disponibile;
+- restore isolato se necessario.
+
+PostgreSQL contiene la memoria applicativa del control plane. Un problema database puo compromettere UI, audit ed evidence anche se GitOps e cluster sono sani.
+
+### 40.8 Problemi Argo CD
+
+Sintomi tipici:
+
+- Application non trovata;
+- `OutOfSync`;
+- `Degraded`;
+- sync non completato;
+- revision inattesa;
+- namespace target errato.
+
+Controlli:
+
+- Application name;
+- sync status;
+- health status;
+- revision;
+- path GitOps;
+- target namespace;
+- eventi Argo CD;
+- risorse Kubernetes gestite.
+
+Stato atteso nella baseline:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+Se Argo CD non e sano, correlare sempre con runtime evidence.
+
+### 40.9 Problemi Tekton
+
+Sintomi tipici:
+
+- PipelineRun non creata;
+- PipelineRun fallita;
+- TaskRun fallita;
+- validation path errato;
+- `failedTaskCount` maggiore di zero;
+- check-validation non produce evidence;
+- UI non mostra Tekton validation card.
+
+Controlli:
+
+- namespace Tekton;
+- PipelineRun status;
+- TaskRun status;
+- reason;
+- log sanificati;
+- validation path;
+- branch o Git revision;
+- RBAC;
+- ServiceAccount;
+- Secret references.
+
+Esempi baseline:
+
+```text
+staging    devops-cp-validate-chg-2026-0049-nd7rm
+production devops-cp-validate-chg-2026-0050-8wqtv
+```
+
+### 40.10 Problemi Kubernetes/OpenShift runtime
+
+Sintomi tipici:
+
+- deployment non ready;
+- pod crash;
+- route non raggiungibile;
+- service selector errato;
+- namespace non accessibile;
+- `/healthz` non HTTP 200.
+
+Controlli:
+
+- deployment status;
+- pod status;
+- ReplicaSet;
+- events;
+- service;
+- route;
+- logs applicativi;
+- readiness probe;
+- image pull status.
+
+E importante verificare sempre il namespace corretto.
+
+### 40.11 Problemi Environment Catalog
+
+Sintomi tipici:
+
+- ambiente sconosciuto;
+- ambiente disabled;
+- namespace errato;
+- validation path mancante;
+- Argo CD Application errata;
+- UI mostra mapping non coerente.
+
+Controlli:
+
+- entry environment;
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application;
+- validation path;
+- technical actions abilitate.
+
+L'Environment Catalog e il primo punto da controllare quando un workflow punta all'ambiente sbagliato.
+
+### 40.12 Problemi Cluster Registry e provider
+
+Sintomi tipici:
+
+- cluster sconosciuto;
+- cluster disabled;
+- provider mancante;
+- provider disabled;
+- errore di provider selection;
+- fallback non previsto.
+
+Comportamento corretto:
+
+```text
+provider missing -> fail closed
+provider disabled -> fail closed
+```
+
+Non bisogna correggere questi errori forzando il fallback a `ocp-dev`.
+
+### 40.13 Problemi Secret references
+
+Sintomi tipici:
+
+- Secret reference mancante;
+- Secret non allow-listed;
+- key mancante;
+- Secret getter non configurato;
+- RBAC insufficiente;
+- loader disabled.
+
+Comportamento corretto:
+
+```text
+fail closed without exposing secret values
+```
+
+Durante troubleshooting non bisogna stampare o decodificare Secret.
+
+### 40.14 Problemi runtime factories
+
+Sintomi tipici:
+
+- factory disabled;
+- API URL mancante;
+- base URL Argo CD mancante;
+- token mancante;
+- kubeconfig non supportato;
+- raw CA non supportata;
+- provider non configurato.
+
+Molti di questi errori sono guardrail attesi.
+
+La remediation corretta e completare prerequisites, non bypassare la factory.
+
+### 40.15 Stop conditions
+
+Il troubleshooting deve fermarsi e passare a escalation se:
+
+- target environment non e dimostrabile;
+- namespace target non e dimostrabile;
+- provider risolve il cluster sbagliato;
+- Secret viene esposto;
+- produzione logica viene confusa con produzione fisica;
+- rollback non e disponibile per una remediation rischiosa;
+- un errore fail-closed viene aggirato manualmente.
+
+### 40.16 Escalation handoff
+
+Quando si escala un incidente, includere:
+
+- summary;
+- priorita;
+- ambiente;
+- namespace;
+- ChangeRequest;
+- evidence directory;
+- check fallito;
+- risultato atteso;
+- risultato osservato;
+- layer sospetto;
+- remediation tentata;
+- conferma che nessun Secret e stato esposto.
+
+Questo rende l'escalation piu efficace e sicura.
+
+### 40.17 Troubleshooting e multi-cluster readiness
+
+Nel futuro multi-cluster, il troubleshooting dovra verificare anche il cluster fisico target.
+
+La regola restera:
+
+```text
+if the intended target cannot be proven, stop the operation
+```
+
+L'obiettivo e evitare azioni involontarie sul cluster sbagliato.
+
+### 40.18 Sintesi
+
+Il troubleshooting del DevOps Control Plane e layer-based, evidence-driven e fail-closed.
+
+L'operatore deve identificare il layer coinvolto, preservare evidence sanificata, evitare azioni distruttive e rispettare i guardrail di sicurezza.
+
+Un errore esplicito e sicuro e preferibile a una correzione rapida ma ambigua.
