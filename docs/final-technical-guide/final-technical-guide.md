@@ -10525,3 +10525,344 @@ Il DevOps Control Plane e pronto come control plane applicativo multi-environmen
 Il progetto e anche pronto a livello codice per il futuro multi-cluster, ma attende infrastruttura reale per validazione fisica cross-cluster.
 
 Questa distinzione e la chiave per descrivere correttamente lo stato del progetto.
+
+## 44. Roadmap futura
+
+La roadmap futura descrive le evoluzioni successive alla baseline corrente del DevOps Control Plane.
+
+Il progetto ha gia raggiunto una baseline avanzata: backend Go, PostgreSQL, workflow ChangeRequest, GitLab, Tekton, Argo CD, runtime evidence, UI evidence-aware, Environment Catalog, Cluster Registry, runtime target resolution e multi-cluster code readiness sono stati completati o consolidati.
+
+La roadmap non deve quindi essere letta come un elenco di mancanze che invalidano il lavoro svolto. Deve essere letta come il percorso naturale per portare la piattaforma da baseline avanzata a piattaforma enterprise sempre piu matura.
+
+### 44.1 Completamento della guida tecnica finale
+
+La priorita immediata e completare la guida tecnica finale.
+
+Attivita residue:
+
+- completare la roadmap;
+- completare le appendici;
+- aggiungere glossario;
+- aggiungere comandi operativi principali;
+- aggiungere commit e tag rilevanti;
+- aggiungere limitazioni note;
+- eseguire revisione complessiva;
+- correggere numerazione, riferimenti e coerenza terminologica;
+- generare il documento Word finale.
+
+Il documento sorgente resta:
+
+```text
+docs/final-technical-guide/final-technical-guide.md
+```
+
+Il Word sara un output derivato.
+
+### 44.2 Revisione complessiva del documento
+
+Dopo la scrittura dei capitoli principali, sara necessaria una revisione completa.
+
+La revisione dovra verificare:
+
+- coerenza tra outline, source map e guida finale;
+- numerazione capitoli;
+- accuratezza tecnica;
+- assenza di claim multi-cluster non validati fisicamente;
+- assenza di Secret o token;
+- coerenza con Fase 10, Fase 13 e Fase 15;
+- chiarezza per lettori non esperti;
+- presenza di esempi concreti;
+- coerenza dei riferimenti a commit e tag;
+- utilita per onboarding e handover.
+
+### 44.3 Generazione del documento Word
+
+Quando il Markdown sara completo e revisionato, verra generato il documento Word.
+
+Output previsto:
+
+```text
+DevOps_Control_Plane_Guida_Tecnica_Finale.docx
+```
+
+Il Word dovra essere leggibile, strutturato e adatto a condivisione formale.
+
+Il file Word non deve diventare la sorgente primaria.
+
+La sorgente primaria resta il Markdown versionato nel repository.
+
+### 44.4 CLI devopsctl
+
+La Fase 11, relativa alla CLI `devopsctl`, e attualmente in standby.
+
+La CLI resta una possibile evoluzione futura.
+
+Possibili funzionalita:
+
+- creare ChangeRequest da terminale;
+- lanciare azioni tecniche;
+- consultare evidenze;
+- eseguire health check;
+- raccogliere evidence package;
+- integrare workflow operativi.
+
+La CLI non e necessaria per completare la baseline attuale.
+
+### 44.5 Real-cluster onboarding
+
+Il real-cluster onboarding e una delle evoluzioni piu importanti.
+
+Oggi staging e production sono namespace-isolated su `ocp-dev`.
+
+In futuro, quando saranno disponibili cluster reali, sara possibile valutare mapping come:
+
+```text
+staging    -> ocp-nonprod / devops-ci-staging
+production -> ocp-production / devops-ci-production
+```
+
+Questa evoluzione dovra seguire il deferred real-cluster onboarding contract.
+
+Non dovra essere eseguita come semplice cambio di configurazione.
+
+### 44.6 Validazione fisica multi-cluster
+
+La validazione fisica multi-cluster resta deferred.
+
+Quando cluster aggiuntivi saranno disponibili, bisognera validare:
+
+- Environment Catalog aggiornato;
+- Cluster Registry aggiornato;
+- Secret references;
+- allow-list;
+- RBAC per cluster;
+- runtime provider;
+- runtime factories;
+- Argo CD Application;
+- Tekton PipelineRun;
+- runtime evidence;
+- UI evidence rendering;
+- no fallback a `ocp-dev`;
+- rollback.
+
+La formulazione attuale resta:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+### 44.7 Produzione reale
+
+La produzione reale richiedera ulteriori decisioni e controlli.
+
+Aree da valutare:
+
+- cluster production fisico;
+- RBAC production-grade;
+- segregazione ambienti;
+- policy di accesso;
+- Secret management;
+- backup e restore;
+- DR rehearsal;
+- monitoring;
+- alerting;
+- SLO e SLA;
+- change approval model;
+- compliance requirements.
+
+La baseline corrente supporta un modello production logico namespace-isolated, ma non deve essere descritta come produzione fisica enterprise definitiva.
+
+### 44.8 Observability avanzata
+
+La piattaforma potra essere estesa con observability avanzata.
+
+Possibili evoluzioni:
+
+- metriche applicative;
+- metriche workflow;
+- metriche PostgreSQL;
+- metriche Tekton;
+- metriche Argo CD;
+- dashboard Prometheus/Grafana;
+- alerting;
+- tracing;
+- synthetic checks.
+
+Questa evoluzione migliorerebbe diagnosi, capacity planning e gestione operativa.
+
+### 44.9 Alerting
+
+L'alerting dovrebbe coprire condizioni operative importanti.
+
+Esempi:
+
+- `/readyz` non disponibile;
+- dashboard non raggiungibile;
+- PostgreSQL non raggiungibile;
+- Argo CD Application `Degraded`;
+- Argo CD Application `OutOfSync` persistente;
+- PipelineRun fallite;
+- deployment non ready;
+- route health failure;
+- provider error;
+- Secret reference error;
+- factory error.
+
+Gli alert devono essere azionabili e collegati ai runbook.
+
+### 44.10 PostgreSQL hardening
+
+Possibili evoluzioni PostgreSQL:
+
+- alta disponibilita;
+- backup schedulati;
+- restore rehearsal periodico;
+- retention policy;
+- encryption strategy;
+- monitoring database;
+- alerting su connessioni e spazio;
+- documentazione RPO/RTO;
+- test di restore isolato pianificati.
+
+PostgreSQL contiene la memoria applicativa del control plane e deve essere trattato come componente critico.
+
+### 44.11 DR rehearsal
+
+Il disaster recovery deve essere provato.
+
+Possibili attivita future:
+
+- restore isolato periodico;
+- validazione backup;
+- simulazione perdita database;
+- simulazione perdita namespace control plane;
+- validazione runbook DR;
+- misurazione RPO e RTO;
+- aggiornamento checklist post-restore.
+
+Un DR non provato non deve essere considerato completamente affidabile.
+
+### 44.12 Policy e compliance
+
+In contesti enterprise o regolati, la piattaforma potra essere estesa con controlli compliance.
+
+Esempi:
+
+- approvazioni formali;
+- separazione ruoli;
+- evidenze immutable;
+- retention policy;
+- audit export;
+- integrazione SIEM;
+- policy-as-code;
+- controlli su ambienti production.
+
+Queste evoluzioni possono essere affrontate dopo la stabilizzazione della baseline.
+
+### 44.13 UI evoluta
+
+La UI potra essere ulteriormente migliorata.
+
+Possibili evoluzioni:
+
+- filtri avanzati ChangeRequest;
+- viste per ambiente;
+- viste per applicazione;
+- storico evidence;
+- export report;
+- indicatori di stato piu ricchi;
+- link diretti a Argo CD, Tekton e GitLab;
+- viste multi-cluster future.
+
+La UI deve continuare a rispettare evidence sanitization e autorizzazione.
+
+### 44.14 API evolute
+
+Le API potranno essere estese per supportare:
+
+- query avanzate;
+- export evidence;
+- integrazione con strumenti esterni;
+- automazioni controllate;
+- CLI futura;
+- reportistica;
+- webhook o event integration.
+
+Ogni nuova API dovra rispettare AuthN/AuthZ, RBAC, sanitizzazione e fail-closed behavior.
+
+### 44.15 Hardening security
+
+Possibili evoluzioni security:
+
+- policy piu granulari;
+- audit authorization;
+- rotazione token automatizzata;
+- integrazione secret manager esterno;
+- gestione certificati;
+- threat model documentato;
+- security test periodici;
+- revisione dei permessi RBAC;
+- scansione dependency e container image.
+
+Il modello attuale e una baseline avanzata, non una fine del percorso security.
+
+### 44.16 Roadmap CLI
+
+Se la CLI verra ripresa, dovra essere coerente con API e sicurezza.
+
+Principi:
+
+- non bypassare AuthN/AuthZ;
+- non bypassare RBAC;
+- non stampare Secret;
+- usare API ufficiali;
+- produrre output sanificati;
+- supportare evidence directory;
+- mantenere compatibility con UI e backend.
+
+La CLI deve essere un client del control plane, non un percorso parallelo non governato.
+
+### 44.17 Roadmap documentale
+
+La documentazione restera un lavoro continuo.
+
+Possibili evoluzioni:
+
+- aggiornamento ADR;
+- guide operative brevi;
+- runbook per real-cluster onboarding;
+- runbook DR completi;
+- diagrammi architetturali;
+- documento Word finale;
+- eventuale PDF;
+- guida introduttiva per nuovi utenti.
+
+La directory principale resta:
+
+```text
+docs/final-technical-guide/
+```
+
+### 44.18 Priorita consigliata
+
+Priorita consigliata:
+
+1. completare appendici della guida finale;
+2. revisionare tutto il Markdown;
+3. generare Word finale;
+4. revocare e sostituire eventuali token esposti durante push operativi;
+5. preparare real-cluster onboarding contract operativo;
+6. attendere disponibilita cluster aggiuntivi;
+7. eseguire primo onboarding cluster reale;
+8. rafforzare observability e alerting;
+9. valutare CLI;
+10. pianificare production hardening completo.
+
+### 44.19 Sintesi
+
+La roadmap futura non mette in discussione la baseline corrente.
+
+Il DevOps Control Plane ha gia raggiunto una baseline avanzata, documentata e operativamente verificabile.
+
+La roadmap descrive il percorso per portare questa baseline verso produzione fisica multi-cluster, maggiore automazione, observability avanzata, hardening security e documentazione finale completa.
