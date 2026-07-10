@@ -1272,7 +1272,7 @@ Esempi reali usati nella baseline:
 - `CHG-2026-0049` per staging;
 - `CHG-2026-0050` per production.
 
-Queste ChangeRequest sono importanti perche hanno validato il workflow namespace-isolated per staging e production, includendo Tekton validation evidence e UI rendering.
+Queste ChangeRequest sono importanti perché hanno validato il workflow namespace-isolated per staging e production, includendo Tekton validation evidence e UI rendering.
 
 ### 15.2 Numero ChangeRequest
 
@@ -1285,7 +1285,7 @@ CHG-2026-0049
 CHG-2026-0050
 ```
 
-Il numero deve essere stabile e riconoscibile, perche compare in dashboard, pagine di dettaglio, audit, evidence, troubleshooting e runbook operativi.
+Il numero deve essere stabile e riconoscibile, perché compare in dashboard, pagine di dettaglio, audit, evidence, troubleshooting e runbook operativi.
 
 ### 15.3 Target environment
 
@@ -1297,7 +1297,7 @@ Ambienti correnti:
 - `staging`;
 - `production`.
 
-Il target environment e fondamentale perche determina il runtime target tecnico.
+Il target environment e fondamentale perché determina il runtime target tecnico.
 
 Nel baseline corrente:
 
@@ -1307,7 +1307,7 @@ staging    -> ocp-dev / devops-ci-staging
 production -> ocp-dev / devops-ci-production
 ```
 
-Il target environment deve essere persistito perche tutte le operazioni successive devono sapere quale ambiente era stato richiesto. Senza questo campo, non sarebbe possibile distinguere correttamente una validazione staging da una validazione production.
+Il target environment deve essere persistito perché tutte le operazioni successive devono sapere quale ambiente era stato richiesto. Senza questo campo, non sarebbe possibile distinguere correttamente una validazione staging da una validazione production.
 
 ### 15.4 Stato del processo
 
@@ -1322,13 +1322,13 @@ Esempi concettuali:
 - fallita;
 - in attesa di azione.
 
-Questo stato non deve essere confuso con lo stato runtime. Una richiesta puo essere stata processata correttamente dal backend, ma il deployment puo comunque non essere pronto.
+Questo stato non deve essere confuso con lo stato runtime. Una richiesta può essere stata processata correttamente dal backend, ma il deployment può comunque non essere pronto.
 
 ### 15.5 Stato runtime
 
 Lo stato runtime descrive cosa e stato osservato nei sistemi tecnici.
 
-Puo derivare da:
+Può derivare da:
 
 - Kubernetes/OpenShift;
 - Argo CD;
@@ -1336,7 +1336,7 @@ Puo derivare da:
 - controlli interni;
 - evidence raccolte.
 
-Questa distinzione evita di dichiarare riuscito un cambiamento solo perche il processo applicativo e avanzato. Il DevOps Control Plane deve distinguere successo del processo, successo tecnico del runtime, fallimento della validazione, fallimento del deployment, evidence mancante o evidence incompleta.
+Questa distinzione evita di dichiarare riuscito un cambiamento solo perché il processo applicativo e avanzato. Il DevOps Control Plane deve distinguere successo del processo, successo tecnico del runtime, fallimento della validazione, fallimento del deployment, evidence mancante o evidence incompleta.
 
 ### 15.6 ChangeEvent
 
@@ -1378,9 +1378,9 @@ L'audit trail e utile per:
 - revisione operativa;
 - verifica dei passaggi eseguiti;
 - ricostruzione storica;
-- responsabilita e governance.
+- responsabilità e governance.
 
-Il valore dell'audit trail non e solo tecnico. L'audit trail aiuta anche a spiegare perche una richiesta si trova in un certo stato.
+Il valore dell'audit trail non e solo tecnico. L'audit trail aiuta anche a spiegare perché una richiesta si trova in un certo stato.
 
 ### 15.8 Evidence
 
@@ -1452,7 +1452,7 @@ La sanitizzazione e un requisito di sicurezza, non un dettaglio secondario.
 
 ### 15.11 Relazione tra ChangeRequest ed Evidence
 
-Una ChangeRequest puo avere piu evidence nel tempo.
+Una ChangeRequest può avere più evidence nel tempo.
 
 Esempio:
 
@@ -1465,11 +1465,11 @@ CHG-2026-0050
       +--> runtime diagnostics evidence
 ```
 
-Questo e importante perche il workflow puo essere eseguito in piu passaggi. La UI deve mostrare le evidence piu rilevanti per l'operatore, in particolare la latest validation evidence quando disponibile.
+Questo e importante perché il workflow può essere eseguito in più passaggi. La UI deve mostrare le evidence più rilevanti per l'operatore, in particolare la latest validation evidence quando disponibile.
 
 ### 15.12 Latest validation evidence
 
-La latest validation evidence e l'evidenza di validazione piu recente associata a una ChangeRequest.
+La latest validation evidence e l'evidenza di validazione più recente associata a una ChangeRequest.
 
 La UI deve mostrare in modo chiaro:
 
@@ -1497,7 +1497,7 @@ result: Succeeded
 
 ### 15.13 Relazione con Environment Catalog
 
-Il modello dati e collegato all'Environment Catalog perche la ChangeRequest contiene il target environment.
+Il modello dati e collegato all'Environment Catalog perché la ChangeRequest contiene il target environment.
 
 Il target environment viene risolto in:
 
@@ -1522,7 +1522,7 @@ Per questo motivo le evidence e i runtime target devono preservare informazioni 
 - namespace;
 - provider selection.
 
-Quando arrivera un cluster reale, sara importante dimostrare che il workflow non e ricaduto per errore su `ocp-dev`.
+Quando arrivera un cluster reale, sarà importante dimostrare che il workflow non e ricaduto per errore su `ocp-dev`.
 
 ### 15.15 Relazione con la UI
 
@@ -1544,7 +1544,7 @@ La UI non deve inventare uno stato. La UI deve rappresentare lo stato persistito
 
 Il modello dati sostiene anche l'operability.
 
-Durante troubleshooting o manutenzione, un operatore puo usare ChangeRequest, eventi ed evidence per capire:
+Durante troubleshooting o manutenzione, un operatore può usare ChangeRequest, eventi ed evidence per capire:
 
 - quale ambiente era coinvolto;
 - quale namespace era coinvolto;
@@ -1573,7 +1573,7 @@ La sicurezza del modello dati e parte della sicurezza della piattaforma.
 
 ### 15.18 Relazione con multi-cluster readiness
 
-Il modello dati supporta la readiness multi-cluster perche conserva il target environment e le informazioni runtime correlate.
+Il modello dati supporta la readiness multi-cluster perché conserva il target environment e le informazioni runtime correlate.
 
 I test post-Fase 15 hanno validato target simulati:
 
@@ -1629,7 +1629,7 @@ Le entita principali sono:
 
 Il modello dati collega governance, automazione, audit, runtime evidence, UI e operability.
 
-Questo e uno dei motivi per cui il DevOps Control Plane puo essere considerato una piattaforma di controllo e non una semplice raccolta di script.
+Questo e uno dei motivi per cui il DevOps Control Plane può essere considerato una piattaforma di controllo e non una semplice raccolta di script.
 
 ## 16. ChangeRequest lifecycle
 
@@ -1654,7 +1654,7 @@ ChangeRequest
       +--> UI detail view
 ```
 
-### 17.1 Perche serve una ChangeRequest
+### 17.1 Perché serve una ChangeRequest
 
 Senza una ChangeRequest, le operazioni DevOps restano sparse tra strumenti diversi.
 
@@ -1698,7 +1698,7 @@ Informazioni tecniche:
 - riferimenti a eventi;
 - riferimenti a evidenze.
 
-Il campo `targetEnvironment` e particolarmente importante perche guida la risoluzione del runtime target.
+Il campo `targetEnvironment` e particolarmente importante perché guida la risoluzione del runtime target.
 
 ### 17.3 Target environment
 
@@ -1722,7 +1722,7 @@ Una richiesta per `staging` non deve essere trattata come `dev`.
 
 Una richiesta per `production` non deve essere trattata come `dev`.
 
-Questa regola e ancora piu importante in ottica multi-cluster futura.
+Questa regola e ancora più importante in ottica multi-cluster futura.
 
 ### 17.4 Creazione della ChangeRequest
 
@@ -1738,7 +1738,7 @@ Durante la creazione, il backend deve:
 
 Il risultato atteso e che la richiesta sia disponibile tramite API e UI.
 
-La dashboard puo poi mostrare la richiesta piu recente come riferimento operativo.
+La dashboard può poi mostrare la richiesta più recente come riferimento operativo.
 
 ### 17.5 Lifecycle status
 
@@ -1776,7 +1776,7 @@ Il runtime status deriva dalle integrazioni tecniche e dalle evidence raccolte.
 
 ### 17.7 ChangeEvent durante il lifecycle
 
-Ogni passaggio importante del lifecycle puo generare un `ChangeEvent`.
+Ogni passaggio importante del lifecycle può generare un `ChangeEvent`.
 
 Esempi:
 
@@ -1797,7 +1797,7 @@ Questi eventi formano l'audit trail della richiesta.
 
 ### 17.8 Workflow tecnico collegato
 
-Una ChangeRequest puo attivare o coordinare diversi workflow tecnici:
+Una ChangeRequest può attivare o coordinare diversi workflow tecnici:
 
 - workflow GitLab;
 - collect-evidence;
@@ -1885,7 +1885,7 @@ evidence sanitized: true
 
 La UI rende visibile il lifecycle della ChangeRequest.
 
-La dashboard mostra la richiesta piu recente.
+La dashboard mostra la richiesta più recente.
 
 La pagina di dettaglio mostra:
 
@@ -1984,9 +1984,9 @@ ChangeRequest
       +--> Argo CD / Tekton validation
 ```
 
-### 18.1 Perche GitLab e importante
+### 18.1 Perché GitLab e importante
 
-GitLab e importante perche conserva la storia delle modifiche.
+GitLab e importante perché conserva la storia delle modifiche.
 
 In un flusso GitOps, una modifica al runtime non dovrebbe essere un'azione manuale e non tracciata sul cluster. La modifica dovrebbe passare dal repository, essere revisionabile e avere un collegamento con una richiesta di cambiamento.
 
@@ -2000,7 +2000,7 @@ Il DevOps Control Plane usa GitLab per rendere il cambiamento:
 
 ### 18.2 Branch workflow
 
-Il workflow puo creare o usare un branch dedicato alla ChangeRequest.
+Il workflow può creare o usare un branch dedicato alla ChangeRequest.
 
 Il branch rappresenta l'area di lavoro tecnica del cambiamento.
 
@@ -2011,13 +2011,13 @@ ChangeRequest: CHG-2026-0050
 branch: change/CHG-2026-0050
 ```
 
-Il branch permette di separare la modifica dal branch principale finche non e stata validata e approvata.
+Il branch permette di separare la modifica dal branch principale finché non e stata validata e approvata.
 
 ### 18.3 Commit workflow
 
 Il commit rappresenta la modifica effettiva salvata in Git.
 
-Nel contesto GitOps, un commit puo modificare manifest, overlay, configurazioni o altri file dichiarativi.
+Nel contesto GitOps, un commit può modificare manifest, overlay, configurazioni o altri file dichiarativi.
 
 Il commit deve essere collegabile alla ChangeRequest.
 
@@ -2031,7 +2031,7 @@ Una MR permette di confrontare la modifica proposta con il branch di destinazion
 
 Nel DevOps Control Plane, la MR e parte del workflow controllato.
 
-La piattaforma puo conservare riferimenti come:
+La piattaforma può conservare riferimenti come:
 
 - branch sorgente;
 - branch target;
@@ -2045,9 +2045,9 @@ Il merge porta la modifica nel branch principale o nel branch GitOps target.
 
 Dopo il merge, gli strumenti GitOps possono osservare la revisione aggiornata.
 
-Argo CD puo quindi confrontare il repository con lo stato del cluster.
+Argo CD può quindi confrontare il repository con lo stato del cluster.
 
-Tekton puo validare path e contenuti GitOps in modo coerente con l'ambiente target.
+Tekton può validare path e contenuti GitOps in modo coerente con l'ambiente target.
 
 ### 18.6 Relazione con GitOps
 
@@ -2085,7 +2085,7 @@ apps/demo-go-color-app/overlays/staging
 apps/demo-go-color-app/overlays/production
 ```
 
-Questi path sono importanti perche una validazione staging non deve validare per errore l'overlay production, e una validazione production non deve validare per errore l'overlay staging.
+Questi path sono importanti perché una validazione staging non deve validare per errore l'overlay production, e una validazione production non deve validare per errore l'overlay staging.
 
 Il validation path environment-specific e una parte essenziale del workflow.
 
@@ -2107,7 +2107,7 @@ Il collegamento tra i due permette di rispondere a domande come:
 
 ### 18.9 Relazione con audit
 
-Ogni passaggio importante del workflow GitLab puo produrre un ChangeEvent.
+Ogni passaggio importante del workflow GitLab può produrre un ChangeEvent.
 
 Esempi:
 
@@ -2123,9 +2123,9 @@ Questi eventi diventano parte dell'audit trail della ChangeRequest.
 
 ### 18.10 Relazione con evidence
 
-Il workflow GitLab puo contribuire indirettamente alle evidence.
+Il workflow GitLab può contribuire indirettamente alle evidence.
 
-Per esempio, una Tekton validation evidence puo contenere o riferire:
+Per esempio, una Tekton validation evidence può contenere o riferire:
 
 - Git revision;
 - branch;
@@ -2136,7 +2136,7 @@ Questi dati aiutano a capire quale contenuto e stato validato.
 
 ### 18.11 Relazione con Argo CD
 
-Dopo che una modifica GitOps e disponibile nel repository, Argo CD puo osservarla.
+Dopo che una modifica GitOps e disponibile nel repository, Argo CD può osservarla.
 
 Argo CD produce stato come:
 
@@ -2163,7 +2163,7 @@ Il risultato Tekton viene raccolto tramite `check-validation` e collegato alla C
 Possibili errori:
 
 - repository non raggiungibile;
-- branch gia esistente;
+- branch già esistente;
 - branch target errato;
 - commit fallito;
 - merge request non creata;
@@ -2176,11 +2176,11 @@ In questi casi il DevOps Control Plane deve registrare l'errore e preservare il 
 
 ### 18.14 Sicurezza del workflow GitLab
 
-Il workflow GitLab puo richiedere token o credenziali.
+Il workflow GitLab può richiedere token o credenziali.
 
 Questi valori non devono essere stampati nei log, nelle evidence o nella documentazione.
 
-La documentazione puo citare nomi di Secret o riferimenti, ma non deve contenere valori raw.
+La documentazione può citare nomi di Secret o riferimenti, ma non deve contenere valori raw.
 
 La regola operativa resta:
 
@@ -2207,7 +2207,7 @@ Il GitLab Merge Request workflow fornisce la dimensione Git del DevOps Control P
 
 Il workflow collega una richiesta di cambiamento a una modifica versionata, revisionabile e compatibile con GitOps.
 
-Grazie a questo collegamento, il DevOps Control Plane puo dimostrare non solo che una validazione e stata eseguita, ma anche quale contenuto Git e stato validato e da quale ChangeRequest e nato il cambiamento.
+Grazie a questo collegamento, il DevOps Control Plane può dimostrare non solo che una validazione e stata eseguita, ma anche quale contenuto Git e stato validato e da quale ChangeRequest e nato il cambiamento.
 
 ## 18. Workflow runtime
 
@@ -2309,7 +2309,7 @@ Esempi di dati raccolti:
 
 L'evidence deve essere collegata alla ChangeRequest corretta.
 
-L'evidence deve anche indicare l'ambiente e il namespace, perche dev, staging e production condividono oggi lo stesso cluster fisico `ocp-dev`.
+L'evidence deve anche indicare l'ambiente e il namespace, perché dev, staging e production condividono oggi lo stesso cluster fisico `ocp-dev`.
 
 ### 19.4 check-deployment
 
@@ -2353,7 +2353,7 @@ production PipelineRun = devops-cp-validate-chg-2026-0050-8wqtv
 
 `check-validation` legge lo stato della PipelineRun Tekton e produce validation evidence.
 
-Questa azione e importante perche trasforma un risultato tecnico Tekton in una evidence persistita e leggibile dal DevOps Control Plane.
+Questa azione e importante perché trasforma un risultato tecnico Tekton in una evidence persistita e leggibile dal DevOps Control Plane.
 
 Campi importanti della validation evidence:
 
@@ -2383,7 +2383,7 @@ Le evidence prodotte dal workflow runtime vengono persistite in PostgreSQL.
 
 Questo consente di consultarle successivamente tramite UI o API.
 
-La persistenza e fondamentale perche i risultati runtime e Tekton possono cambiare nel tempo. Salvare una evidence significa conservare una fotografia del risultato osservato durante una certa fase del workflow.
+La persistenza e fondamentale perché i risultati runtime e Tekton possono cambiare nel tempo. Salvare una evidence significa conservare una fotografia del risultato osservato durante una certa fase del workflow.
 
 ### 19.8 Rendering nella UI
 
@@ -2480,7 +2480,7 @@ I test confermano:
 - provider mancante fail-closed;
 - provider disabled fail-closed.
 
-Questo dimostra che il workflow runtime puo essere esteso a cluster fisici futuri senza riprogettare il modello.
+Questo dimostra che il workflow runtime può essere esteso a cluster fisici futuri senza riprogettare il modello.
 
 ### 19.14 Esempio staging
 
@@ -2640,7 +2640,7 @@ cluster fisico disponibile: ocp-dev
 
 Quindi staging e production sono ambienti logici validati tramite namespace isolation, non cluster fisici separati.
 
-### 20.5 Perche usare namespace isolation
+### 20.5 Perché usare namespace isolation
 
 Namespace isolation consente di validare molte caratteristiche senza attendere cluster aggiuntivi.
 
@@ -2720,7 +2720,7 @@ La smoke matrix finale ha confermato readiness nei namespace:
 - `devops-ci-staging`;
 - `devops-ci-production`.
 
-Questo e importante perche un deployment healthy in dev non prova automaticamente lo stato di staging o production.
+Questo e importante perché un deployment healthy in dev non prova automaticamente lo stato di staging o production.
 
 ### 20.10 Route health per ambiente
 
@@ -2788,8 +2788,8 @@ Rappresentano una validazione del modello codice.
 
 I test dimostrano che:
 
-- staging puo risolvere un cluster diverso da `ocp-dev`;
-- production puo risolvere un cluster diverso da `ocp-dev`;
+- staging può risolvere un cluster diverso da `ocp-dev`;
+- production può risolvere un cluster diverso da `ocp-dev`;
 - non avviene fallback silenzioso verso `ocp-dev`;
 - provider mancante fallisce fail-closed;
 - provider disabled fallisce fail-closed.
@@ -2820,7 +2820,7 @@ Questo significa che il progetto e pronto a livello modello e codice, ma non dic
 
 ### 20.16 Sintesi
 
-Il workflow dev, staging e production dimostra che il DevOps Control Plane e capace di controllare piu ambienti logici in modo coerente.
+Il workflow dev, staging e production dimostra che il DevOps Control Plane e capace di controllare più ambienti logici in modo coerente.
 
 La baseline corrente e namespace-isolated su `ocp-dev`, ma include tutti gli elementi necessari per spiegare e validare il futuro percorso multi-cluster:
 
@@ -2839,7 +2839,7 @@ Questo capitolo chiude la parte dedicata ai workflow applicativi e prepara la gu
 
 La runtime evidence e l'insieme delle prove tecniche raccolte osservando lo stato reale dei sistemi runtime.
 
-Nel DevOps Control Plane, una ChangeRequest non e considerata completa solo perche esiste nel database o perche una pipeline e stata avviata. Il sistema deve anche poter dimostrare cosa e stato osservato nell'ambiente target.
+Nel DevOps Control Plane, una ChangeRequest non e considerata completa solo perché esiste nel database o perché una pipeline e stata avviata. Il sistema deve anche poter dimostrare cosa e stato osservato nell'ambiente target.
 
 La runtime evidence risponde alla domanda:
 
@@ -2849,9 +2849,9 @@ Cosa risultava effettivamente in esecuzione nel cluster al momento del controllo
 
 Per questo motivo la runtime evidence e centrale per operability, troubleshooting, audit tecnico e UI evidence rendering.
 
-### 21.1 Perche serve la runtime evidence
+### 21.1 Perché serve la runtime evidence
 
-In un workflow DevOps distribuito, lo stato puo essere frammentato tra strumenti diversi.
+In un workflow DevOps distribuito, lo stato può essere frammentato tra strumenti diversi.
 
 Per esempio:
 
@@ -2863,9 +2863,9 @@ Per esempio:
 
 La runtime evidence collega la ChangeRequest allo stato osservato nel cluster. Questo permette di dimostrare che una richiesta non e solo stata processata, ma che il runtime e stato controllato e documentato.
 
-### 21.2 Cosa puo contenere la runtime evidence
+### 21.2 Cosa può contenere la runtime evidence
 
-La runtime evidence puo includere informazioni come:
+La runtime evidence può includere informazioni come:
 
 - target environment;
 - cluster name;
@@ -2938,7 +2938,7 @@ La pod evidence e utile quando il deployment non e pronto, per esempio per image
 
 ### 21.6 Service e route evidence
 
-La runtime evidence puo includere informazioni su Service e Route.
+La runtime evidence può includere informazioni su Service e Route.
 
 Nel progetto OpenShift, la Route e importante per verificare la raggiungibilita dell'applicazione.
 
@@ -2958,7 +2958,7 @@ Questi controlli dimostrano che il workload non e solo presente nel cluster, ma 
 
 Argo CD fornisce una vista GitOps dello stato dell'applicazione.
 
-Le informazioni piu importanti sono:
+Le informazioni più importanti sono:
 
 - sync status;
 - health status;
@@ -2992,7 +2992,7 @@ La runtime evidence risponde alla domanda:
 Il runtime osservato risulta coerente e sano?
 ```
 
-Entrambe sono necessarie. Una pipeline Tekton puo riuscire, ma un deployment puo non essere pronto. Oppure un deployment puo essere pronto, ma la validazione GitOps puo fallire.
+Entrambe sono necessarie. Una pipeline Tekton può riuscire, ma un deployment può non essere pronto. Oppure un deployment può essere pronto, ma la validazione GitOps può fallire.
 
 ### 21.9 Persistenza della runtime evidence
 
@@ -3006,7 +3006,7 @@ Questo consente di:
 - confrontare esecuzioni diverse;
 - preservare una fotografia dello stato osservato.
 
-La persistenza e importante perche lo stato runtime puo cambiare dopo il controllo.
+La persistenza e importante perché lo stato runtime può cambiare dopo il controllo.
 
 ### 21.10 Runtime evidence nella UI
 
@@ -3021,7 +3021,7 @@ La UI deve aiutare l'operatore a capire:
 - se la route rispondeva;
 - se Argo CD era `Synced` e `Healthy`.
 
-La UI puo offrire raw sanitized evidence come dettaglio diagnostico, ma non deve esporre dati sensibili.
+La UI può offrire raw sanitized evidence come dettaglio diagnostico, ma non deve esporre dati sensibili.
 
 ### 21.11 Sanitizzazione della runtime evidence
 
@@ -3059,7 +3059,7 @@ show operational metadata, never expose credentials
 
 La runtime evidence e uno strumento di troubleshooting.
 
-Quando qualcosa non funziona, l'operatore puo usare le evidence per capire:
+Quando qualcosa non funziona, l'operatore può usare le evidence per capire:
 
 - se il problema e nel deployment;
 - se il problema e nella route;
@@ -3143,7 +3143,7 @@ Per questo la evidence deve preservare sempre:
 - Tekton namespace;
 - validation path.
 
-Quando arriveranno cluster reali, la evidence dovra dimostrare che il workflow non e ricaduto per errore su `ocp-dev`.
+Quando arriveranno cluster reali, la evidence dovrà dimostrare che il workflow non e ricaduto per errore su `ocp-dev`.
 
 ### 21.18 Cosa la runtime evidence non deve essere
 
@@ -3160,17 +3160,17 @@ La runtime evidence deve essere una prova tecnica utile, sicura e contestualizza
 
 ### 21.19 Sintesi
 
-La runtime evidence e una delle funzioni piu importanti del DevOps Control Plane.
+La runtime evidence e una delle funzioni più importanti del DevOps Control Plane.
 
 Permette di collegare una ChangeRequest allo stato reale osservato in OpenShift, Argo CD e Tekton.
 
-Grazie alla runtime evidence, il sistema puo spiegare non solo che una richiesta e stata elaborata, ma anche cosa e stato osservato nel runtime e quali prove sono disponibili per verificarlo.
+Grazie alla runtime evidence, il sistema può spiegare non solo che una richiesta e stata elaborata, ma anche cosa e stato osservato nel runtime e quali prove sono disponibili per verificarlo.
 
 ## 21. Tekton validation evidence
 
 La Tekton validation evidence e l'evidenza che descrive il risultato di una validazione tecnica eseguita tramite Tekton.
 
-Nel DevOps Control Plane, Tekton non e usato come elemento isolato. Tekton e parte del workflow della `ChangeRequest`: una richiesta di cambiamento puo generare una validazione, la validazione produce una `PipelineRun`, la `PipelineRun` produce uno stato, e il DevOps Control Plane trasforma questo stato in evidence persistita e visualizzabile nella UI.
+Nel DevOps Control Plane, Tekton non e usato come elemento isolato. Tekton e parte del workflow della `ChangeRequest`: una richiesta di cambiamento può generare una validazione, la validazione produce una `PipelineRun`, la `PipelineRun` produce uno stato, e il DevOps Control Plane trasforma questo stato in evidence persistita e visualizzabile nella UI.
 
 La Tekton validation evidence risponde alla domanda:
 
@@ -3180,7 +3180,7 @@ La validazione tecnica associata alla ChangeRequest e riuscita?
 
 Questa evidence e diversa dalla runtime evidence. La runtime evidence osserva il runtime. La Tekton validation evidence osserva il risultato della pipeline tecnica.
 
-### 22.1 Perche serve la Tekton validation evidence
+### 22.1 Perché serve la Tekton validation evidence
 
 La validazione Tekton consente di verificare il cambiamento prima o durante il percorso di promozione tecnica.
 
@@ -3188,7 +3188,7 @@ Nel progetto, Tekton viene usato per validare contenuti GitOps e per produrre un
 
 Senza Tekton validation evidence, un operatore potrebbe vedere che una PipelineRun e stata creata, ma non avrebbe una rappresentazione persistente e leggibile del suo esito nel control plane.
 
-Con la validation evidence, invece, il DevOps Control Plane puo mostrare:
+Con la validation evidence, invece, il DevOps Control Plane può mostrare:
 
 - quale PipelineRun e stata eseguita;
 - in quale namespace Tekton;
@@ -3255,7 +3255,7 @@ L'evidence e sicura da mostrare in UI?
 
 ### 22.4 Validation path
 
-Il validation path e uno dei campi piu importanti.
+Il validation path e uno dei campi più importanti.
 
 Indica quale porzione del repository GitOps e stata validata.
 
@@ -3297,7 +3297,7 @@ Nel baseline validato, staging e production hanno avuto:
 failedTaskCount=0
 ```
 
-Questo valore e importante perche una PipelineRun puo avere molte attivita interne. Sapere che il numero di task fallite e zero rende immediata la lettura operativa del risultato.
+Questo valore e importante perché una PipelineRun può avere molte attività interne. Sapere che il numero di task fallite e zero rende immediata la lettura operativa del risultato.
 
 Quando il numero e maggiore di zero, l'operatore deve passare ad analizzare TaskRun e log sanificati.
 
@@ -3327,7 +3327,7 @@ Dati vietati:
 - credenziali contenute nei log;
 - bearer token.
 
-La UI puo mostrare lo stato sanitized, per esempio:
+La UI può mostrare lo stato sanitized, per esempio:
 
 ```text
 evidence sanitized=true
@@ -3408,7 +3408,7 @@ Argo CD: Synced / Healthy
 Route health: HTTP 200
 ```
 
-Questa combinazione fornisce una visione operativa molto piu solida di un singolo controllo isolato.
+Questa combinazione fornisce una visione operativa molto più solida di un singolo controllo isolato.
 
 ### 22.12 Relazione con UI
 
@@ -3527,7 +3527,7 @@ Lo stato GitOps dell'applicazione e sincronizzato e sano per l'ambiente target?
 
 Questa evidence completa la runtime evidence e la Tekton validation evidence.
 
-### 23.1 Perche serve la Argo CD deployment evidence
+### 23.1 Perché serve la Argo CD deployment evidence
 
 In un modello GitOps, Git rappresenta lo stato desiderato.
 
@@ -3680,7 +3680,7 @@ health=Healthy
 
 Questa Application rappresenta la produzione logica nella baseline namespace-isolated.
 
-Non deve essere descritta come produzione fisica separata, perche il cluster fisico resta `ocp-dev`.
+Non deve essere descritta come produzione fisica separata, perché il cluster fisico resta `ocp-dev`.
 
 ### 23.10 Argo CD evidence e runtime evidence
 
@@ -3699,7 +3699,7 @@ Deployment ready: true
 Route health: HTTP 200
 ```
 
-La combinazione dei due punti di vista rende il controllo piu affidabile.
+La combinazione dei due punti di vista rende il controllo più affidabile.
 
 ### 23.11 Argo CD evidence e Tekton validation evidence
 
@@ -3775,7 +3775,7 @@ Un workflow non dovrebbe essere considerato completamente sano se l'Application 
 
 ### 23.15 Degraded
 
-`Degraded` indica che Argo CD considera non sane una o piu risorse gestite.
+`Degraded` indica che Argo CD considera non sane una o più risorse gestite.
 
 Possibili cause:
 
@@ -3814,13 +3814,13 @@ Dati vietati:
 
 ### 23.17 Relazione con multi-cluster readiness
 
-In futuro, Argo CD dovra essere valutato anche rispetto a cluster fisici separati.
+In futuro, Argo CD dovrà essere valutato anche rispetto a cluster fisici separati.
 
 Oggi la baseline e namespace-isolated su `ocp-dev`.
 
 Domani staging o production potrebbero avere cluster fisici dedicati.
 
-La Argo CD evidence dovra allora preservare anche il cluster target effettivo, per dimostrare che non c'e stato fallback verso `ocp-dev`.
+La Argo CD evidence dovrà allora preservare anche il cluster target effettivo, per dimostrare che non c'e stato fallback verso `ocp-dev`.
 
 ### 23.18 Stato corrente validato
 
@@ -3856,7 +3856,7 @@ collect useful operational evidence, never expose raw credentials
 
 La sanitizzazione permette quindi di mantenere il valore operativo delle evidenze senza compromettere la sicurezza.
 
-### 24.1 Perche la sanitizzazione e necessaria
+### 24.1 Perché la sanitizzazione e necessaria
 
 Il DevOps Control Plane integra sistemi che gestiscono informazioni potenzialmente sensibili:
 
@@ -3869,13 +3869,13 @@ Il DevOps Control Plane integra sistemi che gestiscono informazioni potenzialmen
 - configurazioni runtime;
 - log tecnici.
 
-Durante una validazione o un controllo runtime, il sistema puo attraversare dati provenienti da questi strumenti.
+Durante una validazione o un controllo runtime, il sistema può attraversare dati provenienti da questi strumenti.
 
 Senza una regola esplicita di sanitizzazione, il rischio e salvare o mostrare informazioni che non dovrebbero mai uscire dal sistema di origine.
 
-### 24.2 Cosa puo essere salvato
+### 24.2 Cosa può essere salvato
 
-Una evidence puo contenere metadati operativi sicuri.
+Una evidence può contenere metadati operativi sicuri.
 
 Esempi di dati ammessi:
 
@@ -3949,7 +3949,7 @@ La documentazione, la UI, i log e le evidence possono mostrare riferimenti, ma n
 
 La UI deve presentare solo evidence sicure.
 
-La UI puo mostrare:
+La UI può mostrare:
 
 - stato di validazione;
 - PipelineRun;
@@ -3975,13 +3975,13 @@ La UI deve essere una superficie operativa, non un contenitore di credenziali.
 
 ### 24.6 Sanitizzazione e raw evidence
 
-In alcuni casi puo essere utile conservare una forma di raw evidence diagnostica.
+In alcuni casi può essere utile conservare una forma di raw evidence diagnostica.
 
 Questa raw evidence deve comunque essere sanificata.
 
-Il termine raw, in questo contesto, non significa non filtrato. Significa piu dettagliato rispetto alla card sintetica mostrata nella UI.
+Il termine raw, in questo contesto, non significa non filtrato. Significa più dettagliato rispetto alla card sintetica mostrata nella UI.
 
-Una raw sanitized evidence puo contenere:
+Una raw sanitized evidence può contenere:
 
 - campi tecnici normalizzati;
 - status dettagliati;
@@ -3993,7 +3993,7 @@ Non deve contenere valori riservati.
 
 ### 24.7 Sanitizzazione e Tekton
 
-Tekton puo produrre log e risultati tecnici molto dettagliati.
+Tekton può produrre log e risultati tecnici molto dettagliati.
 
 La validation evidence deve estrarre solo le informazioni utili:
 
@@ -4006,13 +4006,13 @@ La validation evidence deve estrarre solo le informazioni utili:
 - namespace;
 - Git revision o branch.
 
-I log Tekton completi devono essere trattati con cautela, perche potrebbero contenere dati non adatti alla persistenza o alla UI.
+I log Tekton completi devono essere trattati con cautela, perché potrebbero contenere dati non adatti alla persistenza o alla UI.
 
 ### 24.8 Sanitizzazione e Argo CD
 
-Argo CD puo esporre informazioni su Application, repository, revision e stato delle risorse.
+Argo CD può esporre informazioni su Application, repository, revision e stato delle risorse.
 
-La evidence puo conservare:
+La evidence può conservare:
 
 - Application name;
 - sync status;
@@ -4028,7 +4028,7 @@ La evidence non deve conservare token Argo CD, credenziali Git o altri dati rise
 
 Kubernetes/OpenShift espone molte informazioni operative.
 
-La evidence puo conservare:
+La evidence può conservare:
 
 - namespace;
 - deployment;
@@ -4043,7 +4043,7 @@ La evidence non deve conservare contenuto Secret, token di ServiceAccount, kubec
 
 ### 24.10 Sanitizzazione e troubleshooting
 
-Durante troubleshooting, la tentazione puo essere copiare output completi per velocizzare l'analisi.
+Durante troubleshooting, la tentazione può essere copiare output completi per velocizzare l'analisi.
 
 Questa pratica e rischiosa.
 
@@ -4060,7 +4060,7 @@ Regole operative:
 
 ### 24.11 Evidence sanitized flag
 
-Quando una evidence e stata filtrata correttamente, il sistema puo indicare uno stato come:
+Quando una evidence e stata filtrata correttamente, il sistema può indicare uno stato come:
 
 ```text
 evidence sanitized=true
@@ -4068,7 +4068,7 @@ evidence sanitized=true
 
 Questo campo aiuta l'operatore a capire che l'evidence e stata preparata per essere mostrata o conservata.
 
-Tuttavia, il flag non deve sostituire la responsabilita tecnica. Se un output contiene dati sospetti, deve essere rivisto anche se dichiarato sanificato.
+Tuttavia, il flag non deve sostituire la responsabilità tecnica. Se un output contiene dati sospetti, deve essere rivisto anche se dichiarato sanificato.
 
 ### 24.12 Relazione con audit e compliance
 
@@ -4090,9 +4090,9 @@ Non deve contenere materiale che aumenti il rischio di sicurezza.
 
 ### 24.13 Relazione con multi-cluster readiness
 
-La readiness multi-cluster richiede ancora piu attenzione alla sanitizzazione.
+La readiness multi-cluster richiede ancora più attenzione alla sanitizzazione.
 
-Quando verranno aggiunti cluster reali, il sistema potra gestire Secret reference, token e endpoint separati per cluster diversi.
+Quando verranno aggiunti cluster reali, il sistema potrà gestire Secret reference, token e endpoint separati per cluster diversi.
 
 Le evidence dovranno dimostrare:
 
@@ -4168,7 +4168,7 @@ Nelle prime fasi del progetto la UI era un MVP pensato soprattutto per visualizz
 
 La dashboard oggi non deve essere vista come una semplice pagina grafica. Deve essere considerata un punto di ingresso per comprendere:
 
-- quale ChangeRequest e piu recente;
+- quale ChangeRequest e più recente;
 - quali ambienti logici sono configurati;
 - quali namespace sono associati agli ambienti;
 - quali evidenze runtime sono disponibili;
@@ -4183,7 +4183,7 @@ Un operatore deve poter aprire la dashboard e capire rapidamente:
 
 - se il backend risponde;
 - se la UI e aggiornata;
-- qual e la ChangeRequest piu recente;
+- qual e la ChangeRequest più recente;
 - quali ambienti sono rappresentati;
 - quali evidenze sono disponibili;
 - se la piattaforma sta lavorando sul namespace corretto.
@@ -4192,22 +4192,22 @@ La dashboard non sostituisce i runbook, ma aiuta a orientare l'analisi.
 
 ### 25.2 Latest ChangeRequest
 
-La dashboard seleziona la ChangeRequest piu recente disponibile nel backend.
+La dashboard seleziona la ChangeRequest più recente disponibile nel backend.
 
-Questo comportamento e importante perche evita una dashboard statica o legata a una richiesta storica hardcoded.
+Questo comportamento e importante perché evita una dashboard statica o legata a una richiesta storica hardcoded.
 
 Il comportamento atteso e:
 
-- mostrare la ChangeRequest piu recente;
+- mostrare la ChangeRequest più recente;
 - mantenere le ChangeRequest precedenti accessibili nella lista;
 - permettere all'operatore di aprire il dettaglio della richiesta;
 - mostrare evidenze collegate quando disponibili.
 
-In questo modo la dashboard riflette l'attivita corrente del sistema.
+In questo modo la dashboard riflette l'attività corrente del sistema.
 
 ### 25.3 Recent changes
 
-La dashboard puo mostrare un elenco compatto di ChangeRequest recenti.
+La dashboard può mostrare un elenco compatto di ChangeRequest recenti.
 
 Questa lista aiuta a vedere rapidamente il contesto operativo recente senza trasformare la dashboard in una cronologia completa.
 
@@ -4215,7 +4215,7 @@ La cronologia dettagliata resta disponibile nelle viste dedicate e tramite il mo
 
 ### 25.4 KPI e contatori
 
-La dashboard puo includere contatori o indicatori sintetici.
+La dashboard può includere contatori o indicatori sintetici.
 
 Esempi:
 
@@ -4239,7 +4239,7 @@ staging    -> devops-ci-staging
 production -> devops-ci-production
 ```
 
-La visibilita di questa mappatura e fondamentale perche il progetto usa namespace isolation sul cluster `ocp-dev`.
+La visibilita di questa mappatura e fondamentale perché il progetto usa namespace isolation sul cluster `ocp-dev`.
 
 L'operatore deve poter vedere che staging e production sono ambienti logici distinti, anche se condividono lo stesso cluster fisico.
 
@@ -4247,13 +4247,13 @@ L'operatore deve poter vedere che staging e production sono ambienti logici dist
 
 La dashboard include una rappresentazione compatta del contesto utente.
 
-La user box aiuta a mostrare chi sta consultando la UI o quale identita e stata propagata tramite il layer di autenticazione.
+La user box aiuta a mostrare chi sta consultando la UI o quale identità e stata propagata tramite il layer di autenticazione.
 
-Questa informazione non deve oscurare la sezione degli ambienti. La priorita operativa resta rendere visibili environment, namespace ed evidenze.
+Questa informazione non deve oscurare la sezione degli ambienti. La priorità operativa resta rendere visibili environment, namespace ed evidenze.
 
 ### 25.7 Runtime evidence summary
 
-La dashboard puo mostrare una sintesi delle runtime evidence disponibili.
+La dashboard può mostrare una sintesi delle runtime evidence disponibili.
 
 La runtime evidence aiuta a capire se lo stato osservato nel cluster e coerente con il risultato atteso.
 
@@ -4266,11 +4266,11 @@ Esempi di informazioni utili:
 - route health;
 - timestamp di raccolta.
 
-La dashboard deve sintetizzare queste informazioni, mentre la pagina di dettaglio della ChangeRequest puo mostrare informazioni piu ricche.
+La dashboard deve sintetizzare queste informazioni, mentre la pagina di dettaglio della ChangeRequest può mostrare informazioni più ricche.
 
 ### 25.8 Tekton validation summary
 
-La dashboard puo anche mostrare o collegare informazioni sulla validazione Tekton.
+La dashboard può anche mostrare o collegare informazioni sulla validazione Tekton.
 
 Una sintesi utile include:
 
@@ -4281,7 +4281,7 @@ Una sintesi utile include:
 - validation path;
 - stato sanitized.
 
-Per analisi piu dettagliate, l'operatore deve aprire la pagina di dettaglio della ChangeRequest.
+Per analisi più dettagliate, l'operatore deve aprire la pagina di dettaglio della ChangeRequest.
 
 ### 25.9 Dashboard e ChangeRequest detail
 
@@ -4312,7 +4312,7 @@ Questo flusso rende la UI utile sia per una vista rapida sia per l'analisi tecni
 
 La dashboard deve rappresentare correttamente la baseline namespace-isolated.
 
-Non deve suggerire che staging e production siano gia cluster fisici separati.
+Non deve suggerire che staging e production siano già cluster fisici separati.
 
 La rappresentazione corretta e:
 
@@ -4322,7 +4322,7 @@ ambienti logici: dev, staging, production
 isolamento corrente: namespace separation
 ```
 
-Questo evita claim errati e mantiene la documentazione coerente con la realta runtime.
+Questo evita claim errati e mantiene la documentazione coerente con la realtà runtime.
 
 ### 25.11 Dashboard e multi-cluster readiness
 
@@ -4337,7 +4337,7 @@ Tuttavia, la dashboard deve distinguere tra:
 - simulazioni staging e production;
 - validazione fisica futura.
 
-La UI non deve dichiarare validazione fisica cross-cluster finche non saranno disponibili cluster reali.
+La UI non deve dichiarare validazione fisica cross-cluster finché non saranno disponibili cluster reali.
 
 ### 25.12 Dashboard e sicurezza
 
@@ -4406,11 +4406,11 @@ La dashboard e oggi una superficie operativa del DevOps Control Plane.
 
 Essa mostra lo stato recente, la visibilita degli ambienti, il contesto utente e l'accesso alle evidenze.
 
-La dashboard non e piu solo una UI MVP iniziale. E una vista evidence-aware ed environment-aware, coerente con la baseline namespace-isolated e con la readiness multi-cluster a livello codice.
+La dashboard non e più solo una UI MVP iniziale. E una vista evidence-aware ed environment-aware, coerente con la baseline namespace-isolated e con la readiness multi-cluster a livello codice.
 
 ## 25. ChangeRequest detail
 
-La pagina di dettaglio della `ChangeRequest` e la vista piu importante per analizzare una richiesta specifica.
+La pagina di dettaglio della `ChangeRequest` e la vista più importante per analizzare una richiesta specifica.
 
 La dashboard offre una vista sintetica, mentre il dettaglio ChangeRequest permette di entrare nel contesto operativo completo: dati della richiesta, stato del processo, stato runtime, audit log, evidence, validazioni Tekton, stato Argo CD e diagnostica sanificata.
 
@@ -4589,7 +4589,7 @@ evidence sanitized: true
 
 ### 26.9 Argo CD deployment evidence
 
-La pagina di dettaglio puo mostrare anche evidenze Argo CD.
+La pagina di dettaglio può mostrare anche evidenze Argo CD.
 
 Informazioni utili:
 
@@ -4611,11 +4611,11 @@ Queste informazioni aiutano a collegare la ChangeRequest allo stato GitOps osser
 
 ### 26.10 Raw sanitized evidence
 
-La pagina di dettaglio puo offrire una vista piu tecnica della raw sanitized evidence.
+La pagina di dettaglio può offrire una vista più tecnica della raw sanitized evidence.
 
 Questa vista deve essere utile per troubleshooting, ma non deve contenere dati sensibili.
 
-Puo includere:
+Può includere:
 
 - payload tecnici normalizzati;
 - status;
@@ -4636,7 +4636,7 @@ Non deve includere:
 
 ### 26.11 Azioni tecniche
 
-La pagina di dettaglio puo esporre azioni tecniche, in base allo stato della richiesta e ai permessi dell'utente.
+La pagina di dettaglio può esporre azioni tecniche, in base allo stato della richiesta e ai permessi dell'utente.
 
 Esempi di azioni:
 
@@ -4669,7 +4669,7 @@ La visibilita delle azioni deve essere coerente con il backend, che resta la fon
 
 La pagina ChangeRequest detail e uno dei primi punti da consultare durante troubleshooting.
 
-L'operatore puo verificare:
+L'operatore può verificare:
 
 - target environment;
 - namespace;
@@ -4715,7 +4715,7 @@ Dati vietati:
 - bearer token;
 - contenuto Secret decodificato.
 
-La pagina puo mostrare metadati tecnici sicuri:
+La pagina può mostrare metadati tecnici sicuri:
 
 - namespace;
 - application name;
@@ -4735,7 +4735,7 @@ Oggi staging e production sono namespace-isolated su `ocp-dev`.
 
 Domani potranno essere cluster fisici distinti.
 
-La UI dovra quindi continuare a mostrare:
+La UI dovrà quindi continuare a mostrare:
 
 - target environment;
 - cluster name;
@@ -4756,9 +4756,9 @@ Questa vista e essenziale per trasformare il control plane in uno strumento oper
 
 ## 26. UI environment awareness
 
-La UI environment awareness e la capacita della UI del DevOps Control Plane di rappresentare chiaramente gli ambienti logici, i namespace e il contesto runtime associato a una ChangeRequest.
+La UI environment awareness e la capacità della UI del DevOps Control Plane di rappresentare chiaramente gli ambienti logici, i namespace e il contesto runtime associato a una ChangeRequest.
 
-Questa funzionalita e importante perche il progetto non lavora piu con un'unica vista dev-only. La piattaforma gestisce oggi una baseline multi-environment namespace-isolated:
+Questa funzionalita e importante perché il progetto non lavora più con un'unica vista dev-only. La piattaforma gestisce oggi una baseline multi-environment namespace-isolated:
 
 ```text
 dev        -> ocp-dev / devops-ci-demo
@@ -4768,13 +4768,13 @@ production -> ocp-dev / devops-ci-production
 
 La UI deve quindi aiutare l'operatore a capire in quale ambiente logico si trova, quale namespace e coinvolto e quali evidenze appartengono a quell'ambiente.
 
-### 27.1 Perche serve environment awareness nella UI
+### 27.1 Perché serve environment awareness nella UI
 
 Senza environment awareness, la UI rischia di nascondere informazioni operative fondamentali.
 
 Per esempio, se la UI mostrasse solo un'etichetta `dev`, l'operatore potrebbe non capire se una ChangeRequest riguarda staging o production.
 
-Questo sarebbe pericoloso perche:
+Questo sarebbe pericoloso perché:
 
 - staging e production hanno namespace diversi;
 - staging e production hanno Argo CD Applications diverse;
@@ -4824,11 +4824,11 @@ staging    -> devops-ci-staging
 production -> devops-ci-production
 ```
 
-Questa sezione e utile per operatori, reviewer e sviluppatori perche chiarisce subito come il progetto sta rappresentando gli ambienti.
+Questa sezione e utile per operatori, reviewer e sviluppatori perché chiarisce subito come il progetto sta rappresentando gli ambienti.
 
 ### 27.4 Evitare rappresentazioni dev-only
 
-Una UI dev-only non e piu sufficiente.
+Una UI dev-only non e più sufficiente.
 
 Nelle fasi iniziali del progetto poteva essere accettabile mostrare solo `dev` come placeholder. Dopo l'introduzione di Environment Catalog, runtime target resolution, staging e production namespace-isolated, la UI deve rappresentare tutti gli ambienti rilevanti.
 
@@ -4967,11 +4967,11 @@ production -> ocp-production-simulated
 
 Questa simulazione e una validazione del modello codice, non una validazione fisica runtime.
 
-La UI deve quindi supportare il modello, ma non dichiarare validazione fisica cross-cluster finche non esistono cluster reali.
+La UI deve quindi supportare il modello, ma non dichiarare validazione fisica cross-cluster finché non esistono cluster reali.
 
 ### 27.12 Cosa mostrare
 
-La UI puo mostrare informazioni operative sicure:
+La UI può mostrare informazioni operative sicure:
 
 - ambiente;
 - cluster name;
@@ -5033,7 +5033,7 @@ La UI environment awareness rende visibile il modello multi-environment del DevO
 
 Essa consente agli operatori di distinguere dev, staging e production, di vedere namespace e target runtime, e di interpretare le evidence nel contesto corretto.
 
-Questa funzionalita e essenziale nella baseline namespace-isolated e sara ancora piu importante quando saranno disponibili cluster fisici separati.
+Questa funzionalita e essenziale nella baseline namespace-isolated e sarà ancora più importante quando saranno disponibili cluster fisici separati.
 
 ## 27. Environment Catalog
 
@@ -5057,16 +5057,16 @@ production -> ocp-dev / devops-ci-production
 
 L'Environment Catalog e quindi il punto in cui il DevOps Control Plane inizia a distinguere tra ambiente logico, namespace e cluster.
 
-### 28.1 Perche serve l'Environment Catalog
+### 28.1 Perché serve l'Environment Catalog
 
 Senza un Environment Catalog, il sistema rischierebbe di avere configurazioni hardcoded o sparse nel codice.
 
-Questo sarebbe fragile perche:
+Questo sarebbe fragile perché:
 
 - renderebbe difficile aggiungere nuovi ambienti;
 - renderebbe difficile distinguere staging e production;
 - aumenterebbe il rischio di azioni nel namespace sbagliato;
-- ridurrebbe la possibilita di supportare cluster futuri;
+- ridurrebbe la possibilità di supportare cluster futuri;
 - renderebbe meno chiara la UI.
 
 L'Environment Catalog centralizza la descrizione degli ambienti e consente al backend di risolvere target tecnici in modo coerente.
@@ -5089,7 +5089,7 @@ L'Environment Catalog rende questa associazione esplicita.
 
 ### 28.3 Metadati dell'ambiente
 
-Un ambiente nel catalogo puo includere metadati come:
+Un ambiente nel catalogo può includere metadati come:
 
 - nome ambiente;
 - display name;
@@ -5166,7 +5166,7 @@ Il validation path environment-specific e fondamentale. Se il path e sbagliato, 
 
 ### 28.8 Technical actions
 
-L'Environment Catalog puo indicare se un ambiente consente azioni tecniche.
+L'Environment Catalog può indicare se un ambiente consente azioni tecniche.
 
 Esempi di azioni:
 
@@ -5254,7 +5254,7 @@ staging -> ocp-staging-simulated
 production -> ocp-production-simulated
 ```
 
-Questi test dimostrano che il modello puo rappresentare cluster diversi.
+Questi test dimostrano che il modello può rappresentare cluster diversi.
 
 La validazione fisica resta deferred per indisponibilita di cluster aggiuntivi.
 
@@ -5290,7 +5290,7 @@ L'Environment Catalog e il punto di controllo per descrivere gli ambienti logici
 
 Collega ChangeRequest, namespace, Argo CD, Tekton, validation path, UI e runtime target resolution.
 
-Grazie a questo modello, il progetto puo operare oggi con namespace isolation e prepararsi domani a un vero multi-cluster senza riprogettare il workflow.
+Grazie a questo modello, il progetto può operare oggi con namespace isolation e prepararsi domani a un vero multi-cluster senza riprogettare il workflow.
 
 ## 28. Cluster Registry
 
@@ -5308,13 +5308,13 @@ il Cluster Registry risponde alla domanda:
 Che cosa so del cluster associato a quell'ambiente?
 ```
 
-Questa distinzione e importante perche un ambiente logico non deve essere confuso con un cluster fisico. Oggi `dev`, `staging` e `production` sono ambienti logici validati sullo stesso cluster `ocp-dev`, usando namespace separati. In futuro, staging e production potrebbero essere associati a cluster fisici distinti.
+Questa distinzione e importante perché un ambiente logico non deve essere confuso con un cluster fisico. Oggi `dev`, `staging` e `production` sono ambienti logici validati sullo stesso cluster `ocp-dev`, usando namespace separati. In futuro, staging e production potrebbero essere associati a cluster fisici distinti.
 
-### 29.1 Perche serve il Cluster Registry
+### 29.1 Perché serve il Cluster Registry
 
 Senza Cluster Registry, le informazioni sui cluster rischierebbero di essere hardcoded o distribuite in punti diversi del codice.
 
-Questo sarebbe fragile perche:
+Questo sarebbe fragile perché:
 
 - renderebbe difficile aggiungere nuovi cluster;
 - renderebbe difficile disabilitare un cluster in modo controllato;
@@ -5326,7 +5326,7 @@ Il Cluster Registry centralizza le informazioni essenziali sui cluster e permett
 
 ### 29.2 Differenza tra Environment Catalog e Cluster Registry
 
-Environment Catalog e Cluster Registry hanno responsabilita diverse.
+Environment Catalog e Cluster Registry hanno responsabilità diverse.
 
 Environment Catalog:
 
@@ -5397,7 +5397,7 @@ Questo evita che un cluster venga usato prima che siano completate readiness, RB
 
 ### 29.5 API URL
 
-Il Cluster Registry puo includere l'API URL del cluster.
+Il Cluster Registry può includere l'API URL del cluster.
 
 Esempio concettuale:
 
@@ -5411,7 +5411,7 @@ Se un client factory richiede API URL e quel valore manca, il comportamento corr
 
 ### 29.6 Default namespace e allowed namespaces
 
-Il Cluster Registry puo descrivere namespace predefiniti e namespace consentiti.
+Il Cluster Registry può descrivere namespace predefiniti e namespace consentiti.
 
 Esempio:
 
@@ -5433,7 +5433,7 @@ allow only what is required
 
 Il Cluster Registry e collegato al modello Secret reference.
 
-Un cluster reale puo richiedere credenziali, token o CA reference per costruire client runtime.
+Un cluster reale può richiedere credenziali, token o CA reference per costruire client runtime.
 
 Il modello corretto non salva valori raw nel registry.
 
@@ -5494,7 +5494,7 @@ staging -> ocp-staging-simulated
 production -> ocp-production-simulated
 ```
 
-Questi test dimostrano che il modello puo risolvere cluster diversi da `ocp-dev`.
+Questi test dimostrano che il modello può risolvere cluster diversi da `ocp-dev`.
 
 I test confermano:
 
@@ -5594,7 +5594,7 @@ Esempi di fail-closed:
 
 ### 29.15 Real-cluster onboarding futuro
 
-Quando sara disponibile un cluster reale aggiuntivo, il Cluster Registry dovra essere aggiornato con dati controllati.
+Quando sarà disponibile un cluster reale aggiuntivo, il Cluster Registry dovrà essere aggiornato con dati controllati.
 
 Informazioni richieste:
 
@@ -5629,7 +5629,7 @@ Il Cluster Registry e il componente che rende esplicita la conoscenza dei cluste
 
 Insieme all'Environment Catalog, permette di trasformare un ambiente logico in un target runtime tecnico.
 
-Oggi rappresenta la baseline `ocp-dev` namespace-isolated. Domani permettera l'onboarding controllato di cluster fisici aggiuntivi, mantenendo fail-closed, Secret references e guardrail operativi.
+Oggi rappresenta la baseline `ocp-dev` namespace-isolated. Domani permetterà l'onboarding controllato di cluster fisici aggiuntivi, mantenendo fail-closed, Secret references e guardrail operativi.
 
 ## 29. Runtime target resolution
 
@@ -5665,13 +5665,13 @@ TechnicalRuntimeTarget
       +--> check-validation
 ```
 
-### 30.1 Perche serve la runtime target resolution
+### 30.1 Perché serve la runtime target resolution
 
 La runtime target resolution evita che i workflow tecnici usino destinazioni hardcoded.
 
 Senza questo meccanismo, il codice rischierebbe di assumere implicitamente che ogni azione debba essere eseguita su `dev` o sul namespace `devops-ci-demo`.
 
-Questo sarebbe pericoloso perche il progetto oggi supporta tre ambienti logici:
+Questo sarebbe pericoloso perché il progetto oggi supporta tre ambienti logici:
 
 - `dev`;
 - `staging`;
@@ -5703,7 +5703,7 @@ Il primo livello della risoluzione e l'Environment Catalog.
 
 L'Environment Catalog descrive gli ambienti logici e i relativi metadati.
 
-Per esempio, per staging puo contenere:
+Per esempio, per staging può contenere:
 
 ```text
 environment = staging
@@ -5720,7 +5720,7 @@ Questi dati permettono di passare da un ambiente logico a una configurazione tec
 
 Il secondo livello e il Cluster Registry.
 
-L'Environment Catalog puo dire che staging usa `ocp-dev`, ma il sistema deve poi sapere che cos'e `ocp-dev`.
+L'Environment Catalog può dire che staging usa `ocp-dev`, ma il sistema deve poi sapere che cos'e `ocp-dev`.
 
 Il Cluster Registry descrive:
 
@@ -5915,8 +5915,8 @@ production -> ocp-production-simulated
 
 I test dimostrano che:
 
-- staging puo risolvere un cluster diverso da `ocp-dev`;
-- production puo risolvere un cluster diverso da `ocp-dev`;
+- staging può risolvere un cluster diverso da `ocp-dev`;
+- production può risolvere un cluster diverso da `ocp-dev`;
 - il target risolto conserva il cluster simulato;
 - non avviene fallback silenzioso verso `ocp-dev`;
 - provider mancante fallisce fail-closed;
@@ -5926,7 +5926,7 @@ Questa e una validazione di readiness del codice, non una validazione fisica cro
 
 ### 30.16 Relazione con real-cluster onboarding
 
-Quando sara disponibile un cluster reale aggiuntivo, la runtime target resolution sara il meccanismo che permettera di spostare un ambiente verso quel cluster.
+Quando sarà disponibile un cluster reale aggiuntivo, la runtime target resolution sarà il meccanismo che permetterà di spostare un ambiente verso quel cluster.
 
 Esempio futuro:
 
@@ -5974,7 +5974,7 @@ La multi-cluster code-ready baseline rappresenta lo stato in cui il DevOps Contr
 
 Questa affermazione deve essere interpretata con precisione.
 
-Il progetto non dichiara ancora una validazione fisica cross-cluster, perche al momento e disponibile solo il cluster OpenShift `ocp-dev`.
+Il progetto non dichiara ancora una validazione fisica cross-cluster, perché al momento e disponibile solo il cluster OpenShift `ocp-dev`.
 
 Il progetto dichiara invece che il codice, il modello di configurazione, la risoluzione dei target runtime, i provider, le Secret references, le factory e i guardrail fail-closed sono predisposti per il futuro multi-cluster.
 
@@ -5989,7 +5989,7 @@ Multi-cluster code readiness is completed, tested, documented and fail-closed.
 
 Code-ready significa che il modello software e pronto a rappresentare cluster diversi senza riprogettare l'architettura.
 
-In pratica, il sistema puo modellare:
+In pratica, il sistema può modellare:
 
 - ambienti logici diversi;
 - cluster target diversi;
@@ -6001,20 +6001,20 @@ In pratica, il sistema puo modellare:
 - Secret references diverse;
 - factory runtime abilitate in modo controllato.
 
-Questo non significa che i cluster fisici esistono gia.
+Questo non significa che i cluster fisici esistono già.
 
-Significa che, quando i cluster saranno disponibili, il progetto dovra eseguire onboarding, configurazione e validazione, non riscrivere il modello.
+Significa che, quando i cluster saranno disponibili, il progetto dovrà eseguire onboarding, configurazione e validazione, non riscrivere il modello.
 
 ### 31.2 Cosa non significa code-ready
 
 Code-ready non significa:
 
-- staging fisico gia validato;
-- production fisica gia validata;
-- cross-cluster runtime gia eseguito;
-- Secret reali cross-cluster gia letti;
-- RBAC reale cross-cluster gia verificato;
-- rollback fisico cross-cluster gia testato;
+- staging fisico già validato;
+- production fisica già validata;
+- cross-cluster runtime già eseguito;
+- Secret reali cross-cluster già letti;
+- RBAC reale cross-cluster già verificato;
+- rollback fisico cross-cluster già testato;
 - produzione enterprise definitiva.
 
 Questi elementi restano deferred per indisponibilita infrastrutturale.
@@ -6062,7 +6062,7 @@ staging
 production
 ```
 
-Ogni ambiente puo avere metadati specifici come namespace, Tekton namespace, Argo CD Application e validation path.
+Ogni ambiente può avere metadati specifici come namespace, Tekton namespace, Argo CD Application e validation path.
 
 Questo e il primo passo per evitare hardcoding.
 
@@ -6127,7 +6127,7 @@ Il sistema non deve cercare un provider alternativo in modo implicito.
 
 ### 31.9 No fallback a ocp-dev
 
-Il principio piu importante e evitare fallback silenziosi verso `ocp-dev`.
+Il principio più importante e evitare fallback silenziosi verso `ocp-dev`.
 
 Oggi `ocp-dev` e il cluster fisico disponibile.
 
@@ -6152,8 +6152,8 @@ production -> ocp-production-simulated
 
 Questi test validano che:
 
-- staging puo risolvere un cluster diverso da `ocp-dev`;
-- production puo risolvere un cluster diverso da `ocp-dev`;
+- staging può risolvere un cluster diverso da `ocp-dev`;
+- production può risolvere un cluster diverso da `ocp-dev`;
 - il cluster risolto resta preservato nel target runtime;
 - non avviene fallback verso `ocp-dev`;
 - provider mancante fallisce fail-closed;
@@ -6165,11 +6165,11 @@ Non e una validazione fisica runtime.
 
 ### 31.11 Secret reference readiness
 
-Un cluster reale richiedera credenziali o riferimenti tecnici.
+Un cluster reale richiederà credenziali o riferimenti tecnici.
 
 Il modello corretto usa Secret references, non valori raw.
 
-Una Secret reference puo descrivere:
+Una Secret reference può descrivere:
 
 - namespace del Secret;
 - nome del Secret;
@@ -6260,7 +6260,7 @@ Gli operatori devono sapere che:
 
 La UI deve mostrare il target corrente, ma non deve dichiarare cio che non e fisicamente validato.
 
-Quindi la UI puo mostrare:
+Quindi la UI può mostrare:
 
 - dev, staging, production;
 - namespace associati;
@@ -6268,7 +6268,7 @@ Quindi la UI puo mostrare:
 - Tekton validation evidence;
 - Argo CD evidence.
 
-La UI non deve suggerire che staging e production siano gia cluster fisici separati.
+La UI non deve suggerire che staging e production siano già cluster fisici separati.
 
 ### 31.18 Cosa resta deferred
 
@@ -6287,7 +6287,7 @@ Questi elementi richiedono infrastruttura non ancora disponibile.
 
 ### 31.19 Criteri per futuro onboarding
 
-Quando un cluster reale sara disponibile, l'onboarding dovra seguire criteri chiari:
+Quando un cluster reale sarà disponibile, l'onboarding dovrà seguire criteri chiari:
 
 - cluster identity documentata;
 - Environment Catalog aggiornato;
@@ -6303,9 +6303,9 @@ Quando un cluster reale sara disponibile, l'onboarding dovra seguire criteri chi
 
 ### 31.20 Sintesi
 
-La multi-cluster code-ready baseline e uno dei risultati piu importanti del progetto.
+La multi-cluster code-ready baseline e uno dei risultati più importanti del progetto.
 
-Il DevOps Control Plane non e ancora fisicamente validato su piu cluster, ma e pronto a livello codice e modello per supportare cluster futuri.
+Il DevOps Control Plane non e ancora fisicamente validato su più cluster, ma e pronto a livello codice e modello per supportare cluster futuri.
 
 La baseline attuale resta namespace-isolated su `ocp-dev`.
 
@@ -6318,9 +6318,9 @@ Multi-cluster code readiness is completed, tested, documented and fail-closed.
 
 ## 31. Deferred real-cluster onboarding contract
 
-Il deferred real-cluster onboarding contract descrive le regole da seguire quando sara disponibile un cluster OpenShift reale aggiuntivo.
+Il deferred real-cluster onboarding contract descrive le regole da seguire quando sarà disponibile un cluster OpenShift reale aggiuntivo.
 
-Questo capitolo e importante perche separa chiaramente due concetti:
+Questo capitolo e importante perché separa chiaramente due concetti:
 
 ```text
 readiness multi-cluster a livello codice
@@ -6329,9 +6329,9 @@ validazione fisica multi-cluster reale
 
 La readiness a livello codice e completata, testata e documentata. La validazione fisica resta rinviata per indisponibilita di cluster aggiuntivi.
 
-Il contratto di onboarding serve a garantire che, quando un cluster reale sara disponibile, l'integrazione avvenga in modo controllato, sicuro, verificabile e reversibile.
+Il contratto di onboarding serve a garantire che, quando un cluster reale sarà disponibile, l'integrazione avvenga in modo controllato, sicuro, verificabile e reversibile.
 
-### 32.1 Perche l'onboarding reale e deferred
+### 32.1 Perché l'onboarding reale e deferred
 
 L'onboarding reale e deferred per un motivo infrastrutturale: attualmente e disponibile solo il cluster `ocp-dev`.
 
@@ -6456,7 +6456,7 @@ Informazioni richieste:
 - provider metadata;
 - descrizione operativa.
 
-Il cluster deve partire disabilitato o comunque non utilizzabile per runtime reale finche non sono completate le readiness gates.
+Il cluster deve partire disabilitato o comunque non utilizzabile per runtime reale finché non sono completate le readiness gates.
 
 ### 32.7 Secret references
 
@@ -6464,7 +6464,7 @@ Un cluster reale richiede credenziali.
 
 Il modello corretto usa Secret references, non valori raw.
 
-Una Secret reference puo indicare:
+Una Secret reference può indicare:
 
 ```text
 secretNamespace = devops-control-plane
@@ -6535,7 +6535,7 @@ sync=Synced
 health=Healthy
 ```
 
-Se Argo CD non puo osservare correttamente il target, l'onboarding non deve essere completato.
+Se Argo CD non può osservare correttamente il target, l'onboarding non deve essere completato.
 
 ### 32.11 Requisiti Tekton
 
@@ -6644,7 +6644,7 @@ Il rollback deve essere preparato prima dell'onboarding, non dopo il fallimento.
 
 ### 32.17 Exit criteria
 
-L'onboarding reale puo essere considerato completato solo se:
+L'onboarding reale può essere considerato completato solo se:
 
 - il cluster reale e documentato;
 - Environment Catalog e Cluster Registry sono coerenti;
@@ -6679,13 +6679,13 @@ Il deferred real-cluster onboarding contract consente al progetto di essere pron
 
 Il DevOps Control Plane e multi-cluster code-ready, ma la validazione fisica cross-cluster resta deferred.
 
-Quando un cluster reale sara disponibile, l'onboarding dovra seguire questo contratto per mantenere sicurezza, tracciabilita, fail-closed behavior e operability.
+Quando un cluster reale sarà disponibile, l'onboarding dovrà seguire questo contratto per mantenere sicurezza, tracciabilita, fail-closed behavior e operability.
 
 ## 32. RBAC
 
-RBAC, cioe Role-Based Access Control, e il modello con cui Kubernetes e OpenShift controllano quali azioni possono essere eseguite da utenti, gruppi e ServiceAccount.
+RBAC, cioè Role-Based Access Control, e il modello con cui Kubernetes e OpenShift controllano quali azioni possono essere eseguite da utenti, gruppi e ServiceAccount.
 
-Nel DevOps Control Plane, RBAC e un guardrail fondamentale. La piattaforma deve poter osservare runtime, leggere stati, creare o controllare PipelineRun e raccogliere evidence, ma non deve ricevere permessi piu ampi del necessario.
+Nel DevOps Control Plane, RBAC e un guardrail fondamentale. La piattaforma deve poter osservare runtime, leggere stati, creare o controllare PipelineRun e raccogliere evidence, ma non deve ricevere permessi più ampi del necessario.
 
 Il principio guida e:
 
@@ -6695,9 +6695,9 @@ grant the minimum permissions required for the workflow
 
 RBAC deve quindi essere progettato per supportare le azioni tecniche necessarie e, allo stesso tempo, ridurre il rischio operativo.
 
-### 33.1 Perche RBAC e importante
+### 33.1 Perché RBAC e importante
 
-Il DevOps Control Plane interagisce con piu sistemi e namespace.
+Il DevOps Control Plane interagisce con più sistemi e namespace.
 
 Esempi:
 
@@ -6724,7 +6724,7 @@ Per il DevOps Control Plane, questo significa evitare scorciatoie come:
 - permessi di scrittura non necessari;
 - grant temporanei non documentati.
 
-Ogni permesso deve essere collegato a una necessita operativa chiara.
+Ogni permesso deve essere collegato a una necessità operativa chiara.
 
 ### 33.3 Namespace-scoped RBAC
 
@@ -6744,7 +6744,7 @@ Un permesso valido in `devops-ci-demo` non implica che lo stesso permesso sia va
 
 ### 33.4 ServiceAccount
 
-Un ServiceAccount rappresenta l'identita tecnica usata da un workload o da una pipeline.
+Un ServiceAccount rappresenta l'identità tecnica usata da un workload o da una pipeline.
 
 Il DevOps Control Plane e Tekton possono usare ServiceAccount per eseguire azioni controllate.
 
@@ -6789,7 +6789,7 @@ Questo riduce il rischio di accessi cross-namespace non controllati.
 
 ### 33.6 Permessi per runtime evidence
 
-Per raccogliere runtime evidence, il sistema puo avere bisogno di permessi read-only su risorse applicative.
+Per raccogliere runtime evidence, il sistema può avere bisogno di permessi read-only su risorse applicative.
 
 Permessi tipici:
 
@@ -6806,7 +6806,7 @@ Non devono implicare modifiche al workload, salvo che una specifica azione appro
 
 ### 33.7 Permessi per Tekton
 
-Per la validazione Tekton, il sistema puo avere bisogno di permessi nel namespace Tekton target.
+Per la validazione Tekton, il sistema può avere bisogno di permessi nel namespace Tekton target.
 
 Permessi tipici:
 
@@ -6827,7 +6827,7 @@ production -> devops-ci-production
 
 ### 33.8 Permessi per Argo CD
 
-Argo CD puo essere consultato per leggere lo stato delle Application.
+Argo CD può essere consultato per leggere lo stato delle Application.
 
 Il DevOps Control Plane deve poter ottenere informazioni come:
 
@@ -6843,7 +6843,7 @@ Non devono includere privilegi amministrativi non necessari su Argo CD.
 
 ### 33.9 Permessi sui Secret
 
-I permessi sui Secret sono tra i piu delicati.
+I permessi sui Secret sono tra i più delicati.
 
 Il modello preferito e usare Secret references e allow-list.
 
@@ -6884,7 +6884,7 @@ La UI deve rispettare il modello di autorizzazione.
 
 Gli utenti non autorizzati non devono poter attivare azioni tecniche sensibili.
 
-La UI puo mostrare o nascondere azioni in base al ruolo, ma il backend deve restare il punto di enforcement.
+La UI può mostrare o nascondere azioni in base al ruolo, ma il backend deve restare il punto di enforcement.
 
 La regola e:
 
@@ -6909,7 +6909,7 @@ Non bisogna risolvere il problema assegnando subito `cluster-admin`.
 
 ### 33.13 RBAC e multi-cluster readiness
 
-In futuro, quando saranno disponibili cluster fisici diversi, RBAC dovra essere verificato per ogni cluster.
+In futuro, quando saranno disponibili cluster fisici diversi, RBAC dovrà essere verificato per ogni cluster.
 
 Esempio futuro:
 
@@ -6958,7 +6958,7 @@ Permette al sistema di osservare e validare il runtime senza concedere privilegi
 
 Nella baseline namespace-isolated, RBAC deve essere verificato per dev, staging e production.
 
-Nel futuro multi-cluster, RBAC dovra essere validato per ogni cluster reale, mantenendo il principio del minimo privilegio e il comportamento fail-closed.
+Nel futuro multi-cluster, RBAC dovrà essere validato per ogni cluster reale, mantenendo il principio del minimo privilegio e il comportamento fail-closed.
 
 ## 33. Secret reference model
 
@@ -6970,11 +6970,11 @@ Nel progetto, la regola e semplice:
 reference yes, raw secret no
 ```
 
-Questo significa che il sistema puo conoscere il riferimento a un Secret, il namespace in cui si trova e la chiave attesa, ma non deve esporre il valore del Secret nei log, nelle evidence, nella UI, nella documentazione o nei commit.
+Questo significa che il sistema può conoscere il riferimento a un Secret, il namespace in cui si trova e la chiave attesa, ma non deve esporre il valore del Secret nei log, nelle evidence, nella UI, nella documentazione o nei commit.
 
-Il Secret reference model e uno dei guardrail piu importanti per la futura readiness multi-cluster.
+Il Secret reference model e uno dei guardrail più importanti per la futura readiness multi-cluster.
 
-### 34.1 Perche serve un Secret reference model
+### 34.1 Perché serve un Secret reference model
 
 Il DevOps Control Plane integra sistemi che possono richiedere credenziali:
 
@@ -7077,7 +7077,7 @@ Queste references non devono contenere il valore della credenziale.
 
 Il Secret reference registry permette di associare references ai cluster o ai provider.
 
-In questo modo, quando il backend risolve un target runtime, puo anche determinare quali references sarebbero necessarie per operare su quel target.
+In questo modo, quando il backend risolve un target runtime, può anche determinare quali references sarebbero necessarie per operare su quel target.
 
 Esempio concettuale:
 
@@ -7107,7 +7107,7 @@ not allow-listed means not readable
 
 ### 34.8 Runtime Secret loader
 
-Il runtime Secret loader e il componente che puo caricare valori reali dai Secret.
+Il runtime Secret loader e il componente che può caricare valori reali dai Secret.
 
 Nel baseline corrente, il loader resta disabled by default.
 
@@ -7148,7 +7148,7 @@ RBAC deve limitare:
 
 - quali Secret possono essere letti;
 - in quale namespace;
-- da quale identita tecnica;
+- da quale identità tecnica;
 - per quale workflow.
 
 La combinazione corretta e:
@@ -7197,7 +7197,7 @@ token = actual-token-value
 
 ### 34.13 Relazione con UI
 
-La UI puo mostrare metadati sicuri sulle references, se utile.
+La UI può mostrare metadati sicuri sulle references, se utile.
 
 Esempi di dati mostrabili:
 
@@ -7221,7 +7221,7 @@ La UI deve aiutare l'operatore senza trasformarsi in una superficie di esposizio
 
 Il Secret reference model e essenziale per il futuro multi-cluster.
 
-Quando un cluster reale sara disponibile, il sistema dovra sapere quali credenziali usare per quel cluster.
+Quando un cluster reale sarà disponibile, il sistema dovrà sapere quali credenziali usare per quel cluster.
 
 Tuttavia, deve continuare a non salvare valori raw.
 
@@ -7285,13 +7285,13 @@ Il Secret reference model permette al DevOps Control Plane di prepararsi al mult
 
 Il modello conserva riferimenti, non valori.
 
-Insieme a allow-list, RBAC, runtime Secret loader disabled-by-default e evidence sanitization, rappresenta uno dei guardrail di sicurezza piu importanti della piattaforma.
+Insieme a allow-list, RBAC, runtime Secret loader disabled-by-default e evidence sanitization, rappresenta uno dei guardrail di sicurezza più importanti della piattaforma.
 
 ## 34. Runtime factories
 
 Le runtime factories sono i componenti che preparano o costruiscono client runtime per interagire con sistemi esterni come Kubernetes/OpenShift, Tekton e Argo CD.
 
-Nel DevOps Control Plane, le runtime factories sono un elemento importante della readiness multi-cluster, ma sono anche un punto delicato dal punto di vista della sicurezza. Una factory puo trasformare configurazioni, Secret references e parametri runtime in un client capace di comunicare con un cluster o con un servizio esterno.
+Nel DevOps Control Plane, le runtime factories sono un elemento importante della readiness multi-cluster, ma sono anche un punto delicato dal punto di vista della sicurezza. Una factory può trasformare configurazioni, Secret references e parametri runtime in un client capace di comunicare con un cluster o con un servizio esterno.
 
 Per questo motivo il principio operativo e conservativo:
 
@@ -7301,11 +7301,11 @@ runtime factories are disabled by default and must fail closed
 
 Una factory non configurata o non abilitata non deve produrre client reali.
 
-### 35.1 Perche servono le runtime factories
+### 35.1 Perché servono le runtime factories
 
 Il DevOps Control Plane deve poter evolvere da una baseline namespace-isolated su `ocp-dev` verso un modello futuro multi-cluster.
 
-Per operare su cluster reali diversi, il backend avra bisogno di client runtime configurati correttamente.
+Per operare su cluster reali diversi, il backend avrà bisogno di client runtime configurati correttamente.
 
 Esempi:
 
@@ -7320,7 +7320,7 @@ Le runtime factories permettono di costruire questi client in modo controllato.
 
 La Kubernetes runtime client factory e responsabile della costruzione di client verso Kubernetes/OpenShift.
 
-Un client Kubernetes puo essere usato per:
+Un client Kubernetes può essere usato per:
 
 - leggere Deployment;
 - leggere Pod;
@@ -7337,7 +7337,7 @@ Se questi dati mancano, la factory deve fallire fail-closed.
 
 La Tekton runtime client factory e responsabile della costruzione di client o adapter per interagire con Tekton.
 
-Un client Tekton puo essere usato per:
+Un client Tekton può essere usato per:
 
 - creare PipelineRun;
 - leggere PipelineRun;
@@ -7352,7 +7352,7 @@ Anche in questo caso, il client deve essere costruito solo se il contesto e sicu
 
 La Argo CD runtime client factory e responsabile della costruzione di client verso Argo CD.
 
-Un client Argo CD puo essere usato per:
+Un client Argo CD può essere usato per:
 
 - leggere Application;
 - leggere sync status;
@@ -7383,7 +7383,7 @@ Il default conservativo e parte della sicurezza della piattaforma.
 
 ### 35.6 Capability-specific enablement
 
-Le factory devono essere abilitate per capacita specifica.
+Le factory devono essere abilitate per capacità specifica.
 
 Esempi:
 
@@ -7394,7 +7394,7 @@ Esempi:
 
 Questa granularita riduce il rischio operativo.
 
-Se un onboarding richiede solo lettura Kubernetes, non bisogna abilitare anche Argo CD o Tekton senza necessita.
+Se un onboarding richiede solo lettura Kubernetes, non bisogna abilitare anche Argo CD o Tekton senza necessità.
 
 ### 35.7 Relazione con Secret references
 
@@ -7416,7 +7416,7 @@ La factory deve essere alimentata da un percorso controllato, sanificato e appro
 
 Anche se una factory costruisce correttamente un client, il client deve operare con permessi minimi.
 
-RBAC deve limitare cosa puo fare quel client.
+RBAC deve limitare cosa può fare quel client.
 
 Esempi:
 
@@ -7434,7 +7434,7 @@ Le runtime factories sono collegate al provider registry.
 
 Il provider registry seleziona il provider associato al cluster risolto.
 
-La factory puo poi costruire i client necessari per quel provider.
+La factory può poi costruire i client necessari per quel provider.
 
 Flusso concettuale:
 
@@ -7483,7 +7483,7 @@ Non devono essere trattati come problemi da aggirare rapidamente.
 
 Nel modello corrente, l'uso di kubeconfig raw non deve essere considerato il percorso preferito.
 
-Il kubeconfig puo contenere credenziali, endpoint, certificati e informazioni sensibili.
+Il kubeconfig può contenere credenziali, endpoint, certificati e informazioni sensibili.
 
 La piattaforma deve preferire token references e configurazioni controllate.
 
@@ -7493,7 +7493,7 @@ Se una factory riceve kubeconfig non supportato, il comportamento corretto e fai
 
 Anche la raw CA deve essere gestita con cautela.
 
-Materiale CA non controllato o non referenziato correttamente puo introdurre rischi di sicurezza e configurazione.
+Materiale CA non controllato o non referenziato correttamente può introdurre rischi di sicurezza e configurazione.
 
 Se la raw CA non e supportata nel modello corrente, la factory deve fallire in modo esplicito.
 
@@ -7523,7 +7523,7 @@ Il sistema deve continuare a impedire fallback silenziosi verso `ocp-dev`.
 
 ### 35.15 Relazione con deferred onboarding
 
-Il deferred real-cluster onboarding contract definisce quando una factory puo essere realmente abilitata.
+Il deferred real-cluster onboarding contract definisce quando una factory può essere realmente abilitata.
 
 Prima di abilitare una factory, devono essere disponibili:
 
@@ -7542,7 +7542,7 @@ Senza questi prerequisiti, la factory deve restare disabilitata.
 
 ### 35.16 Relazione con evidence
 
-Quando una factory viene usata correttamente, il risultato delle operazioni puo produrre evidence.
+Quando una factory viene usata correttamente, il risultato delle operazioni può produrre evidence.
 
 Esempi:
 
@@ -7554,7 +7554,7 @@ Le evidence devono indicare il contesto operativo, ma non devono mostrare creden
 
 ### 35.17 Relazione con UI
 
-La UI puo mostrare errori fail-closed legati alle factory, se utili all'operatore.
+La UI può mostrare errori fail-closed legati alle factory, se utili all'operatore.
 
 Esempi:
 
@@ -7612,13 +7612,13 @@ Questo comportamento e essenziale per la sicurezza attuale e per il futuro multi
 
 AuthN e AuthZ rappresentano due aspetti distinti della sicurezza applicativa.
 
-AuthN, cioe authentication, risponde alla domanda:
+AuthN, cioè authentication, risponde alla domanda:
 
 ```text
 Chi e l'utente o il sistema che sta accedendo?
 ```
 
-AuthZ, cioe authorization, risponde alla domanda:
+AuthZ, cioè authorization, risponde alla domanda:
 
 ```text
 Che cosa puo fare quell'utente o quel sistema?
@@ -7626,7 +7626,7 @@ Che cosa puo fare quell'utente o quel sistema?
 
 Nel DevOps Control Plane, questi concetti sono importanti per proteggere API, UI e azioni tecniche. La piattaforma non deve permettere a utenti non autorizzati di eseguire workflow sensibili come validazioni runtime, controlli deployment o operazioni future multi-cluster.
 
-### 36.1 Perche AuthN/AuthZ e importante
+### 36.1 Perché AuthN/AuthZ e importante
 
 Il DevOps Control Plane gestisce informazioni operative e azioni tecniche.
 
@@ -7640,7 +7640,7 @@ Esempi:
 - visualizzare runtime diagnostics;
 - in futuro, operare su cluster fisici diversi.
 
-Queste capacita richiedono un modello di accesso controllato.
+Queste capacità richiedono un modello di accesso controllato.
 
 Un utente non autorizzato non deve poter attivare azioni tecniche o consultare dettagli non consentiti.
 
@@ -7648,7 +7648,7 @@ Un utente non autorizzato non deve poter attivare azioni tecniche o consultare d
 
 Autenticazione significa identificare chi accede.
 
-Autorizzazione significa decidere cosa puo fare l'identita autenticata.
+Autorizzazione significa decidere cosa può fare l'identità autenticata.
 
 Esempio:
 
@@ -7659,15 +7659,15 @@ azione richiesta = validate ChangeRequest
 risultato autorizzazione = allowed or denied
 ```
 
-Un utente puo essere autenticato ma non autorizzato a eseguire una specifica azione.
+Un utente può essere autenticato ma non autorizzato a eseguire una specifica azione.
 
 ### 36.3 OAuth proxy
 
 L'OAuth proxy e il componente che protegge l'accesso alla UI e alle route HTTP esposte.
 
-Il proxy puo gestire autenticazione, sessione e propagazione di header verso il backend.
+Il proxy può gestire autenticazione, sessione e propagazione di header verso il backend.
 
-Nel modello del progetto, il backend puo ricevere header come:
+Nel modello del progetto, il backend può ricevere header come:
 
 ```text
 X-Forwarded-User
@@ -7713,7 +7713,7 @@ Anche se le evidence sono sanificate, la UI resta una superficie operativa e dev
 
 ### 36.6 Gruppi e ruoli
 
-L'autorizzazione puo basarsi su gruppi o ruoli.
+L'autorizzazione può basarsi su gruppi o ruoli.
 
 Esempi concettuali:
 
@@ -7722,15 +7722,15 @@ devops-control-plane-admins
 devops-control-plane-viewers
 ```
 
-Un admin puo avere accesso ad azioni tecniche.
+Un admin può avere accesso ad azioni tecniche.
 
-Un viewer puo essere limitato alla consultazione.
+Un viewer può essere limitato alla consultazione.
 
 Il modello deve essere fail-closed: se il ruolo non e riconosciuto o non consente l'azione, l'azione deve essere negata.
 
 ### 36.7 Role-aware UI
 
-La UI puo mostrare o nascondere azioni in base al ruolo.
+La UI può mostrare o nascondere azioni in base al ruolo.
 
 Esempi di azioni tecniche:
 
@@ -7739,7 +7739,7 @@ Esempi di azioni tecniche:
 - validate;
 - check validation.
 
-La UI puo evitare di mostrare un pulsante a un utente non autorizzato.
+La UI può evitare di mostrare un pulsante a un utente non autorizzato.
 
 Tuttavia, la UI non e il punto di sicurezza finale.
 
@@ -7788,9 +7788,9 @@ Un default allow sarebbe rischioso.
 
 AuthN/AuthZ applicativo e RBAC Kubernetes non sono la stessa cosa.
 
-AuthN/AuthZ applicativo controlla cosa puo fare un utente nella piattaforma DevOps Control Plane.
+AuthN/AuthZ applicativo controlla cosa può fare un utente nella piattaforma DevOps Control Plane.
 
-RBAC Kubernetes controlla cosa puo fare il ServiceAccount o il client runtime nel cluster.
+RBAC Kubernetes controlla cosa può fare il ServiceAccount o il client runtime nel cluster.
 
 Entrambi sono necessari.
 
@@ -7813,9 +7813,9 @@ RBAC Kubernetes permette o nega
 
 Le evidence possono essere visualizzate nella UI, ma devono essere sanificate.
 
-AuthZ decide chi puo vedere quelle evidence.
+AuthZ decide chi può vedere quelle evidence.
 
-Evidence sanitization decide cosa puo essere mostrato.
+Evidence sanitization decide cosa può essere mostrato.
 
 Sono due controlli complementari.
 
@@ -7823,7 +7823,7 @@ Un utente autorizzato non deve comunque vedere Secret raw o token.
 
 ### 36.12 Relazione con OAuth proxy rollout
 
-La configurazione dell'OAuth proxy puo essere oggetto di manutenzione.
+La configurazione dell'OAuth proxy può essere oggetto di manutenzione.
 
 Dopo modifiche al proxy bisogna verificare:
 
@@ -7857,7 +7857,7 @@ Se la dashboard non risponde o restituisce 403/401, bisogna distinguere tra:
 
 ### 36.14 Relazione con multi-cluster readiness
 
-Quando saranno disponibili cluster reali, AuthN/AuthZ diventera ancora piu importante.
+Quando saranno disponibili cluster reali, AuthN/AuthZ diventera ancora più importante.
 
 Azioni future multi-cluster potranno avere impatti maggiori.
 
@@ -7905,7 +7905,7 @@ AuthN/AuthZ e OAuth proxy proteggono l'accesso al DevOps Control Plane.
 
 L'autenticazione identifica chi accede.
 
-L'autorizzazione decide cosa puo fare.
+L'autorizzazione decide cosa può fare.
 
 Il proxy protegge la superficie HTTP e propaga il contesto utente.
 
@@ -7915,7 +7915,7 @@ Insieme a RBAC, Secret references, evidence sanitization e runtime factories dis
 
 ## 36. Error handling
 
-L'error handling del DevOps Control Plane definisce come il sistema deve comportarsi quando un'operazione non puo essere completata correttamente.
+L'error handling del DevOps Control Plane definisce come il sistema deve comportarsi quando un'operazione non può essere completata correttamente.
 
 Nel progetto, un errore non deve essere considerato solo come una condizione tecnica da stampare nei log. Un errore deve essere interpretato, classificato, reso comprensibile, collegato alla `ChangeRequest` quando possibile e gestito in modo sicuro.
 
@@ -7927,9 +7927,9 @@ fail clearly, fail safely, preserve evidence
 
 Questo significa che il sistema deve preferire un errore esplicito e sicuro rispetto a un comportamento implicito, ambiguo o potenzialmente pericoloso.
 
-### 37.1 Perche l'error handling e importante
+### 37.1 Perché l'error handling e importante
 
-Il DevOps Control Plane coordina piu sistemi:
+Il DevOps Control Plane coordina più sistemi:
 
 - PostgreSQL;
 - GitLab;
@@ -7941,7 +7941,7 @@ Il DevOps Control Plane coordina piu sistemi:
 - Secret references;
 - runtime factories.
 
-Ogni integrazione puo fallire per motivi diversi.
+Ogni integrazione può fallire per motivi diversi.
 
 Senza una gestione coerente degli errori, l'operatore rischia di non capire:
 
@@ -7998,7 +7998,7 @@ Il sistema non deve tentare di correggere automaticamente input ambigui.
 
 ### 37.4 Authorization error
 
-Un authorization error si verifica quando un utente autenticato non puo eseguire una certa azione.
+Un authorization error si verifica quando un utente autenticato non può eseguire una certa azione.
 
 Esempi:
 
@@ -8015,7 +8015,7 @@ Comportamento atteso:
 fail closed with explicit authorization denial
 ```
 
-La UI puo nascondere azioni non consentite, ma il backend deve comunque applicare autorizzazione.
+La UI può nascondere azioni non consentite, ma il backend deve comunque applicare autorizzazione.
 
 ### 37.5 Environment resolution error
 
@@ -8079,11 +8079,11 @@ Comportamento atteso:
 fail closed without printing secret values
 ```
 
-L'errore puo citare il nome della reference, ma non deve mai mostrare il valore del Secret.
+L'errore può citare il nome della reference, ma non deve mai mostrare il valore del Secret.
 
 ### 37.8 Runtime factory error
 
-Un runtime factory error si verifica quando una factory non puo costruire un client runtime.
+Un runtime factory error si verifica quando una factory non può costruire un client runtime.
 
 Esempi:
 
@@ -8112,7 +8112,7 @@ Esempi:
 
 - repository non raggiungibile;
 - token GitLab non valido;
-- branch gia esistente;
+- branch già esistente;
 - merge request non creata;
 - merge request non mergeabile;
 - errore TLS;
@@ -8127,7 +8127,7 @@ Comportamento atteso:
 
 ### 37.10 Argo CD error
 
-Un Argo CD error puo verificarsi quando il sistema non riesce a leggere o interpretare lo stato GitOps.
+Un Argo CD error può verificarsi quando il sistema non riesce a leggere o interpretare lo stato GitOps.
 
 Esempi:
 
@@ -8310,7 +8310,7 @@ Non tutti gli errori devono essere risolti con retry immediato.
 
 Prima di riprovare, bisogna capire la categoria di errore.
 
-Retry puo avere senso per:
+Retry può avere senso per:
 
 - problemi temporanei di rete;
 - API momentaneamente indisponibile;
@@ -8345,7 +8345,7 @@ Un errore classificato correttamente riduce il tempo di diagnosi.
 
 ### 37.20 Relazione con multi-cluster readiness
 
-Nel futuro multi-cluster, l'error handling diventa ancora piu importante.
+Nel futuro multi-cluster, l'error handling diventa ancora più importante.
 
 Un errore di target o provider non deve portare a un'azione sul cluster sbagliato.
 
@@ -8383,7 +8383,7 @@ staging    -> ocp-dev / devops-ci-staging
 production -> ocp-dev / devops-ci-production
 ```
 
-La validazione fisica multi-cluster resta deferred. Gli health check operativi devono quindi validare la baseline namespace-isolated fino a disponibilita di cluster reali aggiuntivi.
+La validazione fisica multi-cluster resta deferred. Gli health check operativi devono quindi validare la baseline namespace-isolated fino a disponibilità di cluster reali aggiuntivi.
 
 ### 38.1 Obiettivo dell'health check
 
@@ -8439,7 +8439,7 @@ Output atteso:
 nessun output
 ```
 
-Un working tree sporco non significa necessariamente che la piattaforma non funzioni, ma puo rendere ambigua la raccolta di evidenze o la riproducibilita dei comandi.
+Un working tree sporco non significa necessariamente che la piattaforma non funzioni, ma può rendere ambigua la raccolta di evidenze o la riproducibilita dei comandi.
 
 ### 38.4 DevOps Control Plane pod check
 
@@ -8475,7 +8475,7 @@ Controllo atteso:
 readyz_http=200
 ```
 
-Il controllo puo essere eseguito tramite port-forward o route, in base alla procedura operativa.
+Il controllo può essere eseguito tramite port-forward o route, in base alla procedura operativa.
 
 Esempio tramite port-forward:
 
@@ -8669,7 +8669,7 @@ L'health check corrente valida la baseline namespace-isolated.
 
 Non valida cluster fisici separati.
 
-Quando saranno disponibili cluster reali, la matrice dovra essere estesa con controlli cross-cluster.
+Quando saranno disponibili cluster reali, la matrice dovrà essere estesa con controlli cross-cluster.
 
 Per il momento la posizione corretta resta:
 
@@ -8688,7 +8688,7 @@ E il primo strumento da usare per capire se la piattaforma e operativa e coerent
 
 ## 38. Maintenance operations
 
-Le maintenance operations descrivono come eseguire attivita controllate di manutenzione sul DevOps Control Plane senza compromettere la baseline validata, le evidenze operative, la UI, i workflow Tekton, lo stato Argo CD o i guardrail di sicurezza.
+Le maintenance operations descrivono come eseguire attività controllate di manutenzione sul DevOps Control Plane senza compromettere la baseline validata, le evidenze operative, la UI, i workflow Tekton, lo stato Argo CD o i guardrail di sicurezza.
 
 La manutenzione non deve essere vista come una semplice serie di comandi tecnici. Deve essere un processo controllato, documentato e reversibile.
 
@@ -8704,7 +8704,7 @@ La validazione fisica multi-cluster resta deferred, quindi la manutenzione corre
 
 ### 39.1 Obiettivo della manutenzione
 
-L'obiettivo della manutenzione e permettere aggiornamenti, verifiche e interventi controllati senza perdere operativita o tracciabilita.
+L'obiettivo della manutenzione e permettere aggiornamenti, verifiche e interventi controllati senza perdere operatività o tracciabilita.
 
 Esempi di manutenzione:
 
@@ -8733,7 +8733,7 @@ Ogni manutenzione deve seguire alcuni principi:
 - distinguere ambiente logico, namespace e cluster;
 - mantenere rollback pronto;
 - non bypassare guardrail fail-closed;
-- chiudere l'attivita solo dopo smoke test positivo.
+- chiudere l'attività solo dopo smoke test positivo.
 
 La manutenzione deve essere dimostrabile, non solo eseguita.
 
@@ -8808,7 +8808,7 @@ Dopo una modifica ConfigMap bisogna verificare:
 - nessun cambio inatteso su namespace o target;
 - nessuna regressione su evidence rendering.
 
-Una ConfigMap errata puo produrre problemi anche se il pod si avvia correttamente.
+Una ConfigMap errata può produrre problemi anche se il pod si avvia correttamente.
 
 ### 39.7 Manutenzione Secret e token
 
@@ -8912,7 +8912,7 @@ Prima di manutenzioni rischiose bisogna considerare:
 - persistenza ChangeEvent;
 - persistenza Evidence.
 
-Un problema PostgreSQL puo compromettere UI, workflow e audit trail anche se GitOps e cluster restano disponibili.
+Un problema PostgreSQL può compromettere UI, workflow e audit trail anche se GitOps e cluster restano disponibili.
 
 ### 39.13 Manutenzione UI
 
@@ -8944,7 +8944,7 @@ Dopo modifiche a Environment Catalog o Cluster Registry bisogna verificare:
 - provider selection;
 - no fallback a `ocp-dev` non previsto.
 
-Ogni modifica a questi modelli puo influenzare dove vengono eseguite le azioni tecniche.
+Ogni modifica a questi modelli può influenzare dove vengono eseguite le azioni tecniche.
 
 ### 39.15 Manutenzione Secret/RBAC/factory guardrails
 
@@ -8953,8 +8953,8 @@ Dopo modifiche a Secret references, RBAC o runtime factories bisogna verificare:
 - Secret references definite e non valori raw;
 - allow-list coerente;
 - RBAC minimo;
-- loader disabled salvo necessita esplicita;
-- factory disabled salvo necessita esplicita;
+- loader disabled salvo necessità esplicita;
+- factory disabled salvo necessità esplicita;
 - provider missing e disabled ancora fail-closed;
 - nessun token nei log o nelle evidence.
 
@@ -8980,7 +8980,7 @@ In questi casi bisogna preservare evidence e passare a troubleshooting.
 
 ### 39.17 Closure criteria
 
-Una manutenzione puo essere chiusa quando:
+Una manutenzione può essere chiusa quando:
 
 - pre-maintenance evidence e stata raccolta;
 - azioni eseguite sono documentate;
@@ -9028,7 +9028,7 @@ La manutenzione e parte integrante dell'operability della piattaforma.
 
 Il troubleshooting del DevOps Control Plane e il processo con cui un operatore identifica, classifica e risolve problemi che possono emergere durante il normale funzionamento della piattaforma.
 
-Il DevOps Control Plane integra backend Go, PostgreSQL, GitLab, Argo CD, Tekton, Kubernetes/OpenShift, OAuth proxy, UI, RBAC, Secret references e runtime factories. Un problema operativo puo quindi nascere in layer diversi.
+Il DevOps Control Plane integra backend Go, PostgreSQL, GitLab, Argo CD, Tekton, Kubernetes/OpenShift, OAuth proxy, UI, RBAC, Secret references e runtime factories. Un problema operativo può quindi nascere in layer diversi.
 
 Lo scopo del troubleshooting e ridurre l'ambiguita:
 
@@ -9053,7 +9053,7 @@ Durante troubleshooting bisogna seguire alcuni principi:
 - non forzare fallback verso `ocp-dev`;
 - documentare il risultato.
 
-Un errore esplicito fail-closed puo essere il comportamento corretto.
+Un errore esplicito fail-closed può essere il comportamento corretto.
 
 ### 40.2 Classificazione per layer
 
@@ -9149,7 +9149,7 @@ Controlli:
 - verificare backend authorization;
 - verificare runbook AuthN/AuthZ.
 
-Il backend deve restare fail-closed: se identita o ruolo non sono validi, l'azione deve essere negata.
+Il backend deve restare fail-closed: se identità o ruolo non sono validi, l'azione deve essere negata.
 
 ### 40.6 Problemi backend Go
 
@@ -9195,7 +9195,7 @@ Controlli:
 - backup disponibile;
 - restore isolato se necessario.
 
-PostgreSQL contiene la memoria applicativa del control plane. Un problema database puo compromettere UI, audit ed evidence anche se GitOps e cluster sono sani.
+PostgreSQL contiene la memoria applicativa del control plane. Un problema database può compromettere UI, audit ed evidence anche se GitOps e cluster sono sani.
 
 ### 40.8 Problemi Argo CD
 
@@ -9380,7 +9380,7 @@ Il troubleshooting deve fermarsi e passare a escalation se:
 Quando si escala un incidente, includere:
 
 - summary;
-- priorita;
+- priorità;
 - ambiente;
 - namespace;
 - ChangeRequest;
@@ -9392,13 +9392,13 @@ Quando si escala un incidente, includere:
 - remediation tentata;
 - conferma che nessun Secret e stato esposto.
 
-Questo rende l'escalation piu efficace e sicura.
+Questo rende l'escalation più efficace e sicura.
 
 ### 40.17 Troubleshooting e multi-cluster readiness
 
-Nel futuro multi-cluster, il troubleshooting dovra verificare anche il cluster fisico target.
+Nel futuro multi-cluster, il troubleshooting dovrà verificare anche il cluster fisico target.
 
-La regola restera:
+La regola resterà:
 
 ```text
 if the intended target cannot be proven, stop the operation
@@ -9416,9 +9416,9 @@ Un errore esplicito e sicuro e preferibile a una correzione rapida ma ambigua.
 
 ## 40. Backup, restore e disaster recovery
 
-Backup, restore e disaster recovery sono le pratiche che permettono di proteggere la memoria applicativa e la continuita operativa del DevOps Control Plane.
+Backup, restore e disaster recovery sono le pratiche che permettono di proteggere la memoria applicativa e la continuità operativa del DevOps Control Plane.
 
-Il DevOps Control Plane integra piu sistemi. Alcuni stati vivono nel repository Git, altri nel cluster OpenShift, altri in Argo CD, Tekton o GitLab. Tuttavia, la memoria applicativa del control plane e conservata principalmente in PostgreSQL.
+Il DevOps Control Plane integra più sistemi. Alcuni stati vivono nel repository Git, altri nel cluster OpenShift, altri in Argo CD, Tekton o GitLab. Tuttavia, la memoria applicativa del control plane e conservata principalmente in PostgreSQL.
 
 PostgreSQL contiene:
 
@@ -9429,9 +9429,9 @@ PostgreSQL contiene:
 - stato applicativo usato dalla UI;
 - informazioni necessarie per ricostruire il percorso operativo di una richiesta.
 
-Per questo motivo, backup e restore non sono solo attivita database. Sono parte dell'operability complessiva della piattaforma.
+Per questo motivo, backup e restore non sono solo attività database. Sono parte dell'operability complessiva della piattaforma.
 
-### 41.1 Perche backup e restore sono importanti
+### 41.1 Perché backup e restore sono importanti
 
 Senza backup affidabili, la perdita di PostgreSQL potrebbe causare perdita dello storico applicativo.
 
@@ -9444,7 +9444,7 @@ Anche se GitLab, Argo CD, Tekton e OpenShift continuassero a contenere parte del
 - dati mostrati dalla UI;
 - contesto utile per troubleshooting e compliance.
 
-Il backup protegge quindi la capacita del control plane di spiegare cosa e successo.
+Il backup protegge quindi la capacità del control plane di spiegare cosa e successo.
 
 ### 41.2 Cosa deve essere protetto
 
@@ -9492,9 +9492,9 @@ Significa ripristinare il backup in un ambiente separato o in una destinazione n
 
 Questo permette di verificare:
 
-- integrita del dump;
+- integrità del dump;
 - leggibilita dei dati;
-- disponibilita delle tabelle;
+- disponibilità delle tabelle;
 - presenza di ChangeRequest;
 - presenza di ChangeEvent;
 - presenza di Evidence;
@@ -9504,7 +9504,7 @@ Il restore isolato riduce il rischio operativo.
 
 ### 41.5 Restore attivo
 
-Il restore attivo, cioe su database usato dal DevOps Control Plane, deve essere trattato come operazione ad alto impatto.
+Il restore attivo, cioè su database usato dal DevOps Control Plane, deve essere trattato come operazione ad alto impatto.
 
 Prima di un restore attivo servono:
 
@@ -9520,7 +9520,7 @@ Un restore attivo non deve essere eseguito come tentativo rapido senza procedura
 
 ### 41.6 Disaster recovery
 
-Disaster recovery significa ripristinare la capacita operativa della piattaforma dopo un incidente significativo.
+Disaster recovery significa ripristinare la capacità operativa della piattaforma dopo un incidente significativo.
 
 Possibili scenari:
 
@@ -9538,11 +9538,11 @@ Ogni scenario richiede una strategia diversa.
 
 ### 41.7 Relazione tra GitOps e DR
 
-GitOps aiuta il disaster recovery perche lo stato desiderato delle applicazioni e conservato in Git.
+GitOps aiuta il disaster recovery perché lo stato desiderato delle applicazioni e conservato in Git.
 
 Tuttavia, GitOps non sostituisce il backup PostgreSQL.
 
-Git puo aiutare a ricreare manifest e configurazioni applicative, ma non ricostruisce automaticamente:
+Git può aiutare a ricreare manifest e configurazioni applicative, ma non ricostruisce automaticamente:
 
 - storico ChangeRequest;
 - ChangeEvent;
@@ -9554,9 +9554,9 @@ Per questo motivo GitOps e backup database sono complementari.
 
 ### 41.8 Relazione con Argo CD
 
-Argo CD puo riconciliare applicazioni a partire da Git.
+Argo CD può riconciliare applicazioni a partire da Git.
 
-In uno scenario DR, Argo CD puo aiutare a ripristinare lo stato applicativo dichiarativo.
+In uno scenario DR, Argo CD può aiutare a ripristinare lo stato applicativo dichiarativo.
 
 Tuttavia, se Argo CD stesso e danneggiato o indisponibile, bisogna avere procedure dedicate per:
 
@@ -9579,15 +9579,15 @@ In uno scenario DR, bisogna distinguere tra:
 - workspace;
 - ServiceAccount;
 - RBAC;
-- risultati gia persistiti come evidence nel DevOps Control Plane.
+- risultati già persistiti come evidence nel DevOps Control Plane.
 
-Le PipelineRun storiche potrebbero non essere sufficienti a ricostruire evidence se non sono gia state persistite.
+Le PipelineRun storiche potrebbero non essere sufficienti a ricostruire evidence se non sono già state persistite.
 
 ### 41.10 Relazione con GitLab
 
 GitLab contiene repository, branch, commit e merge request.
 
-Il DevOps Control Plane puo registrare riferimenti a GitLab, ma non sostituisce il backup o la protezione di GitLab.
+Il DevOps Control Plane può registrare riferimenti a GitLab, ma non sostituisce il backup o la protezione di GitLab.
 
 Un DR completo deve considerare:
 
@@ -9635,7 +9635,7 @@ Controlli consigliati:
 - Tekton evidence leggibile;
 - nessun dato sensibile esposto.
 
-Il restore non e completo finche la piattaforma non e validata.
+Il restore non e completo finché la piattaforma non e validata.
 
 ### 41.13 Backup e evidence sanitization
 
@@ -9687,7 +9687,7 @@ Ripristinare solo dev non significa aver ripristinato l'intera baseline multi-en
 
 ### 41.16 DR e futuro multi-cluster
 
-Quando saranno disponibili cluster fisici separati, il DR dovra essere esteso.
+Quando saranno disponibili cluster fisici separati, il DR dovrà essere esteso.
 
 Bisognera considerare:
 
@@ -9700,7 +9700,7 @@ Bisognera considerare:
 - Tekton multi-cluster;
 - rollback cross-cluster.
 
-Questi aspetti restano futuri fino a disponibilita infrastrutturale.
+Questi aspetti restano futuri fino a disponibilità infrastrutturale.
 
 ### 41.17 Errori da evitare
 
@@ -9735,7 +9735,7 @@ Checklist minima:
 
 ### 41.19 Sintesi
 
-Backup, restore e disaster recovery proteggono la continuita e la memoria applicativa del DevOps Control Plane.
+Backup, restore e disaster recovery proteggono la continuità e la memoria applicativa del DevOps Control Plane.
 
 PostgreSQL e il componente centrale da proteggere per ChangeRequest, ChangeEvent ed Evidence.
 
@@ -9747,15 +9747,15 @@ Una strategia DR completa deve essere provata, documentata e sanificata.
 
 Questo capitolo riepiloga lo stato delle fasi principali del progetto DevOps Control Plane.
 
-Lo scopo non e solo elencare avanzamenti, ma dare una fotografia coerente del percorso svolto, delle baseline validate, delle attivita completate e di cio che resta intenzionalmente deferred.
+Lo scopo non e solo elencare avanzamenti, ma dare una fotografia coerente del percorso svolto, delle baseline validate, delle attività completate e di cio che resta intenzionalmente deferred.
 
-Il progetto e arrivato a una baseline avanzata, con componenti backend, workflow, UI, operability, evidence model e readiness multi-cluster a livello codice gia consolidati.
+Il progetto e arrivato a una baseline avanzata, con componenti backend, workflow, UI, operability, evidence model e readiness multi-cluster a livello codice già consolidati.
 
 La guida tecnica finale, invece, e la Fase 12 ed e ancora in produzione incrementale.
 
 ### 42.1 Sintesi generale
 
-Lo stato generale del progetto puo essere riassunto cosi:
+Lo stato generale del progetto può essere riassunto così:
 
 ```text
 Backend core                         completato
@@ -9788,7 +9788,7 @@ PARZIALE / IN AGGIORNAMENTO CONTINUO
 
 La documentazione e gli ADR sono stati prodotti lungo tutto il progetto.
 
-La Fase 0 non e una fase chiusa una volta per tutte, perche la documentazione evolve insieme al sistema.
+La Fase 0 non e una fase chiusa una volta per tutte, perché la documentazione evolve insieme al sistema.
 
 Elementi documentali importanti:
 
@@ -9847,7 +9847,7 @@ Risultati principali:
 - transizioni controllate;
 - base per UI e workflow successivi.
 
-Questa fase e fondamentale perche ogni azione tecnica successiva resta collegata a una ChangeRequest.
+Questa fase e fondamentale perché ogni azione tecnica successiva resta collegata a una ChangeRequest.
 
 ### 42.5 Fase 3 — GitLab Merge Request workflow
 
@@ -10036,7 +10036,7 @@ La CLI `devopsctl` resta una possibile evoluzione futura.
 
 Non e necessaria per completare la baseline attuale.
 
-La priorita corrente e la guida tecnica finale e il consolidamento documentale.
+La priorità corrente e la guida tecnica finale e il consolidamento documentale.
 
 ### 42.14 Fase 12 — Documento tecnico finale
 
@@ -10048,7 +10048,7 @@ IN PRODUZIONE INCREMENTALE
 
 Questa guida e il prodotto principale della Fase 12.
 
-Risultati gia ottenuti:
+Risultati già ottenuti:
 
 - directory dedicata `docs/final-technical-guide/`;
 - `README.md`;
@@ -10119,7 +10119,7 @@ Stato:
 COMPLETATA COME MULTI-CLUSTER CODE-READY BASELINE
 ```
 
-La Fase 15 ha consolidato la baseline piu importante del progetto.
+La Fase 15 ha consolidato la baseline più importante del progetto.
 
 Risultati principali:
 
@@ -10153,7 +10153,7 @@ Questi riferimenti aiutano a ricostruire le milestone principali.
 
 ### 42.19 Sintesi
 
-Il progetto ha completato le parti applicative, operative e di readiness piu importanti.
+Il progetto ha completato le parti applicative, operative e di readiness più importanti.
 
 La situazione corrente e:
 
@@ -10164,7 +10164,7 @@ physical multi-cluster validation deferred
 final technical guide in corso
 ```
 
-Questa guida serve a consolidare tutto il lavoro svolto in un documento organico, utile per onboarding, handover e operativita futura.
+Questa guida serve a consolidare tutto il lavoro svolto in un documento organico, utile per onboarding, handover e operatività futura.
 
 ## 42. Stato finale corrente
 
@@ -10172,7 +10172,7 @@ Questo capitolo descrive lo stato finale corrente del progetto DevOps Control Pl
 
 Lo scopo e fornire una fotografia chiara e non ambigua di cio che e completato, di cio che e validato, di cio che e pronto a livello codice e di cio che resta deferred per motivi infrastrutturali o di roadmap.
 
-Il punto piu importante da mantenere e la distinzione tra:
+Il punto più importante da mantenere e la distinzione tra:
 
 ```text
 baseline runtime validata
@@ -10184,7 +10184,7 @@ Questa distinzione evita claim eccessivi e rende il documento utile sia per onbo
 
 ### 43.1 Stato sintetico
 
-Lo stato corrente puo essere riassunto cosi:
+Lo stato corrente può essere riassunto così:
 
 ```text
 DevOps Control Plane backend                   completato
@@ -10469,11 +10469,11 @@ Questi elementi non invalidano la baseline completata. Sono passi futuri legati 
 
 Il progetto non deve dichiarare:
 
-- production fisica separata gia validata;
-- staging fisico separato gia validato;
+- production fisica separata già validata;
+- staging fisico separato già validato;
 - multi-cluster runtime fisico completato;
-- Secret reali cross-cluster gia caricati;
-- factory reali cross-cluster gia abilitate in produzione;
+- Secret reali cross-cluster già caricati;
+- factory reali cross-cluster già abilitate in produzione;
 - produzione enterprise definitiva.
 
 La guida deve mantenere sempre una formulazione accurata.
@@ -10493,7 +10493,7 @@ Questa frase deve essere mantenuta come riferimento ogni volta che si parla di m
 
 La guida finale e in produzione incrementale.
 
-Sono gia stati scritti capitoli su:
+Sono già stati scritti capitoli su:
 
 - concetti fondamentali;
 - architettura;
@@ -10530,15 +10530,15 @@ Questa distinzione e la chiave per descrivere correttamente lo stato del progett
 
 La roadmap futura descrive le evoluzioni successive alla baseline corrente del DevOps Control Plane.
 
-Il progetto ha gia raggiunto una baseline avanzata: backend Go, PostgreSQL, workflow ChangeRequest, GitLab, Tekton, Argo CD, runtime evidence, UI evidence-aware, Environment Catalog, Cluster Registry, runtime target resolution e multi-cluster code readiness sono stati completati o consolidati.
+Il progetto ha già raggiunto una baseline avanzata: backend Go, PostgreSQL, workflow ChangeRequest, GitLab, Tekton, Argo CD, runtime evidence, UI evidence-aware, Environment Catalog, Cluster Registry, runtime target resolution e multi-cluster code readiness sono stati completati o consolidati.
 
-La roadmap non deve quindi essere letta come un elenco di mancanze che invalidano il lavoro svolto. Deve essere letta come il percorso naturale per portare la piattaforma da baseline avanzata a piattaforma enterprise sempre piu matura.
+La roadmap non deve quindi essere letta come un elenco di mancanze che invalidano il lavoro svolto. Deve essere letta come il percorso naturale per portare la piattaforma da baseline avanzata a piattaforma enterprise sempre più matura.
 
 ### 44.1 Completamento della guida tecnica finale
 
-La priorita immediata e completare la guida tecnica finale.
+La priorità immediata e completare la guida tecnica finale.
 
-Attivita residue:
+Attività residue:
 
 - completare la roadmap;
 - completare le appendici;
@@ -10556,13 +10556,13 @@ Il documento sorgente resta:
 docs/final-technical-guide/final-technical-guide.md
 ```
 
-Il Word sara un output derivato.
+Il Word sarà un output derivato.
 
 ### 44.2 Revisione complessiva del documento
 
-Dopo la scrittura dei capitoli principali, sara necessaria una revisione completa.
+Dopo la scrittura dei capitoli principali, sarà necessaria una revisione completa.
 
-La revisione dovra verificare:
+La revisione dovrà verificare:
 
 - coerenza tra outline, source map e guida finale;
 - numerazione capitoli;
@@ -10577,7 +10577,7 @@ La revisione dovra verificare:
 
 ### 44.3 Generazione del documento Word
 
-Quando il Markdown sara completo e revisionato, verra generato il documento Word.
+Quando il Markdown sarà completo e revisionato, verrà generato il documento Word.
 
 Output previsto:
 
@@ -10585,7 +10585,7 @@ Output previsto:
 DevOps_Control_Plane_Guida_Tecnica_Finale.docx
 ```
 
-Il Word dovra essere leggibile, strutturato e adatto a condivisione formale.
+Il Word dovrà essere leggibile, strutturato e adatto a condivisione formale.
 
 Il file Word non deve diventare la sorgente primaria.
 
@@ -10610,20 +10610,20 @@ La CLI non e necessaria per completare la baseline attuale.
 
 ### 44.5 Real-cluster onboarding
 
-Il real-cluster onboarding e una delle evoluzioni piu importanti.
+Il real-cluster onboarding e una delle evoluzioni più importanti.
 
 Oggi staging e production sono namespace-isolated su `ocp-dev`.
 
-In futuro, quando saranno disponibili cluster reali, sara possibile valutare mapping come:
+In futuro, quando saranno disponibili cluster reali, sarà possibile valutare mapping come:
 
 ```text
 staging    -> ocp-nonprod / devops-ci-staging
 production -> ocp-production / devops-ci-production
 ```
 
-Questa evoluzione dovra seguire il deferred real-cluster onboarding contract.
+Questa evoluzione dovrà seguire il deferred real-cluster onboarding contract.
 
-Non dovra essere eseguita come semplice cambio di configurazione.
+Non dovrà essere eseguita come semplice cambio di configurazione.
 
 ### 44.6 Validazione fisica multi-cluster
 
@@ -10654,7 +10654,7 @@ Multi-cluster code readiness is completed, tested, documented and fail-closed.
 
 ### 44.7 Produzione reale
 
-La produzione reale richiedera ulteriori decisioni e controlli.
+La produzione reale richiederà ulteriori decisioni e controlli.
 
 Aree da valutare:
 
@@ -10675,7 +10675,7 @@ La baseline corrente supporta un modello production logico namespace-isolated, m
 
 ### 44.8 Observability avanzata
 
-La piattaforma potra essere estesa con observability avanzata.
+La piattaforma potrà essere estesa con observability avanzata.
 
 Possibili evoluzioni:
 
@@ -10715,7 +10715,7 @@ Gli alert devono essere azionabili e collegati ai runbook.
 
 Possibili evoluzioni PostgreSQL:
 
-- alta disponibilita;
+- alta disponibilità;
 - backup schedulati;
 - restore rehearsal periodico;
 - retention policy;
@@ -10731,7 +10731,7 @@ PostgreSQL contiene la memoria applicativa del control plane e deve essere tratt
 
 Il disaster recovery deve essere provato.
 
-Possibili attivita future:
+Possibili attività future:
 
 - restore isolato periodico;
 - validazione backup;
@@ -10745,7 +10745,7 @@ Un DR non provato non deve essere considerato completamente affidabile.
 
 ### 44.12 Policy e compliance
 
-In contesti enterprise o regolati, la piattaforma potra essere estesa con controlli compliance.
+In contesti enterprise o regolati, la piattaforma potrà essere estesa con controlli compliance.
 
 Esempi:
 
@@ -10762,7 +10762,7 @@ Queste evoluzioni possono essere affrontate dopo la stabilizzazione della baseli
 
 ### 44.13 UI evoluta
 
-La UI potra essere ulteriormente migliorata.
+La UI potrà essere ulteriormente migliorata.
 
 Possibili evoluzioni:
 
@@ -10771,7 +10771,7 @@ Possibili evoluzioni:
 - viste per applicazione;
 - storico evidence;
 - export report;
-- indicatori di stato piu ricchi;
+- indicatori di stato più ricchi;
 - link diretti a Argo CD, Tekton e GitLab;
 - viste multi-cluster future.
 
@@ -10789,13 +10789,13 @@ Le API potranno essere estese per supportare:
 - reportistica;
 - webhook o event integration.
 
-Ogni nuova API dovra rispettare AuthN/AuthZ, RBAC, sanitizzazione e fail-closed behavior.
+Ogni nuova API dovrà rispettare AuthN/AuthZ, RBAC, sanitizzazione e fail-closed behavior.
 
 ### 44.15 Hardening security
 
 Possibili evoluzioni security:
 
-- policy piu granulari;
+- policy più granulari;
 - audit authorization;
 - rotazione token automatizzata;
 - integrazione secret manager esterno;
@@ -10809,7 +10809,7 @@ Il modello attuale e una baseline avanzata, non una fine del percorso security.
 
 ### 44.16 Roadmap CLI
 
-Se la CLI verra ripresa, dovra essere coerente con API e sicurezza.
+Se la CLI verrà ripresa, dovrà essere coerente con API e sicurezza.
 
 Principi:
 
@@ -10825,7 +10825,7 @@ La CLI deve essere un client del control plane, non un percorso parallelo non go
 
 ### 44.17 Roadmap documentale
 
-La documentazione restera un lavoro continuo.
+La documentazione resterà un lavoro continuo.
 
 Possibili evoluzioni:
 
@@ -10844,16 +10844,16 @@ La directory principale resta:
 docs/final-technical-guide/
 ```
 
-### 44.18 Priorita consigliata
+### 44.18 Priorità consigliata
 
-Priorita consigliata:
+Priorità consigliata:
 
 1. completare appendici della guida finale;
 2. revisionare tutto il Markdown;
 3. generare Word finale;
 4. revocare e sostituire eventuali token esposti durante push operativi;
 5. preparare real-cluster onboarding contract operativo;
-6. attendere disponibilita cluster aggiuntivi;
+6. attendere disponibilità cluster aggiuntivi;
 7. eseguire primo onboarding cluster reale;
 8. rafforzare observability e alerting;
 9. valutare CLI;
@@ -10863,7 +10863,7 @@ Priorita consigliata:
 
 La roadmap futura non mette in discussione la baseline corrente.
 
-Il DevOps Control Plane ha gia raggiunto una baseline avanzata, documentata e operativamente verificabile.
+Il DevOps Control Plane ha già raggiunto una baseline avanzata, documentata e operativamente verificabile.
 
 La roadmap descrive il percorso per portare questa baseline verso produzione fisica multi-cluster, maggiore automazione, observability avanzata, hardening security e documentazione finale completa.
 
@@ -10904,7 +10904,7 @@ Descrive qualcosa che e accaduto durante il lifecycle della richiesta, per esemp
 
 Una `Evidence` e una prova tecnica raccolta durante un workflow.
 
-Puo rappresentare stato runtime, stato Tekton, stato Argo CD, risultato di deploy o diagnostica sanificata.
+Può rappresentare stato runtime, stato Tekton, stato Argo CD, risultato di deploy o diagnostica sanificata.
 
 Le evidence devono essere associate a una ChangeRequest e devono essere sanificate.
 
@@ -10912,7 +10912,7 @@ Le evidence devono essere associate a una ChangeRequest e devono essere sanifica
 
 La runtime evidence descrive lo stato osservato nel runtime Kubernetes/OpenShift.
 
-Puo includere deployment readiness, pod status, service, route, Argo CD sync e health, namespace e cluster target.
+Può includere deployment readiness, pod status, service, route, Argo CD sync e health, namespace e cluster target.
 
 ### A.6 Tekton validation evidence
 
@@ -10934,7 +10934,7 @@ Le evidence possono contenere metadati operativi, ma non devono contenere token,
 
 ### A.9 GitOps
 
-GitOps e un modello operativo in cui Git rappresenta la fonte di verita dello stato desiderato.
+GitOps e un modello operativo in cui Git rappresenta la fonte di verità dello stato desiderato.
 
 Nel progetto, Argo CD usa repository GitOps per riconciliare applicazioni su OpenShift.
 
@@ -11076,7 +11076,7 @@ Esempi:
 
 Multi-cluster code-ready significa che il modello e il codice sono pronti a rappresentare cluster diversi.
 
-Non significa che la validazione fisica cross-cluster sia gia stata eseguita.
+Non significa che la validazione fisica cross-cluster sia già stata eseguita.
 
 ### A.25 Physical validation deferred
 
@@ -11467,7 +11467,7 @@ La CLI `devopsctl` resta in standby.
 
 Non e necessaria per la baseline attuale.
 
-Potra essere ripresa come evoluzione futura.
+Potrà essere ripresa come evoluzione futura.
 
 ### D.6 Produzione enterprise non dichiarata
 
