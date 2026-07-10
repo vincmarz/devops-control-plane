@@ -9,12 +9,12 @@ The guide is written in Italian. Commands, resource names, API names, file paths
 - `outline.md` — final guide structure.
 - `source-map.md` — mapping between guide chapters and source repository documents.
 - `writing-plan.md` — writing strategy, quality rules and review criteria.
-- `final-technical-guide.md` — main source document for the final guide.
+- `final-technical-guide-it.md` — main source document for the final guide (Italian).
 - `outputs/` — generated deliverables such as Word or PDF files, if versioned.
 
 ## Source of truth
 
-The Markdown file `final-technical-guide.md` is the primary source of truth.
+The Markdown file `final-technical-guide-it.md` is the primary source of truth.
 
 Generated Word or PDF files must be treated as derived outputs.
 
@@ -28,7 +28,7 @@ La guida tecnica finale del DevOps Control Plane e stata completata come sorgent
 Il documento sorgente principale resta il Markdown versionato nel repository:
 
 ```text
-docs/final-technical-guide/final-technical-guide.md
+docs/final-technical-guide/final-technical-guide-it.md
 ```
 
 Il Markdown e la sorgente di verita per modifiche future, revisioni, rigenerazioni e aggiornamenti documentali.
@@ -133,7 +133,7 @@ Questa distinzione deve essere mantenuta anche in eventuali revisioni future del
 
 Per modificare la guida:
 
-1. aggiornare `docs/final-technical-guide/final-technical-guide.md`;
+1. aggiornare `docs/final-technical-guide/final-technical-guide-it.md`;
 2. aggiornare `source-map.md` se cambiano capitoli o fonti;
 3. rieseguire i controlli strutturali;
 4. rigenerare il Word in `outputs/`;

@@ -40,7 +40,7 @@ La scrittura della guida finale partirà da:
 
 Il documento sorgente finale previsto è:
 
-- `docs/final-technical-guide/final-technical-guide.md`.
+- `docs/final-technical-guide/final-technical-guide-it.md`.
 
 L’output Word finale previsto è:
 

@@ -22,7 +22,7 @@ Outline principale:
 
 Documento sorgente finale previsto:
 
-- `docs/final-technical-guide/final-technical-guide.md`
+- `docs/final-technical-guide/final-technical-guide-it.md`
 
 Output Word previsto:
 
@@ -73,7 +73,7 @@ Fonti principali:
 - `docs/runtime-evidence-dashboard-maintenance-alignment.md`
 - `docs/phase-10-operability-closure.md`
 - `docs/final-technical-guide/outline.md`
-- `docs/final-technical-guide/final-technical-guide.md`
+- `docs/final-technical-guide/final-technical-guide-it.md`
 
 Uso previsto:
 
@@ -735,7 +735,7 @@ Uso previsto:
 Fonti principali:
 
 - tutti i documenti principali;
-- in particolare `docs/05-architecture.md`, `docs/11-change-workflows.md`, `docs/12-evidence-model.md`, `docs/final-technical-guide/final-technical-guide.md`.
+- in particolare `docs/05-architecture.md`, `docs/11-change-workflows.md`, `docs/12-evidence-model.md`, `docs/final-technical-guide/final-technical-guide-it.md`.
 
 ### Appendice B — Comandi operativi principali
 
@@ -752,7 +752,7 @@ Fonti principali:
 - cronologia Git;
 - `docs/multi-cluster-environment-enablement-request.md`;
 - `docs/runtime-evidence-dashboard-maintenance-alignment.md`;
-- `docs/final-technical-guide/final-technical-guide.md`.
+- `docs/final-technical-guide/final-technical-guide-it.md`.
 
 Commit e tag da includere:
 

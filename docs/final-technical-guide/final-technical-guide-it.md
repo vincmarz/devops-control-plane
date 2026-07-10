@@ -1,5 +1,7 @@
 # DevOps Control Plane — Guida tecnica finale
 
+**Status: Localized Italian deliverable (per documentation-language-policy.md §5.2)**
+
 Status: Draft  
 Phase: 12.4 — Start final technical guide with introduction and foundations  
 Owner: Vincenzo Marzario  

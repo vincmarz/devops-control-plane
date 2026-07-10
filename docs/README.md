@@ -21,7 +21,7 @@ New to the project? Read in this order:
 5. [adr/README.md](adr/README.md) — the decisions behind the design.
 
 For an end-to-end narrative, see the
-[Final technical guide](final-technical-guide/final-technical-guide.md).
+[Final technical guide](final-technical-guide/final-technical-guide-it.md) (Italian).
 
 ---
 
@@ -116,15 +116,15 @@ The synthesized end-to-end guide under [final-technical-guide/](final-technical-
 
 | Doc | Purpose |
 |---|---|
-| [final-technical-guide.md](final-technical-guide/final-technical-guide.md) | Full technical guide |
+| [final-technical-guide-it.md](final-technical-guide/final-technical-guide-it.md) | Full technical guide (Italian localized deliverable) |
 | [README.md](final-technical-guide/README.md) | Guide overview |
 | [outline.md](final-technical-guide/outline.md) | Guide outline |
 | [source-map.md](final-technical-guide/source-map.md) | Source mapping |
 | [writing-plan.md](final-technical-guide/writing-plan.md) | Writing plan |
 
-> Note: `final-technical-guide.md` is currently written in Italian. Per the
-> language policy it should either be translated to English or renamed to
-> `final-technical-guide-it.md` and marked as a localized deliverable.
+> **Localized deliverable**: `final-technical-guide-it.md` is a declared Italian
+> deliverable per documentation-language-policy.md §5.2. Commands, resource names,
+> API names and technical identifiers remain in their original format.
 
 ---
 
