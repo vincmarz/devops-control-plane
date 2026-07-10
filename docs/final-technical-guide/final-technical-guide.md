@@ -7621,7 +7621,7 @@ Chi e l'utente o il sistema che sta accedendo?
 AuthZ, cioè authorization, risponde alla domanda:
 
 ```text
-Che cosa puo fare quell'utente o quel sistema?
+Che cosa può fare quell'utente o quel sistema?
 ```
 
 Nel DevOps Control Plane, questi concetti sono importanti per proteggere API, UI e azioni tecniche. La piattaforma non deve permettere a utenti non autorizzati di eseguire workflow sensibili come validazioni runtime, controlli deployment o operazioni future multi-cluster.
@@ -9033,7 +9033,7 @@ Il DevOps Control Plane integra backend Go, PostgreSQL, GitLab, Argo CD, Tekton,
 Lo scopo del troubleshooting e ridurre l'ambiguita:
 
 ```text
-capire cosa non funziona, dove non funziona, perche non funziona e quale evidence lo dimostra
+capire cosa non funziona, dove non funziona, perché non funziona e quale evidence lo dimostra
 ```
 
 Il troubleshooting deve essere eseguito in modo sicuro, preservando evidenze e rispettando i guardrail fail-closed.
