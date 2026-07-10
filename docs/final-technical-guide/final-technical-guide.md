@@ -5967,3 +5967,351 @@ La runtime target resolution e il ponte tra il modello logico e il runtime tecni
 Trasforma una ChangeRequest con `targetEnvironment` in un `TechnicalRuntimeTarget` usabile da workflow, evidence, UI e operability.
 
 Questo meccanismo e essenziale per la baseline namespace-isolated attuale e per il futuro multi-cluster reale.
+
+## 31. Multi-cluster code-ready baseline
+
+La multi-cluster code-ready baseline rappresenta lo stato in cui il DevOps Control Plane e pronto, a livello di codice e modello operativo, per supportare cluster fisici separati in futuro.
+
+Questa affermazione deve essere interpretata con precisione.
+
+Il progetto non dichiara ancora una validazione fisica cross-cluster, perche al momento e disponibile solo il cluster OpenShift `ocp-dev`.
+
+Il progetto dichiara invece che il codice, il modello di configurazione, la risoluzione dei target runtime, i provider, le Secret references, le factory e i guardrail fail-closed sono predisposti per il futuro multi-cluster.
+
+La formulazione corretta e:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+### 31.1 Cosa significa code-ready
+
+Code-ready significa che il modello software e pronto a rappresentare cluster diversi senza riprogettare l'architettura.
+
+In pratica, il sistema puo modellare:
+
+- ambienti logici diversi;
+- cluster target diversi;
+- namespace Kubernetes diversi;
+- namespace Tekton diversi;
+- Argo CD Applications diverse;
+- validation path diversi;
+- provider runtime diversi;
+- Secret references diverse;
+- factory runtime abilitate in modo controllato.
+
+Questo non significa che i cluster fisici esistono gia.
+
+Significa che, quando i cluster saranno disponibili, il progetto dovra eseguire onboarding, configurazione e validazione, non riscrivere il modello.
+
+### 31.2 Cosa non significa code-ready
+
+Code-ready non significa:
+
+- staging fisico gia validato;
+- production fisica gia validata;
+- cross-cluster runtime gia eseguito;
+- Secret reali cross-cluster gia letti;
+- RBAC reale cross-cluster gia verificato;
+- rollback fisico cross-cluster gia testato;
+- produzione enterprise definitiva.
+
+Questi elementi restano deferred per indisponibilita infrastrutturale.
+
+### 31.3 Baseline fisica attuale
+
+La baseline fisica attuale resta namespace-isolated su `ocp-dev`:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Questa baseline e stata validata tramite smoke matrix, Argo CD Applications, deployment readiness, route health, Tekton PipelineRun e UI evidence rendering.
+
+### 31.4 Componenti che rendono il sistema code-ready
+
+La readiness multi-cluster e supportata da diversi componenti:
+
+- Environment Catalog;
+- Cluster Registry;
+- Environment Cluster Resolver;
+- Technical Runtime Target;
+- Runtime Client Provider Registry;
+- Runtime Client Secret References;
+- Kubernetes runtime provider registry;
+- Tekton runtime provider registry;
+- Argo CD runtime provider registry;
+- runtime client factories;
+- Secret loader controllato;
+- provider-aware runtime wiring.
+
+Questi componenti separano il concetto di ambiente dal concetto di cluster fisico.
+
+### 31.5 Environment Catalog
+
+L'Environment Catalog descrive gli ambienti logici.
+
+Esempi:
+
+```text
+dev
+staging
+production
+```
+
+Ogni ambiente puo avere metadati specifici come namespace, Tekton namespace, Argo CD Application e validation path.
+
+Questo e il primo passo per evitare hardcoding.
+
+### 31.6 Cluster Registry
+
+Il Cluster Registry descrive i cluster.
+
+Oggi il cluster fisico validato e:
+
+```text
+ocp-dev
+```
+
+Nei test sono stati simulati target esterni:
+
+```text
+ocp-staging-simulated
+ocp-production-simulated
+```
+
+Il registry permette di modellare cluster abilitati, disabilitati o non ancora configurati.
+
+### 31.7 Runtime target resolution
+
+La runtime target resolution combina Environment Catalog e Cluster Registry per produrre un `TechnicalRuntimeTarget`.
+
+Esempio staging corrente:
+
+```text
+targetEnvironment = staging
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-staging
+tektonNamespace = devops-ci-staging
+argocdApplicationName = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Esempio production corrente:
+
+```text
+targetEnvironment = production
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-production
+tektonNamespace = devops-ci-production
+argocdApplicationName = demo-go-color-app-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+Questa risoluzione e il punto centrale della readiness multi-cluster.
+
+### 31.8 Provider selection
+
+Dopo aver risolto il cluster target, il sistema deve selezionare il provider runtime corretto.
+
+Il provider selection deve essere esplicito.
+
+Se il provider manca, l'azione deve fallire.
+
+Se il provider e disabled, l'azione deve fallire.
+
+Il sistema non deve cercare un provider alternativo in modo implicito.
+
+### 31.9 No fallback a ocp-dev
+
+Il principio piu importante e evitare fallback silenziosi verso `ocp-dev`.
+
+Oggi `ocp-dev` e il cluster fisico disponibile.
+
+Domani staging o production potrebbero puntare a cluster fisici diversi.
+
+Se un cluster target futuro non e configurato correttamente, il sistema deve fermarsi.
+
+Regola:
+
+```text
+explicit failure is safer than implicit fallback
+```
+
+### 31.10 Simulazione staging e production cluster
+
+Il codice e stato rafforzato con test che simulano cluster separati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+Questi test validano che:
+
+- staging puo risolvere un cluster diverso da `ocp-dev`;
+- production puo risolvere un cluster diverso da `ocp-dev`;
+- il cluster risolto resta preservato nel target runtime;
+- non avviene fallback verso `ocp-dev`;
+- provider mancante fallisce fail-closed;
+- provider disabled fallisce fail-closed.
+
+Questa e una validazione del modello codice.
+
+Non e una validazione fisica runtime.
+
+### 31.11 Secret reference readiness
+
+Un cluster reale richiedera credenziali o riferimenti tecnici.
+
+Il modello corretto usa Secret references, non valori raw.
+
+Una Secret reference puo descrivere:
+
+- namespace del Secret;
+- nome del Secret;
+- chiave attesa;
+- cluster associato;
+- tipo di credenziale.
+
+La regola e:
+
+```text
+reference yes, raw credential no
+```
+
+### 31.12 Secret loader controllato
+
+Il runtime Secret loader resta disabled by default.
+
+Questo e intenzionale.
+
+Il caricamento reale dei Secret deve essere abilitato solo quando:
+
+- il cluster e documentato;
+- le Secret references sono definite;
+- l'allow-list e configurata;
+- RBAC e minimo e approvato;
+- non vengono stampati valori raw;
+- esiste rollback;
+- l'onboarding e approvato.
+
+### 31.13 Runtime factories
+
+Le runtime factories permettono di costruire client reali per sistemi esterni.
+
+Esempi:
+
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory.
+
+Queste factory sono disabled by default.
+
+Devono essere abilitate in modo esplicito e capability-specific.
+
+### 31.14 Fail-closed delle factory
+
+Le factory devono fallire in modo esplicito quando mancano prerequisiti.
+
+Esempi:
+
+- factory disabled;
+- API URL mancante;
+- Argo CD base URL mancante;
+- token mancante;
+- kubeconfig non supportato;
+- raw CA non supportata;
+- richiesta factory non valida.
+
+Questo comportamento protegge da abilitazioni incomplete o non sicure.
+
+### 31.15 Test e non regressione
+
+La code readiness e stata coperta da test mirati.
+
+In particolare, sono stati validati:
+
+- target runtime simulato per staging;
+- target runtime simulato per production;
+- provider missing fail-closed;
+- provider disabled fail-closed;
+- assenza di fallback verso `ocp-dev`;
+- non regressione sui package principali.
+
+Questo rafforza la dichiarazione di multi-cluster code-ready baseline.
+
+### 31.16 Relazione con operability
+
+La readiness multi-cluster deve essere riflessa anche nei runbook.
+
+Gli operatori devono sapere che:
+
+- la baseline fisica corrente e `ocp-dev` namespace-isolated;
+- staging e production fisici non sono ancora disponibili;
+- eventuali cluster futuri devono seguire un contratto di onboarding;
+- provider missing o disabled sono errori fail-closed attesi;
+- non bisogna forzare fallback a `ocp-dev`.
+
+### 31.17 Relazione con UI
+
+La UI deve mostrare il target corrente, ma non deve dichiarare cio che non e fisicamente validato.
+
+Quindi la UI puo mostrare:
+
+- dev, staging, production;
+- namespace associati;
+- runtime evidence;
+- Tekton validation evidence;
+- Argo CD evidence.
+
+La UI non deve suggerire che staging e production siano gia cluster fisici separati.
+
+### 31.18 Cosa resta deferred
+
+Restano deferred:
+
+- cluster staging fisico;
+- cluster production fisico;
+- Secret loading reale cross-cluster;
+- RBAC reale cross-cluster;
+- Argo CD reale cross-cluster;
+- Tekton reale cross-cluster;
+- smoke test fisico cross-cluster;
+- rollback fisico da onboarding fallito.
+
+Questi elementi richiedono infrastruttura non ancora disponibile.
+
+### 31.19 Criteri per futuro onboarding
+
+Quando un cluster reale sara disponibile, l'onboarding dovra seguire criteri chiari:
+
+- cluster identity documentata;
+- Environment Catalog aggiornato;
+- Cluster Registry aggiornato;
+- Secret references definite;
+- allow-list configurata;
+- RBAC minimo approvato;
+- provider runtime configurato;
+- factory abilitate solo se necessarie;
+- smoke test eseguito;
+- evidence sanificata;
+- rollback documentato.
+
+### 31.20 Sintesi
+
+La multi-cluster code-ready baseline e uno dei risultati piu importanti del progetto.
+
+Il DevOps Control Plane non e ancora fisicamente validato su piu cluster, ma e pronto a livello codice e modello per supportare cluster futuri.
+
+La baseline attuale resta namespace-isolated su `ocp-dev`.
+
+La posizione corretta e:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
