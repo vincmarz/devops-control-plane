@@ -4407,3 +4407,349 @@ La dashboard e oggi una superficie operativa del DevOps Control Plane.
 Essa mostra lo stato recente, la visibilita degli ambienti, il contesto utente e l'accesso alle evidenze.
 
 La dashboard non e piu solo una UI MVP iniziale. E una vista evidence-aware ed environment-aware, coerente con la baseline namespace-isolated e con la readiness multi-cluster a livello codice.
+
+## 26. ChangeRequest detail
+
+La pagina di dettaglio della `ChangeRequest` e la vista piu importante per analizzare una richiesta specifica.
+
+La dashboard offre una vista sintetica, mentre il dettaglio ChangeRequest permette di entrare nel contesto operativo completo: dati della richiesta, stato del processo, stato runtime, audit log, evidence, validazioni Tekton, stato Argo CD e diagnostica sanificata.
+
+In pratica, questa vista risponde alla domanda:
+
+```text
+Cosa e successo per questa ChangeRequest e quali prove tecniche lo dimostrano?
+```
+
+### 26.1 Scopo della pagina di dettaglio
+
+La pagina di dettaglio deve aiutare operatori, sviluppatori e reviewer a capire lo stato reale di una singola richiesta.
+
+La pagina deve mostrare:
+
+- dati principali della ChangeRequest;
+- target environment;
+- stato del processo;
+- stato runtime;
+- audit log;
+- runtime evidence;
+- Tekton validation evidence;
+- Argo CD deployment evidence;
+- raw sanitized evidence quando utile;
+- eventuali azioni tecniche disponibili.
+
+La pagina di dettaglio non deve essere solo una vista anagrafica. Deve essere una vista operativa.
+
+### 26.2 Dati principali della ChangeRequest
+
+La sezione iniziale della pagina deve mostrare i dati principali della richiesta.
+
+Esempi di informazioni utili:
+
+- numero ChangeRequest;
+- titolo;
+- descrizione;
+- applicazione target;
+- ambiente target;
+- requester;
+- branch Git o riferimento Git;
+- timestamp;
+- stato corrente.
+
+Esempi reali usati nella guida:
+
+```text
+CHG-2026-0049
+CHG-2026-0050
+```
+
+Questi dati permettono all'operatore di capire immediatamente quale richiesta sta analizzando.
+
+### 26.3 Target environment nel dettaglio
+
+Il dettaglio deve mostrare chiaramente l'ambiente target.
+
+Nel baseline attuale:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Per una ChangeRequest staging, la UI deve rendere chiaro che il namespace e `devops-ci-staging`.
+
+Per una ChangeRequest production, la UI deve rendere chiaro che il namespace e `devops-ci-production`.
+
+Questa chiarezza evita ambiguita tra ambienti logici e cluster fisico.
+
+### 26.4 Lifecycle status
+
+Il lifecycle status descrive l'avanzamento logico della richiesta.
+
+Esempi:
+
+- richiesta creata;
+- workflow GitLab eseguito;
+- evidence raccolta;
+- deployment controllato;
+- validazione avviata;
+- validazione completata;
+- richiesta completata;
+- richiesta fallita.
+
+Il lifecycle status aiuta a capire in quale fase del processo si trova la richiesta.
+
+### 26.5 Runtime status
+
+Il runtime status descrive lo stato tecnico osservato.
+
+Esempi:
+
+- deployment ready;
+- deployment not ready;
+- Argo CD `Synced`;
+- Argo CD `Healthy`;
+- Tekton `Succeeded`;
+- route health HTTP `200`;
+- evidence non disponibile;
+- validazione fallita.
+
+Il runtime status deve essere interpretato insieme alle evidence.
+
+### 26.6 Audit log
+
+L'audit log mostra gli eventi associati alla ChangeRequest.
+
+Esempi di eventi:
+
+- ChangeRequest creata;
+- workflow avviato;
+- branch creato;
+- Merge Request creata;
+- runtime evidence raccolta;
+- Tekton validation avviata;
+- check-validation completato;
+- errore registrato.
+
+L'audit log permette di ricostruire la sequenza delle azioni.
+
+### 26.7 Runtime evidence card
+
+La runtime evidence card mostra una sintesi dello stato osservato nel runtime.
+
+Informazioni utili:
+
+- ambiente target;
+- cluster;
+- namespace;
+- deployment;
+- readiness;
+- route health;
+- Argo CD sync e health;
+- timestamp.
+
+Questa card evita che l'operatore debba cercare manualmente tutte le informazioni nei sistemi esterni.
+
+### 26.8 Tekton validation evidence card
+
+La Tekton validation evidence card mostra l'esito della validazione tecnica.
+
+Informazioni utili:
+
+- PipelineRun;
+- Tekton namespace;
+- pipeline;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- stato sanitized.
+
+Esempio staging:
+
+```text
+ChangeRequest: CHG-2026-0049
+PipelineRun: devops-cp-validate-chg-2026-0049-nd7rm
+validationPath: apps/demo-go-color-app/overlays/staging
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+Esempio production:
+
+```text
+ChangeRequest: CHG-2026-0050
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+validationPath: apps/demo-go-color-app/overlays/production
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+### 26.9 Argo CD deployment evidence
+
+La pagina di dettaglio puo mostrare anche evidenze Argo CD.
+
+Informazioni utili:
+
+- Application name;
+- sync status;
+- health status;
+- revision;
+- target namespace;
+- GitOps path.
+
+Stato atteso nella baseline validata:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+Queste informazioni aiutano a collegare la ChangeRequest allo stato GitOps osservato.
+
+### 26.10 Raw sanitized evidence
+
+La pagina di dettaglio puo offrire una vista piu tecnica della raw sanitized evidence.
+
+Questa vista deve essere utile per troubleshooting, ma non deve contenere dati sensibili.
+
+Puo includere:
+
+- payload tecnici normalizzati;
+- status;
+- reason;
+- nomi risorse;
+- validation path;
+- timestamp;
+- informazioni diagnostiche non sensibili.
+
+Non deve includere:
+
+- token;
+- password;
+- kubeconfig;
+- private key;
+- Secret raw;
+- bearer token.
+
+### 26.11 Azioni tecniche
+
+La pagina di dettaglio puo esporre azioni tecniche, in base allo stato della richiesta e ai permessi dell'utente.
+
+Esempi di azioni:
+
+- collect evidence;
+- check deployment;
+- validate;
+- check validation;
+- aprire dettagli o link correlati.
+
+Le azioni devono rispettare i guardrail:
+
+- target environment valido;
+- provider disponibile;
+- provider enabled;
+- Secret reference valida;
+- factory configurata quando richiesta;
+- nessun fallback silenzioso verso namespace o cluster sbagliati.
+
+### 26.12 Relazione con RBAC e ruoli
+
+Non tutti gli utenti devono poter eseguire tutte le azioni.
+
+La UI deve riflettere il modello di autorizzazione.
+
+Un utente senza permessi adeguati non deve vedere o poter attivare azioni tecniche sensibili.
+
+La visibilita delle azioni deve essere coerente con il backend, che resta la fonte autorevole per enforcement e fail-closed.
+
+### 26.13 Relazione con troubleshooting
+
+La pagina ChangeRequest detail e uno dei primi punti da consultare durante troubleshooting.
+
+L'operatore puo verificare:
+
+- target environment;
+- namespace;
+- audit log;
+- evidence disponibili;
+- validazione Tekton;
+- stato Argo CD;
+- stato runtime;
+- eventuali failure.
+
+Se la UI non mostra evidence attese, bisogna verificare:
+
+- che la evidence sia stata raccolta;
+- che sia stata persistita;
+- che sia collegata alla ChangeRequest corretta;
+- che la UI stia eseguendo una versione aggiornata;
+- che non ci siano errori backend.
+
+### 26.14 Relazione con operability
+
+I runbook operativi includono controlli sulle pagine di dettaglio ChangeRequest.
+
+Esempio di risultato atteso:
+
+```text
+chg0049_ui_http=200
+chg0050_ui_http=200
+```
+
+Questi controlli dimostrano che la UI e in grado di rendere le informazioni principali della richiesta e delle evidence.
+
+### 26.15 Sicurezza della pagina di dettaglio
+
+La pagina di dettaglio non deve mai esporre materiale sensibile.
+
+Dati vietati:
+
+- Secret raw;
+- token;
+- password;
+- kubeconfig;
+- private key;
+- bearer token;
+- contenuto Secret decodificato.
+
+La pagina puo mostrare metadati tecnici sicuri:
+
+- namespace;
+- application name;
+- PipelineRun;
+- Argo CD Application;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitized state.
+
+### 26.16 Relazione con multi-cluster readiness
+
+La pagina ChangeRequest detail deve essere pronta a rappresentare target futuri multi-cluster.
+
+Oggi staging e production sono namespace-isolated su `ocp-dev`.
+
+Domani potranno essere cluster fisici distinti.
+
+La UI dovra quindi continuare a mostrare:
+
+- target environment;
+- cluster name;
+- namespace;
+- provider selection, quando disponibile;
+- evidence associate;
+- eventuali errori fail-closed.
+
+La UI non deve nascondere un fallback non voluto.
+
+### 26.17 Sintesi
+
+La pagina ChangeRequest detail e il punto in cui il DevOps Control Plane rende comprensibile una singola richiesta.
+
+Essa collega dati di dominio, audit trail, runtime evidence, Tekton validation evidence, Argo CD evidence e azioni tecniche.
+
+Questa vista e essenziale per trasformare il control plane in uno strumento operativo reale, non solo in un archivio di richieste.
