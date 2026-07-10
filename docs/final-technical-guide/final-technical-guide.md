@@ -10866,3 +10866,643 @@ La roadmap futura non mette in discussione la baseline corrente.
 Il DevOps Control Plane ha gia raggiunto una baseline avanzata, documentata e operativamente verificabile.
 
 La roadmap descrive il percorso per portare questa baseline verso produzione fisica multi-cluster, maggiore automazione, observability avanzata, hardening security e documentazione finale completa.
+
+## Appendice A - Glossario
+
+Questa appendice raccoglie i termini principali usati nella guida tecnica finale del DevOps Control Plane.
+
+Lo scopo del glossario e aiutare lettori nuovi, sviluppatori, platform engineer e operatori a interpretare correttamente i concetti usati nel documento.
+
+### A.1 DevOps Control Plane
+
+Il DevOps Control Plane e la piattaforma applicativa sviluppata nel progetto.
+
+Coordina ChangeRequest, workflow GitLab, validazioni Tekton, stato Argo CD, runtime evidence Kubernetes/OpenShift, persistenza PostgreSQL, UI e guardrail di sicurezza.
+
+Non sostituisce GitLab, Argo CD, Tekton o OpenShift. Li coordina e ne rende il risultato osservabile e auditabile.
+
+### A.2 ChangeRequest
+
+Una `ChangeRequest` e la richiesta di cambiamento gestita dal DevOps Control Plane.
+
+Contiene informazioni come numero, titolo, descrizione, applicazione target, ambiente target, stato del processo, stato runtime, eventi ed evidenze.
+
+Esempi reali usati nella guida:
+
+```text
+CHG-2026-0049
+CHG-2026-0050
+```
+
+### A.3 ChangeEvent
+
+Un `ChangeEvent` e un evento di audit collegato a una ChangeRequest.
+
+Descrive qualcosa che e accaduto durante il lifecycle della richiesta, per esempio creazione, validazione, raccolta evidence, errore o completamento.
+
+### A.4 Evidence
+
+Una `Evidence` e una prova tecnica raccolta durante un workflow.
+
+Puo rappresentare stato runtime, stato Tekton, stato Argo CD, risultato di deploy o diagnostica sanificata.
+
+Le evidence devono essere associate a una ChangeRequest e devono essere sanificate.
+
+### A.5 Runtime evidence
+
+La runtime evidence descrive lo stato osservato nel runtime Kubernetes/OpenShift.
+
+Puo includere deployment readiness, pod status, service, route, Argo CD sync e health, namespace e cluster target.
+
+### A.6 Tekton validation evidence
+
+La Tekton validation evidence descrive il risultato di una validazione tecnica Tekton.
+
+Include PipelineRun, Tekton namespace, validation path, status, reason, failed task count e stato sanitized.
+
+### A.7 Argo CD deployment evidence
+
+La Argo CD deployment evidence descrive lo stato GitOps osservato da Argo CD.
+
+Include Application, sync status, health status, revision, target namespace e GitOps path.
+
+### A.8 Evidence sanitization
+
+Evidence sanitization e il processo con cui vengono rimossi valori sensibili dalle evidenze.
+
+Le evidence possono contenere metadati operativi, ma non devono contenere token, password, kubeconfig raw, private key o Secret decodificati.
+
+### A.9 GitOps
+
+GitOps e un modello operativo in cui Git rappresenta la fonte di verita dello stato desiderato.
+
+Nel progetto, Argo CD usa repository GitOps per riconciliare applicazioni su OpenShift.
+
+### A.10 Argo CD
+
+Argo CD e il motore GitOps usato dal progetto.
+
+Osserva repository Git, Application, sync status e health status.
+
+Stato atteso nella baseline:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+### A.11 Tekton
+
+Tekton e il motore di pipeline usato per validazioni tecniche.
+
+Concetti principali:
+
+- Task;
+- Pipeline;
+- PipelineRun;
+- TaskRun.
+
+### A.12 PipelineRun
+
+Una `PipelineRun` e una esecuzione concreta di una Pipeline Tekton.
+
+Esempi reali:
+
+```text
+devops-cp-validate-chg-2026-0049-nd7rm
+devops-cp-validate-chg-2026-0050-8wqtv
+```
+
+### A.13 TaskRun
+
+Una `TaskRun` e l'esecuzione concreta di un Task Tekton.
+
+Le TaskRun sono utili per capire quale passaggio tecnico e fallito in una PipelineRun.
+
+### A.14 Kubernetes namespace
+
+Un namespace Kubernetes/OpenShift e uno spazio logico dentro un cluster.
+
+Nel progetto sono usati namespace separati per dev, staging e production:
+
+```text
+devops-ci-demo
+devops-ci-staging
+devops-ci-production
+```
+
+### A.15 Namespace isolation
+
+Namespace isolation e la separazione di ambienti logici tramite namespace diversi nello stesso cluster.
+
+Baseline corrente:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+### A.16 Environment Catalog
+
+L'Environment Catalog descrive gli ambienti logici del DevOps Control Plane.
+
+Include mapping verso namespace Kubernetes, namespace Tekton, Argo CD Application, validation path e technical actions.
+
+### A.17 Cluster Registry
+
+Il Cluster Registry descrive i cluster conosciuti o previsti.
+
+Include cluster name, enabled flag, API URL quando necessaria, allowed namespaces, Secret references e provider metadata.
+
+### A.18 Runtime target resolution
+
+La runtime target resolution trasforma un `targetEnvironment` in un `TechnicalRuntimeTarget`.
+
+Esempio:
+
+```text
+targetEnvironment = production
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-production
+tektonNamespace = devops-ci-production
+argocdApplicationName = demo-go-color-app-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+### A.19 TechnicalRuntimeTarget
+
+`TechnicalRuntimeTarget` e l'oggetto tecnico risultante dalla runtime target resolution.
+
+Contiene cluster, namespace, Tekton namespace, Argo CD Application, validation path e altri metadati necessari ai workflow.
+
+### A.20 RuntimeClientProviderRegistry
+
+Il `RuntimeClientProviderRegistry` associa cluster e provider runtime.
+
+Se un provider manca o e disabled, il comportamento atteso e fail-closed.
+
+### A.21 Secret reference
+
+Una Secret reference e un riferimento a un Secret, non il valore del Secret.
+
+Esempio accettabile:
+
+```text
+secretNamespace = devops-control-plane
+secretName = dcp-ocp-nonprod-runtime-token
+key = token
+```
+
+### A.22 Runtime factories
+
+Le runtime factories costruiscono client runtime per sistemi esterni come Kubernetes/OpenShift, Tekton e Argo CD.
+
+Devono restare disabled by default e fallire fail-closed se mancano prerequisiti.
+
+### A.23 Fail-closed
+
+Fail-closed significa che, in caso di configurazione incompleta o non sicura, il sistema deve fermarsi con errore esplicito.
+
+Esempi:
+
+- provider missing;
+- provider disabled;
+- Secret reference non allow-listed;
+- factory disabled;
+- cluster disabled.
+
+### A.24 Multi-cluster code-ready
+
+Multi-cluster code-ready significa che il modello e il codice sono pronti a rappresentare cluster diversi.
+
+Non significa che la validazione fisica cross-cluster sia gia stata eseguita.
+
+### A.25 Physical validation deferred
+
+Physical validation deferred significa che la validazione fisica cross-cluster e rinviata per indisponibilita di cluster reali aggiuntivi.
+
+Formulazione ufficiale:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+## Appendice B - Comandi operativi principali
+
+Questa appendice raccoglie comandi operativi utili per health check, manutenzione, troubleshooting e igiene Git.
+
+I comandi devono essere adattati al contesto reale prima dell'esecuzione.
+
+### B.1 Git hygiene
+
+Verificare working tree:
+
+```bash
+git status --short
+```
+
+Ultimi commit:
+
+```bash
+git log --oneline -10
+```
+
+Allineare remote tracking:
+
+```bash
+git fetch origin
+```
+
+Verificare stato branch:
+
+```bash
+git status
+```
+
+### B.2 DevOps Control Plane pod
+
+Elencare pod:
+
+```bash
+oc get pod -n devops-control-plane
+```
+
+Descrivere pod:
+
+```bash
+oc describe pod "$POD" -n devops-control-plane
+```
+
+Log pod:
+
+```bash
+oc logs "$POD" -n devops-control-plane
+```
+
+### B.3 Readiness
+
+Esempio port-forward:
+
+```bash
+oc port-forward -n devops-control-plane svc/devops-control-plane 18091:8080
+```
+
+Check `/readyz`:
+
+```bash
+curl -s -o readyz.json -w "readyz_http=%{http_code}
+" http://127.0.0.1:18091/readyz
+```
+
+### B.4 Dashboard
+
+Check HTTP dashboard, adattando URL e autenticazione al contesto:
+
+```bash
+curl -k -s -o dashboard.html -w "dashboard_http=%{http_code}
+" "$DASHBOARD_URL"
+```
+
+### B.5 Argo CD Applications
+
+Elencare Applications:
+
+```bash
+oc get application -n openshift-gitops
+```
+
+Controllare Application staging:
+
+```bash
+oc get application demo-go-color-app-staging -n openshift-gitops -o yaml
+```
+
+Controllare Application production:
+
+```bash
+oc get application demo-go-color-app-production -n openshift-gitops -o yaml
+```
+
+### B.6 Deployment readiness
+
+Dev:
+
+```bash
+oc get deployment demo-go-color-app -n devops-ci-demo
+```
+
+Staging:
+
+```bash
+oc get deployment demo-go-color-app -n devops-ci-staging
+```
+
+Production:
+
+```bash
+oc get deployment demo-go-color-app -n devops-ci-production
+```
+
+### B.7 Route health
+
+Elencare route:
+
+```bash
+oc get route -n devops-ci-demo
+oc get route -n devops-ci-staging
+oc get route -n devops-ci-production
+```
+
+Esempio check health:
+
+```bash
+curl -k -s -o /dev/null -w "healthz_http=%{http_code}
+" "$ROUTE_URL/healthz"
+```
+
+### B.8 Tekton PipelineRun
+
+Elencare PipelineRun staging:
+
+```bash
+oc get pipelinerun -n devops-ci-staging
+```
+
+Elencare PipelineRun production:
+
+```bash
+oc get pipelinerun -n devops-ci-production
+```
+
+Descrivere PipelineRun:
+
+```bash
+oc describe pipelinerun "$PIPELINERUN" -n "$TEKTON_NAMESPACE"
+```
+
+Elencare TaskRun:
+
+```bash
+oc get taskrun -n "$TEKTON_NAMESPACE"
+```
+
+### B.9 Evidence directory
+
+Creare evidence directory:
+
+```bash
+EVIDENCE_DIR="/tmp/dcp-health-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$EVIDENCE_DIR"
+echo "$EVIDENCE_DIR"
+```
+
+Scrivere summary:
+
+```bash
+cat > "$EVIDENCE_DIR/90-summary.txt" <<'EOF'
+Summary:
+- readyz:
+- dashboard:
+- Argo CD:
+- deployments:
+- routes:
+- Tekton:
+- UI:
+EOF
+```
+
+### B.10 Comandi da evitare in evidence
+
+Non salvare output che include Secret raw.
+
+Da evitare in evidence non controllate:
+
+```bash
+oc get secret -o yaml
+oc describe secret
+oc get secret "$SECRET" -o jsonpath='{.data.token}' | base64 -d
+```
+
+Se un controllo su Secret e necessario, usare solo metadati sanificati e procedure approvate.
+
+## Appendice C - Commit e tag rilevanti
+
+Questa appendice raccoglie commit e tag rilevanti per ricostruire le principali milestone del progetto.
+
+### C.1 Tag baseline
+
+Tag baseline namespace-isolated:
+
+```text
+namespace-isolated-baseline-20260709
+```
+
+Commit associato:
+
+```text
+af6ddb3 Document phase 15.8.11.1 runtime smoke matrix
+```
+
+### C.2 Chiusura Fase 15
+
+Commit rilevante:
+
+```text
+052c446 Close Phase 15 as multi-cluster code-ready baseline
+```
+
+Significato:
+
+- chiusura formale Fase 15;
+- baseline multi-cluster code-ready;
+- physical validation deferred.
+
+### C.3 Simulazione staging e production cluster
+
+Commit rilevanti:
+
+```text
+9b72931 Add simulated staging and production cluster readiness tests
+215a790 Document simulated staging and production cluster readiness validation
+```
+
+Significato:
+
+- target simulati staging e production;
+- no fallback a `ocp-dev`;
+- provider missing fail-closed;
+- provider disabled fail-closed.
+
+### C.4 Fase 13 alignment
+
+Commit rilevanti:
+
+```text
+f43a6ab Refresh evidence model after Phase 15 runtime validation
+dd9273b Refresh dashboard and UI architecture after Phase 15
+912483d Refresh maintenance operations after Phase 15
+32c9c5e Refresh change workflows after Phase 15
+b6c7c61 Close Phase 13 documentation alignment
+```
+
+Significato:
+
+- riallineamento evidence;
+- dashboard/UI;
+- maintenance operations;
+- change workflows;
+- chiusura Fase 13.
+
+### C.5 Fase 10 post-Fase 15
+
+Commit rilevanti:
+
+```text
+a85d133 Refresh operability health-check runbook after Phase 15
+f075a35 Refresh troubleshooting matrix after Phase 15
+a8d13f8 Add post-Phase 15 incident triage quick-reference
+b0fa89d Document operational guardrails for Secret RBAC and factories
+e1e81d1 Consolidate Phase 10 operability baseline after Phase 15
+```
+
+Significato:
+
+- operability baseline avanzata;
+- health check;
+- troubleshooting;
+- incident triage;
+- Secret/RBAC/factory guardrails.
+
+### C.6 Fase 12 guida finale
+
+Commit rilevanti:
+
+```text
+bdae466 Define final technical guide outline
+24ca185 Map source documents for final technical guide
+d2fd5e2 Plan final technical guide writing approach
+00112bf Start final technical guide with introduction and foundations
+585143a Move final technical guide documents into dedicated directory
+```
+
+Commit capitoli recenti:
+
+```text
+8b18489 Add runtime evidence chapter to final technical guide
+5db59c7 Add Tekton validation evidence chapter to final technical guide
+157a7cb Add Argo CD deployment evidence chapter to final technical guide
+1f80da0 Add evidence sanitization chapter to final technical guide
+1a015ea Add dashboard chapter to final technical guide
+b27cd7b Add ChangeRequest detail chapter to final technical guide
+61f1581 Add UI environment awareness chapter to final technical guide
+c4dad45 Add Environment Catalog chapter to final technical guide
+1d5b51a Add Cluster Registry chapter to final technical guide
+a370844 Add runtime target resolution chapter to final technical guide
+21f1383 Add multi-cluster code-ready baseline chapter to final technical guide
+2b88cbc Add deferred real-cluster onboarding chapter to final technical guide
+2957fb2 Add future roadmap chapter to final technical guide
+```
+
+## Appendice D - Limitazioni note
+
+Questa appendice elenca le limitazioni note della baseline corrente.
+
+Le limitazioni non invalidano il lavoro completato. Servono a descrivere con precisione cosa e validato e cosa resta futuro.
+
+### D.1 Validazione fisica multi-cluster deferred
+
+La validazione fisica cross-cluster e deferred.
+
+Motivo:
+
+```text
+non sono disponibili cluster OpenShift aggiuntivi oltre a ocp-dev
+```
+
+Formulazione corretta:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+### D.2 Staging e production non sono cluster fisici separati
+
+Staging e production sono ambienti logici namespace-isolated su `ocp-dev`.
+
+Baseline corrente:
+
+```text
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Non bisogna descriverli come cluster fisici separati.
+
+### D.3 Runtime Secret loader disabled by default
+
+Il runtime Secret loader resta disabled by default.
+
+Questo e un guardrail intenzionale.
+
+Il loader deve essere abilitato solo in un onboarding reale approvato, con Secret references, allow-list, RBAC e rollback.
+
+### D.4 Runtime factories disabled by default
+
+Le runtime factories restano disabled by default.
+
+Questo include:
+
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory.
+
+L'abilitazione deve essere capability-specific e controllata.
+
+### D.5 CLI devopsctl in standby
+
+La CLI `devopsctl` resta in standby.
+
+Non e necessaria per la baseline attuale.
+
+Potra essere ripresa come evoluzione futura.
+
+### D.6 Produzione enterprise non dichiarata
+
+La baseline corrente e avanzata, ma non deve essere dichiarata come produzione enterprise definitiva.
+
+Restano futuri:
+
+- hardening production completo;
+- observability avanzata;
+- alerting;
+- RPO/RTO formali;
+- DR rehearsal periodico;
+- cluster production fisico;
+- security review finale.
+
+### D.7 Evidence sanificata obbligatoria
+
+Le evidence devono restare sanificate.
+
+Limitazione intenzionale:
+
+```text
+no raw Secret, no token, no kubeconfig, no private key
+```
+
+Questa limitazione e un requisito di sicurezza.
+
+### D.8 Source of truth documentale
+
+La sorgente primaria della guida finale e:
+
+```text
+docs/final-technical-guide/final-technical-guide.md
+```
+
+Il Word e un output derivato.
+
+Eventuali modifiche future devono partire dal Markdown.
