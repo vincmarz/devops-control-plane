@@ -3165,3 +3165,350 @@ La runtime evidence e una delle funzioni piu importanti del DevOps Control Plane
 Permette di collegare una ChangeRequest allo stato reale osservato in OpenShift, Argo CD e Tekton.
 
 Grazie alla runtime evidence, il sistema puo spiegare non solo che una richiesta e stata elaborata, ma anche cosa e stato osservato nel runtime e quali prove sono disponibili per verificarlo.
+
+## 22. Tekton validation evidence
+
+La Tekton validation evidence e l'evidenza che descrive il risultato di una validazione tecnica eseguita tramite Tekton.
+
+Nel DevOps Control Plane, Tekton non e usato come elemento isolato. Tekton e parte del workflow della `ChangeRequest`: una richiesta di cambiamento puo generare una validazione, la validazione produce una `PipelineRun`, la `PipelineRun` produce uno stato, e il DevOps Control Plane trasforma questo stato in evidence persistita e visualizzabile nella UI.
+
+La Tekton validation evidence risponde alla domanda:
+
+```text
+La validazione tecnica associata alla ChangeRequest e riuscita?
+```
+
+Questa evidence e diversa dalla runtime evidence. La runtime evidence osserva il runtime. La Tekton validation evidence osserva il risultato della pipeline tecnica.
+
+### 22.1 Perche serve la Tekton validation evidence
+
+La validazione Tekton consente di verificare il cambiamento prima o durante il percorso di promozione tecnica.
+
+Nel progetto, Tekton viene usato per validare contenuti GitOps e per produrre un risultato tecnico collegato alla ChangeRequest.
+
+Senza Tekton validation evidence, un operatore potrebbe vedere che una PipelineRun e stata creata, ma non avrebbe una rappresentazione persistente e leggibile del suo esito nel control plane.
+
+Con la validation evidence, invece, il DevOps Control Plane puo mostrare:
+
+- quale PipelineRun e stata eseguita;
+- in quale namespace Tekton;
+- con quale validation path;
+- quale stato finale ha avuto;
+- quale reason e stata restituita;
+- se ci sono task fallite;
+- se l'evidence e stata sanificata.
+
+### 22.2 Pipeline, PipelineRun e TaskRun
+
+Tekton organizza il lavoro tecnico attraverso concetti specifici.
+
+Una `Pipeline` descrive una sequenza di passaggi.
+
+Una `PipelineRun` e un'esecuzione concreta di una Pipeline.
+
+Una `TaskRun` e l'esecuzione concreta di un singolo task all'interno di una PipelineRun.
+
+Nel troubleshooting, la `PipelineRun` dice se la validazione complessiva e riuscita. Le `TaskRun` aiutano a capire dove si e verificato un errore.
+
+Vista semplificata:
+
+```text
+Tekton Pipeline
+      |
+      v
+PipelineRun
+      |
+      +--> TaskRun clone-repository
+      +--> TaskRun validate-gitops
+      +--> TaskRun collect-result
+```
+
+### 22.3 Campi principali della validation evidence
+
+Una Tekton validation evidence deve contenere informazioni sufficienti per spiegare il risultato senza obbligare l'operatore a interrogare manualmente Tekton.
+
+Campi importanti:
+
+- target environment;
+- Tekton namespace;
+- pipeline name;
+- PipelineRun name;
+- Git revision o branch;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- failed tasks, se disponibili;
+- sanitization state.
+
+Questi campi aiutano a rispondere a domande operative precise.
+
+Esempio:
+
+```text
+Quale overlay GitOps e stato validato?
+Quale PipelineRun ha prodotto il risultato?
+La validazione e terminata con Succeeded?
+Ci sono TaskRun fallite?
+L'evidence e sicura da mostrare in UI?
+```
+
+### 22.4 Validation path
+
+Il validation path e uno dei campi piu importanti.
+
+Indica quale porzione del repository GitOps e stata validata.
+
+Nel baseline corrente i path validati sono environment-specific:
+
+```text
+staging     apps/demo-go-color-app/overlays/staging
+production  apps/demo-go-color-app/overlays/production
+```
+
+Questa distinzione evita errori pericolosi.
+
+Una validazione production non deve validare per errore l'overlay staging.
+
+Una validazione staging non deve validare per errore l'overlay production.
+
+### 22.5 Stato e reason
+
+Tekton espone condizioni che indicano lo stato della PipelineRun.
+
+Per una validazione riuscita, il risultato atteso e:
+
+```text
+status=True
+reason=Succeeded
+```
+
+Se la PipelineRun fallisce, lo stato e la reason aiutano a capire la natura del problema.
+
+La validation evidence deve preservare questi valori per renderli visibili nella UI e disponibili per troubleshooting.
+
+### 22.6 Failed task count
+
+`failedTaskCount` indica quante TaskRun sono fallite.
+
+Nel baseline validato, staging e production hanno avuto:
+
+```text
+failedTaskCount=0
+```
+
+Questo valore e importante perche una PipelineRun puo avere molte attivita interne. Sapere che il numero di task fallite e zero rende immediata la lettura operativa del risultato.
+
+Quando il numero e maggiore di zero, l'operatore deve passare ad analizzare TaskRun e log sanificati.
+
+### 22.7 Evidence sanitization
+
+La Tekton validation evidence deve essere sanificata.
+
+Dati ammessi:
+
+- PipelineRun name;
+- TaskRun name;
+- namespace;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- Git revision o branch;
+- timestamp.
+
+Dati vietati:
+
+- token Git;
+- password;
+- kubeconfig raw;
+- private key;
+- Secret decodificati;
+- credenziali contenute nei log;
+- bearer token.
+
+La UI puo mostrare lo stato sanitized, per esempio:
+
+```text
+evidence sanitized=true
+```
+
+### 22.8 Esempio staging
+
+Esempio validato per staging:
+
+```text
+ChangeRequest: CHG-2026-0049
+environment: staging
+Tekton namespace: devops-ci-staging
+PipelineRun: devops-cp-validate-chg-2026-0049-nd7rm
+validationPath: apps/demo-go-color-app/overlays/staging
+status: True
+reason: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+Questa evidence dimostra che la validazione associata a staging e stata completata correttamente.
+
+### 22.9 Esempio production
+
+Esempio validato per production:
+
+```text
+ChangeRequest: CHG-2026-0050
+environment: production
+Tekton namespace: devops-ci-production
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+validationPath: apps/demo-go-color-app/overlays/production
+status: True
+reason: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+Questa evidence dimostra che la validazione associata a production logica e stata completata correttamente nella baseline namespace-isolated.
+
+### 22.10 Relazione con ChangeRequest
+
+La validation evidence deve essere collegata alla ChangeRequest corretta.
+
+Il motivo e semplice: senza questo collegamento, un operatore potrebbe vedere una PipelineRun riuscita ma non sapere quale richiesta di cambiamento l'ha generata.
+
+Il collegamento permette di navigare dalla ChangeRequest alla validation evidence e viceversa.
+
+Vista concettuale:
+
+```text
+ChangeRequest CHG-2026-0050
+      |
+      +--> validate
+      |
+      +--> PipelineRun devops-cp-validate-chg-2026-0050-8wqtv
+      |
+      +--> Tekton validation evidence
+```
+
+### 22.11 Relazione con runtime evidence
+
+Tekton validation evidence e runtime evidence si completano a vicenda.
+
+Tekton validation evidence dimostra che la validazione tecnica e riuscita.
+
+Runtime evidence dimostra cosa e stato osservato nel cluster.
+
+Un workflow completo deve poter mostrare entrambe.
+
+Esempio:
+
+```text
+Tekton validation: Succeeded
+Runtime deployment: Ready
+Argo CD: Synced / Healthy
+Route health: HTTP 200
+```
+
+Questa combinazione fornisce una visione operativa molto piu solida di un singolo controllo isolato.
+
+### 22.12 Relazione con UI
+
+La UI espone la Tekton validation evidence nella pagina di dettaglio della ChangeRequest.
+
+La card di validazione dovrebbe rendere visibili:
+
+- PipelineRun;
+- Tekton namespace;
+- pipeline;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitized state.
+
+Questo evita che l'operatore debba usare immediatamente `oc` o la console Tekton per capire l'esito della validazione.
+
+La UI non sostituisce Tekton, ma rende il risultato Tekton leggibile nel contesto della ChangeRequest.
+
+### 22.13 Relazione con troubleshooting
+
+Quando una validazione fallisce, la validation evidence e il primo punto di analisi.
+
+L'operatore deve verificare:
+
+- PipelineRun status;
+- reason;
+- failed task count;
+- TaskRun fallite;
+- validation path;
+- namespace Tekton;
+- Git revision o branch;
+- eventuale errore di accesso a Git;
+- eventuale problema RBAC;
+- eventuale problema di workspace o parametri.
+
+La evidence deve guidare il troubleshooting senza esporre credenziali.
+
+### 22.14 Relazione con operability
+
+I runbook operativi includono controlli sulle PipelineRun staging e production.
+
+Esempi:
+
+```text
+staging PipelineRun status=True reason=Succeeded
+production PipelineRun status=True reason=Succeeded
+```
+
+Questi controlli fanno parte della smoke matrix post-Fase 15.
+
+### 22.15 Relazione con multi-cluster readiness
+
+Oggi la validazione Tekton e namespace-isolated su `ocp-dev`.
+
+Domani staging e production potrebbero puntare a cluster fisici diversi.
+
+La Tekton validation evidence deve quindi preservare:
+
+- target environment;
+- Tekton namespace;
+- cluster name quando disponibile;
+- provider selection quando disponibile;
+- validation path.
+
+I test simulati post-Fase 15 hanno dimostrato che staging e production possono risolvere target cluster simulati senza fallback a `ocp-dev`.
+
+### 22.16 Errori tipici
+
+Errori possibili nella validazione Tekton:
+
+- Pipeline non trovata;
+- Task non trovata;
+- PipelineRun fallita;
+- Git clone fallito;
+- validation path errato;
+- RBAC insufficiente;
+- ServiceAccount non autorizzato;
+- workspace mancante;
+- Secret reference non valida;
+- timeout della pipeline.
+
+Questi errori devono essere riportati come evidence sanificata e collegati alla ChangeRequest.
+
+### 22.17 Cosa non deve fare la validation evidence
+
+La validation evidence non deve:
+
+- copiare log completi non sanificati;
+- esporre token Git;
+- esporre Secret;
+- nascondere il namespace;
+- nascondere il validation path;
+- dichiarare production fisica quando si tratta di production logica namespace-isolated.
+
+### 22.18 Sintesi
+
+La Tekton validation evidence rende verificabile il risultato della validazione tecnica.
+
+Essa collega ChangeRequest, PipelineRun, validation path, stato, reason, failed task count e UI.
+
+Insieme alla runtime evidence, permette al DevOps Control Plane di fornire una vista completa e auditabile del cambiamento.
