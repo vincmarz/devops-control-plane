@@ -9413,3 +9413,332 @@ Il troubleshooting del DevOps Control Plane e layer-based, evidence-driven e fai
 L'operatore deve identificare il layer coinvolto, preservare evidence sanificata, evitare azioni distruttive e rispettare i guardrail di sicurezza.
 
 Un errore esplicito e sicuro e preferibile a una correzione rapida ma ambigua.
+
+## 41. Backup, restore e disaster recovery
+
+Backup, restore e disaster recovery sono le pratiche che permettono di proteggere la memoria applicativa e la continuita operativa del DevOps Control Plane.
+
+Il DevOps Control Plane integra piu sistemi. Alcuni stati vivono nel repository Git, altri nel cluster OpenShift, altri in Argo CD, Tekton o GitLab. Tuttavia, la memoria applicativa del control plane e conservata principalmente in PostgreSQL.
+
+PostgreSQL contiene:
+
+- ChangeRequest;
+- ChangeEvent;
+- Evidence;
+- audit trail;
+- stato applicativo usato dalla UI;
+- informazioni necessarie per ricostruire il percorso operativo di una richiesta.
+
+Per questo motivo, backup e restore non sono solo attivita database. Sono parte dell'operability complessiva della piattaforma.
+
+### 41.1 Perche backup e restore sono importanti
+
+Senza backup affidabili, la perdita di PostgreSQL potrebbe causare perdita dello storico applicativo.
+
+Anche se GitLab, Argo CD, Tekton e OpenShift continuassero a contenere parte dello stato tecnico, il DevOps Control Plane perderebbe:
+
+- storico ChangeRequest;
+- audit log;
+- evidenze persistite;
+- collegamento tra richiesta e workflow;
+- dati mostrati dalla UI;
+- contesto utile per troubleshooting e compliance.
+
+Il backup protegge quindi la capacita del control plane di spiegare cosa e successo.
+
+### 41.2 Cosa deve essere protetto
+
+Il componente principale da proteggere e PostgreSQL.
+
+Dati critici:
+
+- tabelle ChangeRequest;
+- tabelle ChangeEvent;
+- tabelle Evidence;
+- eventuali metadati applicativi;
+- configurazioni database necessarie al funzionamento.
+
+Oltre a PostgreSQL, bisogna considerare anche dipendenze esterne:
+
+- repository GitLab;
+- repository GitOps;
+- configurazione Argo CD;
+- configurazione Tekton;
+- ConfigMap e Secret OpenShift;
+- manifest GitOps.
+
+La guida finale si concentra principalmente su PostgreSQL, ma il disaster recovery completo deve considerare l'ecosistema intero.
+
+### 41.3 Backup PostgreSQL
+
+Il backup PostgreSQL deve produrre una copia ripristinabile del database.
+
+Un backup utile deve essere:
+
+- eseguito in modo controllato;
+- conservato in posizione sicura;
+- protetto da accessi non autorizzati;
+- verificabile;
+- associato a timestamp;
+- documentato nella evidence di manutenzione.
+
+Un backup non verificato non deve essere considerato sufficiente.
+
+### 41.4 Restore isolato
+
+Il restore isolato e una pratica consigliata.
+
+Significa ripristinare il backup in un ambiente separato o in una destinazione non attiva, senza sovrascrivere immediatamente il database runtime.
+
+Questo permette di verificare:
+
+- integrita del dump;
+- leggibilita dei dati;
+- disponibilita delle tabelle;
+- presenza di ChangeRequest;
+- presenza di ChangeEvent;
+- presenza di Evidence;
+- compatibilita con la versione applicativa.
+
+Il restore isolato riduce il rischio operativo.
+
+### 41.5 Restore attivo
+
+Il restore attivo, cioe su database usato dal DevOps Control Plane, deve essere trattato come operazione ad alto impatto.
+
+Prima di un restore attivo servono:
+
+- approvazione;
+- backup corrente dello stato attivo, se possibile;
+- finestra di manutenzione;
+- piano di rollback;
+- evidence directory;
+- stop dei workflow sensibili;
+- validazione post-restore.
+
+Un restore attivo non deve essere eseguito come tentativo rapido senza procedura.
+
+### 41.6 Disaster recovery
+
+Disaster recovery significa ripristinare la capacita operativa della piattaforma dopo un incidente significativo.
+
+Possibili scenari:
+
+- perdita database;
+- corruzione dati;
+- perdita namespace control plane;
+- errore rollout applicativo;
+- perdita configurazione Secret o ConfigMap;
+- indisponibilita GitLab;
+- indisponibilita Argo CD;
+- indisponibilita Tekton;
+- errore cluster OpenShift.
+
+Ogni scenario richiede una strategia diversa.
+
+### 41.7 Relazione tra GitOps e DR
+
+GitOps aiuta il disaster recovery perche lo stato desiderato delle applicazioni e conservato in Git.
+
+Tuttavia, GitOps non sostituisce il backup PostgreSQL.
+
+Git puo aiutare a ricreare manifest e configurazioni applicative, ma non ricostruisce automaticamente:
+
+- storico ChangeRequest;
+- ChangeEvent;
+- Evidence;
+- audit trail applicativo;
+- stato persistito della UI.
+
+Per questo motivo GitOps e backup database sono complementari.
+
+### 41.8 Relazione con Argo CD
+
+Argo CD puo riconciliare applicazioni a partire da Git.
+
+In uno scenario DR, Argo CD puo aiutare a ripristinare lo stato applicativo dichiarativo.
+
+Tuttavia, se Argo CD stesso e danneggiato o indisponibile, bisogna avere procedure dedicate per:
+
+- reinstallazione o recovery Argo CD;
+- ripristino Application;
+- verifica repository;
+- verifica sync e health;
+- controllo target namespace.
+
+La guida finale deve chiarire che Argo CD ha proprie esigenze DR.
+
+### 41.9 Relazione con Tekton
+
+Tekton gestisce pipeline, task e PipelineRun.
+
+In uno scenario DR, bisogna distinguere tra:
+
+- definizioni Pipeline e Task;
+- PipelineRun storiche;
+- workspace;
+- ServiceAccount;
+- RBAC;
+- risultati gia persistiti come evidence nel DevOps Control Plane.
+
+Le PipelineRun storiche potrebbero non essere sufficienti a ricostruire evidence se non sono gia state persistite.
+
+### 41.10 Relazione con GitLab
+
+GitLab contiene repository, branch, commit e merge request.
+
+Il DevOps Control Plane puo registrare riferimenti a GitLab, ma non sostituisce il backup o la protezione di GitLab.
+
+Un DR completo deve considerare:
+
+- repository applicativi;
+- repository GitOps;
+- branch;
+- merge request;
+- token;
+- permessi;
+- webhook o integrazioni, se presenti.
+
+GitLab deve avere una propria strategia di backup e recovery.
+
+### 41.11 RPO e RTO
+
+Due concetti importanti sono RPO e RTO.
+
+RPO, Recovery Point Objective, indica quanta perdita dati e accettabile.
+
+RTO, Recovery Time Objective, indica quanto tempo e accettabile per ripristinare il servizio.
+
+Esempio concettuale:
+
+```text
+RPO = massimo 1 ora di dati persi
+RTO = servizio ripristinato entro 4 ore
+```
+
+Nel progetto attuale, RPO e RTO formali restano temi di production hardening futuro.
+
+### 41.12 Validazione post-restore
+
+Dopo un restore bisogna eseguire controlli precisi.
+
+Controlli consigliati:
+
+- PostgreSQL raggiungibile;
+- backend `/readyz` HTTP 200;
+- dashboard HTTP 200;
+- ChangeRequest recenti visibili;
+- ChangeEvent presenti;
+- Evidence presenti;
+- UI ChangeRequest detail funzionante;
+- Argo CD matrix coerente;
+- Tekton evidence leggibile;
+- nessun dato sensibile esposto.
+
+Il restore non e completo finche la piattaforma non e validata.
+
+### 41.13 Backup e evidence sanitization
+
+I backup possono contenere evidence.
+
+Quindi bisogna considerare anche la sicurezza dei backup.
+
+Se una evidence non fosse stata sanificata correttamente, il backup potrebbe conservarla.
+
+Per questo motivo evidence sanitization e backup sono collegati.
+
+Regola:
+
+```text
+never rely on backup encryption to justify storing raw secrets in evidence
+```
+
+I Secret non devono entrare nelle evidence in primo luogo.
+
+### 41.14 Backup e Secret
+
+I Secret OpenShift e le credenziali devono essere trattati separatamente dal backup applicativo PostgreSQL.
+
+Il DevOps Control Plane usa Secret references e non dovrebbe persistere valori raw nel database.
+
+Il backup database non deve diventare un backup implicito di credenziali.
+
+La gestione dei Secret deve seguire procedure dedicate e controllate.
+
+### 41.15 DR e namespace isolation
+
+La baseline corrente e namespace-isolated su `ocp-dev`.
+
+In caso di recovery, bisogna verificare tutti gli ambienti logici:
+
+- dev;
+- staging;
+- production.
+
+La verifica deve includere i namespace:
+
+```text
+devops-ci-demo
+devops-ci-staging
+devops-ci-production
+```
+
+Ripristinare solo dev non significa aver ripristinato l'intera baseline multi-environment.
+
+### 41.16 DR e futuro multi-cluster
+
+Quando saranno disponibili cluster fisici separati, il DR dovra essere esteso.
+
+Bisognera considerare:
+
+- backup e restore per cluster separati;
+- perdita di un cluster staging;
+- perdita di un cluster production;
+- Secret references per cluster;
+- provider e factory per cluster;
+- Argo CD multi-cluster;
+- Tekton multi-cluster;
+- rollback cross-cluster.
+
+Questi aspetti restano futuri fino a disponibilita infrastrutturale.
+
+### 41.17 Errori da evitare
+
+Errori da evitare:
+
+- considerare un backup valido senza restore test;
+- sovrascrivere il database attivo senza backup corrente;
+- confondere GitOps recovery con database recovery;
+- ignorare ChangeEvent ed Evidence;
+- ripristinare PostgreSQL senza validare UI;
+- copiare Secret raw nei backup applicativi;
+- non documentare RPO e RTO quando si passa a produzione reale;
+- non preservare evidence durante incidente.
+
+### 41.18 Checklist post-DR
+
+Checklist minima:
+
+- database disponibile;
+- backend ready;
+- dashboard raggiungibile;
+- ChangeRequest visibili;
+- ChangeEvent visibili;
+- Evidence visibili;
+- Argo CD Application sane;
+- deployment ready;
+- route health positiva;
+- Tekton validation evidence consultabile;
+- Secret non esposti;
+- summary DR prodotto;
+- owner operativo informato.
+
+### 41.19 Sintesi
+
+Backup, restore e disaster recovery proteggono la continuita e la memoria applicativa del DevOps Control Plane.
+
+PostgreSQL e il componente centrale da proteggere per ChangeRequest, ChangeEvent ed Evidence.
+
+GitOps, Argo CD, Tekton e GitLab hanno ruoli importanti, ma non sostituiscono il backup del database e la validazione post-restore.
+
+Una strategia DR completa deve essere provata, documentata e sanificata.
