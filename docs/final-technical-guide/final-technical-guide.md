@@ -7607,3 +7607,308 @@ Permettono al DevOps Control Plane di costruire client runtime verso Kubernetes/
 Per questo devono essere disabilitate per default, abilitate solo in modo esplicito, e progettate per fallire in modo sicuro quando mancano prerequisiti.
 
 Questo comportamento e essenziale per la sicurezza attuale e per il futuro multi-cluster reale.
+
+## 36. AuthN/AuthZ e OAuth proxy
+
+AuthN e AuthZ rappresentano due aspetti distinti della sicurezza applicativa.
+
+AuthN, cioe authentication, risponde alla domanda:
+
+```text
+Chi e l'utente o il sistema che sta accedendo?
+```
+
+AuthZ, cioe authorization, risponde alla domanda:
+
+```text
+Che cosa puo fare quell'utente o quel sistema?
+```
+
+Nel DevOps Control Plane, questi concetti sono importanti per proteggere API, UI e azioni tecniche. La piattaforma non deve permettere a utenti non autorizzati di eseguire workflow sensibili come validazioni runtime, controlli deployment o operazioni future multi-cluster.
+
+### 36.1 Perche AuthN/AuthZ e importante
+
+Il DevOps Control Plane gestisce informazioni operative e azioni tecniche.
+
+Esempi:
+
+- visualizzare ChangeRequest;
+- consultare evidence;
+- avviare validazioni Tekton;
+- controllare deployment;
+- osservare Argo CD;
+- visualizzare runtime diagnostics;
+- in futuro, operare su cluster fisici diversi.
+
+Queste capacita richiedono un modello di accesso controllato.
+
+Un utente non autorizzato non deve poter attivare azioni tecniche o consultare dettagli non consentiti.
+
+### 36.2 Differenza tra autenticazione e autorizzazione
+
+Autenticazione significa identificare chi accede.
+
+Autorizzazione significa decidere cosa puo fare l'identita autenticata.
+
+Esempio:
+
+```text
+utente autenticato = ocpuser
+gruppo = devops-control-plane-admins
+azione richiesta = validate ChangeRequest
+risultato autorizzazione = allowed or denied
+```
+
+Un utente puo essere autenticato ma non autorizzato a eseguire una specifica azione.
+
+### 36.3 OAuth proxy
+
+L'OAuth proxy e il componente che protegge l'accesso alla UI e alle route HTTP esposte.
+
+Il proxy puo gestire autenticazione, sessione e propagazione di header verso il backend.
+
+Nel modello del progetto, il backend puo ricevere header come:
+
+```text
+X-Forwarded-User
+X-Forwarded-Groups
+```
+
+Questi header aiutano il backend o la UI a conoscere il contesto utente.
+
+Il backend non deve fidarsi di header arbitrari provenienti da traffico non controllato. Gli header devono essere considerati attendibili solo se arrivano attraverso il percorso proxy previsto.
+
+### 36.4 Skip-auth per health endpoint
+
+Alcuni endpoint di health possono essere esposti con skip-auth controllato.
+
+Esempi:
+
+```text
+/readyz
+/livez
+```
+
+Questi endpoint servono a probe, health check e operability.
+
+La loro esposizione deve essere limitata a informazioni non sensibili.
+
+Un endpoint di readiness non deve restituire Secret, token o diagnostica riservata.
+
+### 36.5 UI protetta
+
+La UI del DevOps Control Plane deve essere accessibile solo attraverso il percorso autenticato previsto.
+
+La UI espone informazioni come:
+
+- dashboard;
+- ChangeRequest detail;
+- audit log;
+- runtime evidence;
+- Tekton validation evidence;
+- Argo CD evidence;
+- stato ambiente e namespace.
+
+Anche se le evidence sono sanificate, la UI resta una superficie operativa e deve essere protetta.
+
+### 36.6 Gruppi e ruoli
+
+L'autorizzazione puo basarsi su gruppi o ruoli.
+
+Esempi concettuali:
+
+```text
+devops-control-plane-admins
+devops-control-plane-viewers
+```
+
+Un admin puo avere accesso ad azioni tecniche.
+
+Un viewer puo essere limitato alla consultazione.
+
+Il modello deve essere fail-closed: se il ruolo non e riconosciuto o non consente l'azione, l'azione deve essere negata.
+
+### 36.7 Role-aware UI
+
+La UI puo mostrare o nascondere azioni in base al ruolo.
+
+Esempi di azioni tecniche:
+
+- collect evidence;
+- check deployment;
+- validate;
+- check validation.
+
+La UI puo evitare di mostrare un pulsante a un utente non autorizzato.
+
+Tuttavia, la UI non e il punto di sicurezza finale.
+
+La regola e:
+
+```text
+UI visibility improves usability, backend authorization enforces security
+```
+
+### 36.8 Backend authorization
+
+Il backend deve verificare le autorizzazioni prima di eseguire azioni sensibili.
+
+Azioni da proteggere:
+
+- creazione o modifica ChangeRequest;
+- workflow GitLab;
+- collect evidence;
+- check deployment;
+- validate;
+- check validation;
+- azioni future real-cluster;
+- abilitazione provider o factory, se esposta tramite API.
+
+Se l'utente non e autorizzato, il backend deve rifiutare la richiesta.
+
+### 36.9 Fail-closed authorization
+
+Il modello di autorizzazione deve essere fail-closed.
+
+Esempi:
+
+- utente assente;
+- gruppi assenti;
+- ruolo non riconosciuto;
+- azione non mappata;
+- ambiente non autorizzato;
+- header non attendibile;
+- configurazione incompleta.
+
+In questi casi il sistema deve negare l'azione.
+
+Un default allow sarebbe rischioso.
+
+### 36.10 Relazione con RBAC Kubernetes
+
+AuthN/AuthZ applicativo e RBAC Kubernetes non sono la stessa cosa.
+
+AuthN/AuthZ applicativo controlla cosa puo fare un utente nella piattaforma DevOps Control Plane.
+
+RBAC Kubernetes controlla cosa puo fare il ServiceAccount o il client runtime nel cluster.
+
+Entrambi sono necessari.
+
+Esempio:
+
+```text
+Utente autorizzato dalla UI
+      |
+      v
+Backend autorizza l'azione
+      |
+      v
+ServiceAccount esegue azione nel namespace consentito
+      |
+      v
+RBAC Kubernetes permette o nega
+```
+
+### 36.11 Relazione con evidence
+
+Le evidence possono essere visualizzate nella UI, ma devono essere sanificate.
+
+AuthZ decide chi puo vedere quelle evidence.
+
+Evidence sanitization decide cosa puo essere mostrato.
+
+Sono due controlli complementari.
+
+Un utente autorizzato non deve comunque vedere Secret raw o token.
+
+### 36.12 Relazione con OAuth proxy rollout
+
+La configurazione dell'OAuth proxy puo essere oggetto di manutenzione.
+
+Dopo modifiche al proxy bisogna verificare:
+
+- `/readyz` ancora raggiungibile se previsto;
+- UI protetta;
+- dashboard HTTP atteso;
+- header utente propagati correttamente;
+- gruppi propagati correttamente;
+- utenti non autorizzati bloccati;
+- nessuna esposizione accidentale di path sensibili.
+
+### 36.13 Relazione con operability
+
+I runbook operativi includono controlli su health endpoint e UI.
+
+Esempi:
+
+```text
+readyz_http=200
+dashboard_http=200
+```
+
+Se la dashboard non risponde o restituisce 403/401, bisogna distinguere tra:
+
+- errore applicativo;
+- errore OAuth proxy;
+- utente non autorizzato;
+- header mancanti;
+- route o TLS issue;
+- configurazione gruppi errata.
+
+### 36.14 Relazione con multi-cluster readiness
+
+Quando saranno disponibili cluster reali, AuthN/AuthZ diventera ancora piu importante.
+
+Azioni future multi-cluster potranno avere impatti maggiori.
+
+Esempi:
+
+- validare staging su cluster non-production reale;
+- validare production su cluster reale;
+- usare provider runtime reali;
+- leggere Secret references;
+- avviare PipelineRun remote o provider-aware.
+
+Queste azioni devono essere autorizzate in modo esplicito.
+
+### 36.15 Errori da evitare
+
+Errori da evitare:
+
+- fidarsi di header non provenienti dal proxy;
+- abilitare azioni tecniche a tutti gli utenti autenticati;
+- confondere autenticazione con autorizzazione;
+- lasciare path sensibili non protetti;
+- mostrare evidence a utenti non autorizzati;
+- mostrare Secret o token anche a utenti autorizzati;
+- fare default allow su ruoli sconosciuti;
+- non verificare 401/403 nei runbook.
+
+### 36.16 Checklist AuthN/AuthZ
+
+Checklist minima:
+
+- UI protetta da OAuth proxy;
+- endpoint health esposti solo se sicuri;
+- header utente propagati correttamente;
+- header gruppi propagati correttamente;
+- ruoli mappati;
+- azioni tecniche protette lato backend;
+- default deny per ruoli sconosciuti;
+- evidence sanificate;
+- nessun Secret esposto;
+- test 401/403 documentati dove rilevanti.
+
+### 36.17 Sintesi
+
+AuthN/AuthZ e OAuth proxy proteggono l'accesso al DevOps Control Plane.
+
+L'autenticazione identifica chi accede.
+
+L'autorizzazione decide cosa puo fare.
+
+Il proxy protegge la superficie HTTP e propaga il contesto utente.
+
+Il backend deve applicare autorizzazione fail-closed per le azioni sensibili.
+
+Insieme a RBAC, Secret references, evidence sanitization e runtime factories disabled-by-default, AuthN/AuthZ completa il modello di sicurezza applicativa della piattaforma.
