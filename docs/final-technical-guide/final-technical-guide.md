@@ -3841,3 +3841,321 @@ La Argo CD deployment evidence dimostra lo stato GitOps dell'applicazione.
 Essa collega repository Git, Application Argo CD, namespace target, stato di sync, stato di health e ChangeRequest.
 
 Insieme a runtime evidence e Tekton validation evidence, permette al DevOps Control Plane di fornire una vista completa del cambiamento: codice validato, GitOps sincronizzato e runtime osservato.
+
+## 24. Evidence sanitization
+
+La evidence sanitization e il processo con cui il DevOps Control Plane conserva e mostra solo informazioni tecniche sicure, evitando di esporre credenziali, token, Secret o altri dati sensibili.
+
+Nel progetto, le evidenze sono fondamentali per audit, troubleshooting, validazione tecnica e UI. Tuttavia, una evidence utile non deve diventare un canale di esposizione di informazioni riservate.
+
+La regola principale e:
+
+```text
+collect useful operational evidence, never expose raw credentials
+```
+
+La sanitizzazione permette quindi di mantenere il valore operativo delle evidenze senza compromettere la sicurezza.
+
+### 24.1 Perche la sanitizzazione e necessaria
+
+Il DevOps Control Plane integra sistemi che gestiscono informazioni potenzialmente sensibili:
+
+- GitLab;
+- Argo CD;
+- Tekton;
+- Kubernetes/OpenShift;
+- Secret;
+- token di accesso;
+- configurazioni runtime;
+- log tecnici.
+
+Durante una validazione o un controllo runtime, il sistema puo attraversare dati provenienti da questi strumenti.
+
+Senza una regola esplicita di sanitizzazione, il rischio e salvare o mostrare informazioni che non dovrebbero mai uscire dal sistema di origine.
+
+### 24.2 Cosa puo essere salvato
+
+Una evidence puo contenere metadati operativi sicuri.
+
+Esempi di dati ammessi:
+
+- numero ChangeRequest;
+- target environment;
+- cluster name;
+- namespace;
+- nome Deployment;
+- nome Pod;
+- nome Service;
+- nome Route;
+- Argo CD Application name;
+- sync status;
+- health status;
+- Git revision o branch;
+- validation path;
+- PipelineRun name;
+- TaskRun name;
+- status;
+- reason;
+- failed task count;
+- timestamp;
+- stato `evidence sanitized=true`.
+
+Questi dati aiutano operatori e sviluppatori a capire cosa e stato osservato, senza rivelare materiale sensibile.
+
+### 24.3 Cosa non deve mai essere salvato
+
+Una evidence non deve contenere credenziali o contenuti raw sensibili.
+
+Dati vietati:
+
+- password;
+- bearer token;
+- token GitLab;
+- token Argo CD;
+- token Kubernetes;
+- kubeconfig raw;
+- private key;
+- contenuto Secret decodificato;
+- certificate private material;
+- variabili di ambiente contenenti segreti;
+- log completi non revisionati;
+- payload che possono includere credenziali.
+
+Se un dato non e necessario per spiegare il risultato operativo, non deve essere salvato nella evidence.
+
+### 24.4 Secret reference invece di Secret value
+
+Il progetto usa un modello basato su Secret reference.
+
+Una Secret reference descrive dove si trova un Secret e quali chiavi sono attese, ma non contiene il valore del Secret.
+
+Esempio di informazione accettabile:
+
+```text
+secretRefName = dcp-cluster-ocp-dev-token
+secretNamespace = devops-control-plane
+key = token
+```
+
+Esempio di informazione vietata:
+
+```text
+token = actual-token-value
+```
+
+La documentazione, la UI, i log e le evidence possono mostrare riferimenti, ma non valori raw.
+
+### 24.5 Sanitizzazione e UI
+
+La UI deve presentare solo evidence sicure.
+
+La UI puo mostrare:
+
+- stato di validazione;
+- PipelineRun;
+- namespace;
+- validation path;
+- failed task count;
+- Argo CD Application;
+- sync e health;
+- deployment readiness;
+- route health;
+- stato sanitized.
+
+La UI non deve mostrare:
+
+- token;
+- Secret raw;
+- kubeconfig;
+- password;
+- private key;
+- contenuto decodificato di Secret.
+
+La UI deve essere una superficie operativa, non un contenitore di credenziali.
+
+### 24.6 Sanitizzazione e raw evidence
+
+In alcuni casi puo essere utile conservare una forma di raw evidence diagnostica.
+
+Questa raw evidence deve comunque essere sanificata.
+
+Il termine raw, in questo contesto, non significa non filtrato. Significa piu dettagliato rispetto alla card sintetica mostrata nella UI.
+
+Una raw sanitized evidence puo contenere:
+
+- campi tecnici normalizzati;
+- status dettagliati;
+- reason;
+- nomi risorse;
+- messaggi di errore non sensibili.
+
+Non deve contenere valori riservati.
+
+### 24.7 Sanitizzazione e Tekton
+
+Tekton puo produrre log e risultati tecnici molto dettagliati.
+
+La validation evidence deve estrarre solo le informazioni utili:
+
+- PipelineRun;
+- TaskRun fallite;
+- status;
+- reason;
+- failed task count;
+- validation path;
+- namespace;
+- Git revision o branch.
+
+I log Tekton completi devono essere trattati con cautela, perche potrebbero contenere dati non adatti alla persistenza o alla UI.
+
+### 24.8 Sanitizzazione e Argo CD
+
+Argo CD puo esporre informazioni su Application, repository, revision e stato delle risorse.
+
+La evidence puo conservare:
+
+- Application name;
+- sync status;
+- health status;
+- revision;
+- namespace target;
+- GitOps path;
+- messaggi non sensibili.
+
+La evidence non deve conservare token Argo CD, credenziali Git o altri dati riservati.
+
+### 24.9 Sanitizzazione e Kubernetes/OpenShift
+
+Kubernetes/OpenShift espone molte informazioni operative.
+
+La evidence puo conservare:
+
+- namespace;
+- deployment;
+- pod;
+- service;
+- route;
+- readiness;
+- replica count;
+- eventi non sensibili.
+
+La evidence non deve conservare contenuto Secret, token di ServiceAccount, kubeconfig o altri dati sensibili.
+
+### 24.10 Sanitizzazione e troubleshooting
+
+Durante troubleshooting, la tentazione puo essere copiare output completi per velocizzare l'analisi.
+
+Questa pratica e rischiosa.
+
+Gli operatori devono preservare solo evidenze utili e sicure.
+
+Regole operative:
+
+- non decodificare Secret in terminale se l'output viene salvato;
+- non copiare token in ticket;
+- non allegare kubeconfig;
+- non salvare log completi senza revisione;
+- preferire summary sanificati;
+- indicare i nomi delle risorse invece dei valori segreti.
+
+### 24.11 Evidence sanitized flag
+
+Quando una evidence e stata filtrata correttamente, il sistema puo indicare uno stato come:
+
+```text
+evidence sanitized=true
+```
+
+Questo campo aiuta l'operatore a capire che l'evidence e stata preparata per essere mostrata o conservata.
+
+Tuttavia, il flag non deve sostituire la responsabilita tecnica. Se un output contiene dati sospetti, deve essere rivisto anche se dichiarato sanificato.
+
+### 24.12 Relazione con audit e compliance
+
+La sanitizzazione e importante anche per audit e compliance.
+
+Un audit trail utile deve spiegare cosa e successo, ma non deve esporre credenziali.
+
+Una buona evidence auditabile contiene:
+
+- chiara associazione alla ChangeRequest;
+- ambiente target;
+- namespace;
+- strumento coinvolto;
+- risultato;
+- timestamp;
+- stato di sanitizzazione.
+
+Non deve contenere materiale che aumenti il rischio di sicurezza.
+
+### 24.13 Relazione con multi-cluster readiness
+
+La readiness multi-cluster richiede ancora piu attenzione alla sanitizzazione.
+
+Quando verranno aggiunti cluster reali, il sistema potra gestire Secret reference, token e endpoint separati per cluster diversi.
+
+Le evidence dovranno dimostrare:
+
+- ambiente target;
+- cluster target;
+- namespace target;
+- provider selection;
+- risultato tecnico;
+- assenza di fallback non voluto.
+
+Ma non dovranno mai mostrare credenziali dei cluster.
+
+### 24.14 Errori da evitare
+
+Errori comuni da evitare:
+
+- copiare output di `oc describe secret` con dati sensibili;
+- decodificare Secret e salvare il risultato;
+- inserire token in documentazione;
+- allegare kubeconfig a evidenze;
+- salvare log completi senza revisione;
+- mostrare in UI payload non filtrati;
+- confondere Secret reference con Secret value;
+- bypassare allow-list per velocizzare un test.
+
+### 24.15 Esempio di evidence corretta
+
+Esempio sicuro:
+
+```text
+ChangeRequest: CHG-2026-0050
+environment: production
+namespace: devops-ci-production
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+validationPath: apps/demo-go-color-app/overlays/production
+status: True
+reason: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+Questa evidence e utile e non contiene credenziali.
+
+### 24.16 Esempio di evidence non corretta
+
+Esempio non accettabile:
+
+```text
+bearerToken: actual-token-value
+kubeconfig: raw-kubeconfig-content
+password: actual-password
+```
+
+Questi valori non devono essere salvati, mostrati o committati.
+
+### 24.17 Sintesi
+
+La evidence sanitization e un guardrail fondamentale del DevOps Control Plane.
+
+Permette di conservare prove tecniche utili senza trasformare il sistema in un archivio di segreti.
+
+La regola finale e semplice:
+
+```text
+le evidenze devono spiegare cosa e successo, non rivelare credenziali
+```
