@@ -8685,3 +8685,341 @@ L'health check e il controllo operativo rapido del DevOps Control Plane.
 Verifica backend, UI, Argo CD, deployment, route, Tekton e ChangeRequest detail.
 
 E il primo strumento da usare per capire se la piattaforma e operativa e coerente con la baseline validata.
+
+## 39. Maintenance operations
+
+Le maintenance operations descrivono come eseguire attivita controllate di manutenzione sul DevOps Control Plane senza compromettere la baseline validata, le evidenze operative, la UI, i workflow Tekton, lo stato Argo CD o i guardrail di sicurezza.
+
+La manutenzione non deve essere vista come una semplice serie di comandi tecnici. Deve essere un processo controllato, documentato e reversibile.
+
+Nel progetto, le maintenance operations sono state riallineate dopo la Fase 15 per riflettere la baseline corrente:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+La validazione fisica multi-cluster resta deferred, quindi la manutenzione corrente deve proteggere la baseline namespace-isolated.
+
+### 39.1 Obiettivo della manutenzione
+
+L'obiettivo della manutenzione e permettere aggiornamenti, verifiche e interventi controllati senza perdere operativita o tracciabilita.
+
+Esempi di manutenzione:
+
+- aggiornamento ConfigMap;
+- aggiornamento Secret reference;
+- rotazione token;
+- verifica OAuth proxy;
+- verifica RBAC;
+- aggiornamento trust bundle;
+- manutenzione PostgreSQL;
+- verifica Argo CD;
+- verifica Tekton;
+- validazione UI post-rollout;
+- controllo evidence rendering.
+
+Ogni manutenzione deve avere obiettivo, evidenze e criteri di chiusura.
+
+### 39.2 Principi generali
+
+Ogni manutenzione deve seguire alcuni principi:
+
+- preservare evidence prima e dopo l'intervento;
+- evitare comandi distruttivi non necessari;
+- non stampare Secret o token;
+- verificare dev, staging e production separatamente;
+- distinguere ambiente logico, namespace e cluster;
+- mantenere rollback pronto;
+- non bypassare guardrail fail-closed;
+- chiudere l'attivita solo dopo smoke test positivo.
+
+La manutenzione deve essere dimostrabile, non solo eseguita.
+
+### 39.3 Evidence directory di manutenzione
+
+Ogni sessione di manutenzione dovrebbe usare una evidence directory dedicata.
+
+Pattern consigliato:
+
+```text
+/tmp/dcp-maintenance-YYYYMMDD-HHMMSS
+```
+
+Esempio:
+
+```bash
+EVIDENCE_DIR="/tmp/dcp-maintenance-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$EVIDENCE_DIR"
+echo "$EVIDENCE_DIR"
+```
+
+La directory deve contenere output pre-maintenance, output post-maintenance e summary finale.
+
+### 39.4 Pre-maintenance checks
+
+Prima di iniziare la manutenzione, bisogna raccogliere una baseline.
+
+Controlli minimi:
+
+- working tree pulito, se si opera dal repository;
+- pod DevOps Control Plane running;
+- PostgreSQL running;
+- `/readyz` HTTP 200;
+- dashboard HTTP 200;
+- Argo CD Applications `Synced` e `Healthy`;
+- deployment ready nei tre namespace;
+- route `/healthz` HTTP 200 per dev, staging e production;
+- PipelineRun Tekton rilevanti in stato terminale atteso;
+- pagine ChangeRequest detail raggiungibili.
+
+Se un controllo pre-maintenance fallisce, la manutenzione non dovrebbe procedere senza analisi.
+
+### 39.5 Post-maintenance smoke matrix
+
+Dopo ogni intervento, bisogna eseguire una smoke matrix.
+
+La matrice deve verificare:
+
+- Control Plane;
+- PostgreSQL;
+- dashboard;
+- Argo CD;
+- deployment readiness;
+- route health;
+- Tekton validation;
+- UI evidence rendering;
+- Secret/RBAC/factory guardrails.
+
+La smoke matrix deve essere salvata nella evidence directory.
+
+### 39.6 Manutenzione ConfigMap
+
+Le ConfigMap possono influenzare comportamento applicativo, runtime target, proxy o UI.
+
+Dopo una modifica ConfigMap bisogna verificare:
+
+- rollout completato;
+- pod running;
+- `/readyz` HTTP 200;
+- dashboard HTTP 200;
+- environment mapping visibile;
+- nessun cambio inatteso su namespace o target;
+- nessuna regressione su evidence rendering.
+
+Una ConfigMap errata puo produrre problemi anche se il pod si avvia correttamente.
+
+### 39.7 Manutenzione Secret e token
+
+La manutenzione di Secret e token richiede attenzione massima.
+
+Regole:
+
+- non stampare valori Secret;
+- non decodificare token in output salvati;
+- usare Secret references;
+- verificare allow-list;
+- verificare RBAC minimo;
+- preservare evidence sanificata;
+- ruotare token secondo procedura controllata;
+- verificare connettivita dopo rotazione.
+
+Una rotazione token deve essere seguita da controlli su GitLab, Argo CD, Tekton o cluster, in base al token coinvolto.
+
+### 39.8 Manutenzione RBAC
+
+Dopo modifiche RBAC, bisogna verificare che il sistema possa ancora eseguire le azioni previste.
+
+Controlli utili:
+
+- lettura Deployment nel namespace target;
+- lettura Pod;
+- lettura Service e Route;
+- creazione o lettura PipelineRun Tekton, se prevista;
+- lettura TaskRun;
+- nessun accesso Secret eccessivo;
+- nessun grant `cluster-admin` non motivato.
+
+RBAC deve restare namespace-scoped dove possibile.
+
+### 39.9 Manutenzione OAuth proxy
+
+Dopo modifiche OAuth proxy, bisogna verificare:
+
+- `/readyz` raggiungibile secondo la policy prevista;
+- dashboard protetta;
+- header utente propagati;
+- header gruppi propagati;
+- utenti non autorizzati bloccati;
+- azioni tecniche protette;
+- nessuna esposizione accidentale di path sensibili.
+
+Problemi OAuth proxy possono apparire come errori UI, 401, 403 o header mancanti.
+
+### 39.10 Manutenzione Argo CD
+
+Dopo manutenzione Argo CD, bisogna verificare le Application per ambiente.
+
+Application principali:
+
+```text
+dev        demo-go-color-app
+staging    demo-go-color-app-staging
+production demo-go-color-app-production
+```
+
+Risultato atteso:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+Se una Application e `OutOfSync` o `Degraded`, la manutenzione non deve essere chiusa senza analisi.
+
+### 39.11 Manutenzione Tekton
+
+Dopo manutenzione Tekton, bisogna verificare:
+
+- Pipeline presente;
+- Task presenti;
+- ServiceAccount corretto;
+- RBAC corretto;
+- PipelineRun leggibile;
+- TaskRun leggibili;
+- validation evidence creabile;
+- failed task count coerente.
+
+Esempi di PipelineRun validate:
+
+```text
+staging    devops-cp-validate-chg-2026-0049-nd7rm
+production devops-cp-validate-chg-2026-0050-8wqtv
+```
+
+### 39.12 Manutenzione PostgreSQL
+
+PostgreSQL contiene la memoria applicativa del control plane.
+
+Prima di manutenzioni rischiose bisogna considerare:
+
+- backup;
+- restore isolato;
+- connettivita dal backend;
+- `/readyz`;
+- persistenza ChangeRequest;
+- persistenza ChangeEvent;
+- persistenza Evidence.
+
+Un problema PostgreSQL puo compromettere UI, workflow e audit trail anche se GitOps e cluster restano disponibili.
+
+### 39.13 Manutenzione UI
+
+Dopo modifiche UI o rollout immagine, bisogna verificare:
+
+- dashboard HTTP 200;
+- latest ChangeRequest;
+- `Environments / Namespaces`;
+- user box;
+- ChangeRequest detail;
+- runtime evidence card;
+- Tekton validation card;
+- Argo CD evidence;
+- raw sanitized evidence;
+- nessun Secret esposto.
+
+Se la UI non mostra dati attesi, bisogna verificare backend, evidence persistite, immagine del pod e cache browser.
+
+### 39.14 Manutenzione Environment Catalog e Cluster Registry
+
+Dopo modifiche a Environment Catalog o Cluster Registry bisogna verificare:
+
+- mapping ambiente -> cluster;
+- mapping ambiente -> namespace;
+- Tekton namespace;
+- Argo CD Application;
+- validation path;
+- cluster enabled flag;
+- provider selection;
+- no fallback a `ocp-dev` non previsto.
+
+Ogni modifica a questi modelli puo influenzare dove vengono eseguite le azioni tecniche.
+
+### 39.15 Manutenzione Secret/RBAC/factory guardrails
+
+Dopo modifiche a Secret references, RBAC o runtime factories bisogna verificare:
+
+- Secret references definite e non valori raw;
+- allow-list coerente;
+- RBAC minimo;
+- loader disabled salvo necessita esplicita;
+- factory disabled salvo necessita esplicita;
+- provider missing e disabled ancora fail-closed;
+- nessun token nei log o nelle evidence.
+
+Questi guardrail non devono essere indeboliti durante manutenzione.
+
+### 39.16 Stop conditions
+
+La manutenzione deve fermarsi se:
+
+- `/readyz` non e HTTP 200;
+- dashboard non e HTTP 200;
+- target environment non e dimostrabile;
+- namespace target non e dimostrabile;
+- Argo CD non e `Synced` e `Healthy`;
+- deployment readiness fallisce;
+- route health fallisce;
+- Tekton validation fallisce in modo inatteso;
+- UI evidence rendering e incoerente;
+- un Secret viene esposto;
+- un provider fa fallback non previsto.
+
+In questi casi bisogna preservare evidence e passare a troubleshooting.
+
+### 39.17 Closure criteria
+
+Una manutenzione puo essere chiusa quando:
+
+- pre-maintenance evidence e stata raccolta;
+- azioni eseguite sono documentate;
+- post-maintenance smoke matrix e positiva;
+- ambienti interessati sono validati separatamente;
+- nessun Secret e stato esposto;
+- guardrail fail-closed restano attivi;
+- evidence directory e preservata;
+- working tree e pulito se il repository e stato usato.
+
+### 39.18 Relazione con Fase 10
+
+La Fase 10 ha consolidato operability, runbook e produzione operativa avanzata.
+
+Le maintenance operations della guida finale derivano da quel lavoro e lo rendono leggibile in forma narrativa.
+
+La Fase 10 non dichiara production-hardening esaustivo, ma definisce una baseline operativa avanzata e verificabile.
+
+### 39.19 Relazione con multi-cluster readiness
+
+Quando saranno disponibili cluster reali, le maintenance operations dovranno essere estese.
+
+Bisognera validare:
+
+- cluster fisico target;
+- RBAC per cluster;
+- Secret references per cluster;
+- provider e factory;
+- Argo CD per cluster;
+- Tekton per cluster;
+- rollback cross-cluster;
+- no fallback verso `ocp-dev`.
+
+Fino ad allora, la manutenzione deve proteggere la baseline namespace-isolated.
+
+### 39.20 Sintesi
+
+Le maintenance operations permettono di eseguire interventi controllati sul DevOps Control Plane senza perdere sicurezza, tracciabilita o affidabilita.
+
+Ogni manutenzione deve produrre evidence, rispettare guardrail, verificare dev, staging e production e chiudersi solo dopo smoke test positivo.
+
+La manutenzione e parte integrante dell'operability della piattaforma.
