@@ -2521,3 +2521,316 @@ Il workflow runtime e la parte del DevOps Control Plane che collega la richiesta
 Attraverso `collect-evidence`, `check-deployment`, `validate` e `check-validation`, il sistema produce una vista coerente e persistente del risultato tecnico.
 
 Questo workflow rende possibile osservare, validare e spiegare lo stato di dev, staging e production nella baseline namespace-isolated e prepara il progetto al futuro multi-cluster reale.
+
+## 20. Workflow dev, staging e production
+
+Il DevOps Control Plane supporta un modello multi-environment basato su tre ambienti logici:
+
+- `dev`;
+- `staging`;
+- `production`.
+
+Nel baseline attuale questi ambienti non sono ancora distribuiti su cluster fisici separati. Sono invece validati con isolamento per namespace sul cluster OpenShift disponibile `ocp-dev`.
+
+La topologia validata e:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Questa scelta permette di validare workflow, evidenze, Argo CD, Tekton, UI e operability multi-environment anche in assenza di cluster fisici aggiuntivi.
+
+### 20.1 Ambiente dev
+
+L'ambiente `dev` rappresenta l'ambiente di sviluppo attivo.
+
+Nel baseline corrente:
+
+```text
+environment: dev
+cluster: ocp-dev
+namespace: devops-ci-demo
+application: demo-go-color-app
+```
+
+L'ambiente dev e il primo ambiente validato nel progetto. Viene usato come baseline operativa iniziale per verificare che il DevOps Control Plane sia in grado di:
+
+- creare ChangeRequest;
+- interagire con GitLab;
+- interrogare Argo CD;
+- osservare lo stato runtime Kubernetes/OpenShift;
+- raccogliere evidence;
+- mostrare dati in UI.
+
+### 20.2 Ambiente staging
+
+L'ambiente `staging` rappresenta un ambiente logico pre-produzione.
+
+Nel baseline corrente:
+
+```text
+environment: staging
+cluster: ocp-dev
+namespace: devops-ci-staging
+Argo CD Application: demo-go-color-app-staging
+validationPath: apps/demo-go-color-app/overlays/staging
+```
+
+Staging e stato validato come namespace separato sul cluster `ocp-dev`.
+
+La validazione importante associata a staging e:
+
+```text
+ChangeRequest: CHG-2026-0049
+PipelineRun: devops-cp-validate-chg-2026-0049-nd7rm
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+Questo dimostra che il workflow staging non e solo documentato, ma e stato eseguito e verificato.
+
+### 20.3 Ambiente production
+
+L'ambiente `production` rappresenta la produzione logica del modello.
+
+Nel baseline corrente production non e un cluster fisico separato. E un namespace isolato sul cluster `ocp-dev`.
+
+Mappatura corrente:
+
+```text
+environment: production
+cluster: ocp-dev
+namespace: devops-ci-production
+Argo CD Application: demo-go-color-app-production
+validationPath: apps/demo-go-color-app/overlays/production
+```
+
+La validazione importante associata a production e:
+
+```text
+ChangeRequest: CHG-2026-0050
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+result: Succeeded
+failedTaskCount: 0
+evidence sanitized: true
+```
+
+Questa validazione dimostra che il workflow production logico e stato testato senza dichiarare una produzione fisica reale.
+
+### 20.4 Differenza tra ambiente logico e cluster fisico
+
+E importante distinguere due concetti:
+
+- ambiente logico;
+- cluster fisico.
+
+Un ambiente logico rappresenta lo scopo operativo di un workflow: sviluppo, staging o production.
+
+Un cluster fisico e invece un cluster OpenShift reale.
+
+Nel progetto attuale:
+
+```text
+ambienti logici: dev, staging, production
+cluster fisico disponibile: ocp-dev
+```
+
+Quindi staging e production sono ambienti logici validati tramite namespace isolation, non cluster fisici separati.
+
+### 20.5 Perche usare namespace isolation
+
+Namespace isolation consente di validare molte caratteristiche senza attendere cluster aggiuntivi.
+
+Il progetto ha potuto validare:
+
+- mapping environment-to-namespace;
+- Argo CD Applications separate;
+- overlay GitOps environment-specific;
+- Tekton namespace separati;
+- validation path staging e production;
+- route health per ambiente;
+- runtime evidence environment-aware;
+- UI Environments / Namespaces;
+- ChangeRequest detail con evidence specifica.
+
+Questa strategia ha permesso di avanzare senza bloccare il progetto per indisponibilita infrastrutturale.
+
+### 20.6 Workflow comune ai tre ambienti
+
+Il workflow logico e simile per dev, staging e production.
+
+Passaggi principali:
+
+1. creare o selezionare una ChangeRequest;
+2. risolvere il target environment;
+3. risolvere cluster e namespace;
+4. controllare Argo CD;
+5. controllare deployment e route;
+6. avviare o verificare Tekton validation;
+7. raccogliere evidence;
+8. mostrare evidence in UI.
+
+La differenza principale e nei metadati environment-specific.
+
+### 20.7 Mapping environment-specific
+
+Tabella concettuale:
+
+```text
+Environment   Cluster   Namespace                 Argo CD Application
+----------    -------   -----------------------   -------------------------------
+dev           ocp-dev   devops-ci-demo            demo-go-color-app
+staging       ocp-dev   devops-ci-staging         demo-go-color-app-staging
+production    ocp-dev   devops-ci-production      demo-go-color-app-production
+```
+
+Validation path:
+
+```text
+staging     apps/demo-go-color-app/overlays/staging
+production  apps/demo-go-color-app/overlays/production
+```
+
+Questi valori devono restare espliciti nelle evidence e nei workflow.
+
+### 20.8 Argo CD per ambiente
+
+Argo CD osserva Applications distinte per ambiente.
+
+Le verifiche finali hanno confermato:
+
+```text
+dev        sync=Synced health=Healthy
+staging    sync=Synced health=Healthy
+production sync=Synced health=Healthy
+```
+
+Questo risultato conferma che le Applications GitOps sono coerenti con la baseline namespace-isolated.
+
+### 20.9 Deployment readiness per ambiente
+
+Il deployment `demo-go-color-app` e stato verificato nei tre namespace.
+
+La smoke matrix finale ha confermato readiness nei namespace:
+
+- `devops-ci-demo`;
+- `devops-ci-staging`;
+- `devops-ci-production`.
+
+Questo e importante perche un deployment healthy in dev non prova automaticamente lo stato di staging o production.
+
+### 20.10 Route health per ambiente
+
+Ogni ambiente espone una route applicativa.
+
+La validazione finale ha verificato `/healthz` per tutti e tre gli ambienti:
+
+```text
+dev_healthz_http=200
+staging_healthz_http=200
+production_healthz_http=200
+```
+
+Route e health check sono parte delle evidenze operative di runtime.
+
+### 20.11 Tekton per staging e production
+
+Tekton e stato usato per validare staging e production.
+
+Staging:
+
+```text
+PipelineRun: devops-cp-validate-chg-2026-0049-nd7rm
+status: True
+reason: Succeeded
+```
+
+Production:
+
+```text
+PipelineRun: devops-cp-validate-chg-2026-0050-8wqtv
+status: True
+reason: Succeeded
+```
+
+Questi risultati confermano che la validazione tecnica e stata completata sugli ambienti logici corretti.
+
+### 20.12 UI per dev, staging e production
+
+La UI e stata aggiornata per mostrare il modello multi-environment.
+
+Elementi importanti:
+
+- dashboard latest ChangeRequest;
+- sezione `Environments / Namespaces`;
+- ChangeRequest detail;
+- runtime evidence card;
+- Tekton validation evidence card;
+- evidence sanitized.
+
+La UI deve rendere chiaro che staging e production sono ambienti logici separati, anche se condividono il cluster fisico `ocp-dev`.
+
+### 20.13 Simulazione cluster separati
+
+Dopo la chiusura della Fase 15, il codice e stato rafforzato con test di target cluster simulati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+Questi test non rappresentano validazione fisica cross-cluster.
+
+Rappresentano una validazione del modello codice.
+
+I test dimostrano che:
+
+- staging puo risolvere un cluster diverso da `ocp-dev`;
+- production puo risolvere un cluster diverso da `ocp-dev`;
+- non avviene fallback silenzioso verso `ocp-dev`;
+- provider mancante fallisce fail-closed;
+- provider disabled fallisce fail-closed.
+
+### 20.14 Cosa resta deferred
+
+Restano deferred per indisponibilita infrastrutturale:
+
+- validazione fisica su cluster staging reale;
+- validazione fisica su cluster production reale;
+- Secret loading reale cross-cluster;
+- RBAC reale cross-cluster;
+- rollback reale da onboarding fisico fallito;
+- smoke test cross-cluster fisico.
+
+Questi elementi sono rinviati per mancanza di cluster, non per mancanza del modello codice.
+
+### 20.15 Regola operativa
+
+La regola da mantenere e:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+Questo significa che il progetto e pronto a livello modello e codice, ma non dichiara una validazione fisica che non e stata possibile eseguire.
+
+### 20.16 Sintesi
+
+Il workflow dev, staging e production dimostra che il DevOps Control Plane e capace di controllare piu ambienti logici in modo coerente.
+
+La baseline corrente e namespace-isolated su `ocp-dev`, ma include tutti gli elementi necessari per spiegare e validare il futuro percorso multi-cluster:
+
+- environment mapping;
+- namespace mapping;
+- Argo CD Applications;
+- Tekton validation;
+- runtime evidence;
+- UI environment awareness;
+- fail-closed guardrails;
+- simulazione staging e production cluster.
+
+Questo capitolo chiude la parte dedicata ai workflow applicativi e prepara la guida ai capitoli sull'evidence model.
