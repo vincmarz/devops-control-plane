@@ -10165,3 +10165,363 @@ final technical guide in corso
 ```
 
 Questa guida serve a consolidare tutto il lavoro svolto in un documento organico, utile per onboarding, handover e operativita futura.
+
+## 43. Stato finale corrente
+
+Questo capitolo descrive lo stato finale corrente del progetto DevOps Control Plane alla data di redazione della guida tecnica finale.
+
+Lo scopo e fornire una fotografia chiara e non ambigua di cio che e completato, di cio che e validato, di cio che e pronto a livello codice e di cio che resta deferred per motivi infrastrutturali o di roadmap.
+
+Il punto piu importante da mantenere e la distinzione tra:
+
+```text
+baseline runtime validata
+readiness multi-cluster a livello codice
+validazione fisica multi-cluster deferred
+```
+
+Questa distinzione evita claim eccessivi e rende il documento utile sia per onboarding sia per handover operativo.
+
+### 43.1 Stato sintetico
+
+Lo stato corrente puo essere riassunto cosi:
+
+```text
+DevOps Control Plane backend                   completato
+PostgreSQL persistence                         completata
+ChangeRequest lifecycle                        completato
+GitLab MR workflow                             completato
+Tekton validation workflow                     completato
+Argo CD deployment evidence                    completata
+Runtime evidence                               completata
+UI evidence-aware                              completata
+Environment Catalog                            completato
+Cluster Registry                               completato
+Runtime target resolution                      completata
+Multi-cluster code-ready baseline              completata
+Namespace-isolated runtime baseline            validata
+Physical multi-cluster runtime validation       deferred
+Final technical guide                          in corso
+```
+
+Questa sintesi rappresenta una baseline avanzata e coerente con lo stato reale del progetto.
+
+### 43.2 Baseline runtime validata
+
+La baseline runtime validata e namespace-isolated sul cluster OpenShift disponibile `ocp-dev`.
+
+Mappatura corrente:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Questa baseline e stata validata con:
+
+- Argo CD Applications;
+- deployment readiness;
+- route `/healthz`;
+- Tekton validation;
+- runtime evidence;
+- UI evidence rendering;
+- health-check e operability runbook.
+
+Questa e la baseline fisica reale attualmente disponibile.
+
+### 43.3 Tag di baseline
+
+La baseline namespace-isolated e stata consolidata con il tag:
+
+```text
+namespace-isolated-baseline-20260709
+```
+
+Il tag rappresenta un punto di riferimento importante per ricostruire lo stato validato della piattaforma.
+
+### 43.4 Dev environment
+
+L'ambiente `dev` e associato a:
+
+```text
+cluster = ocp-dev
+namespace = devops-ci-demo
+application = demo-go-color-app
+```
+
+Dev rappresenta l'ambiente iniziale e la base operativa di sviluppo.
+
+### 43.5 Staging environment
+
+L'ambiente `staging` e associato a:
+
+```text
+cluster = ocp-dev
+namespace = devops-ci-staging
+Argo CD Application = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+La validazione staging include:
+
+```text
+ChangeRequest = CHG-2026-0049
+PipelineRun = devops-cp-validate-chg-2026-0049-nd7rm
+result = Succeeded
+failedTaskCount = 0
+evidence sanitized = true
+```
+
+### 43.6 Production environment
+
+L'ambiente `production` e associato a:
+
+```text
+cluster = ocp-dev
+namespace = devops-ci-production
+Argo CD Application = demo-go-color-app-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+La validazione production include:
+
+```text
+ChangeRequest = CHG-2026-0050
+PipelineRun = devops-cp-validate-chg-2026-0050-8wqtv
+result = Succeeded
+failedTaskCount = 0
+evidence sanitized = true
+```
+
+Production, in questa fase, e production logica namespace-isolated, non un cluster production fisico separato.
+
+### 43.7 Backend e persistenza
+
+Il backend Go e completato come foundation applicativa del control plane.
+
+Componenti principali:
+
+- `ChangeService`;
+- repository layer;
+- ChangeRequest persistence;
+- ChangeEvent persistence;
+- Evidence persistence;
+- runtime target resolver;
+- provider registry;
+- service options.
+
+PostgreSQL conserva la memoria applicativa del sistema.
+
+La persistenza e stata validata per:
+
+- ChangeRequest;
+- ChangeEvent;
+- Evidence;
+- audit trail;
+- UI data model.
+
+### 43.8 Workflow applicativi
+
+I workflow principali sono completati e documentati:
+
+- ChangeRequest lifecycle;
+- GitLab Merge Request workflow;
+- runtime workflow;
+- dev/staging/production workflow;
+- collect-evidence;
+- check-deployment;
+- validate;
+- check-validation.
+
+Questi workflow sono collegati a evidence persistite e UI rendering.
+
+### 43.9 Evidence model
+
+Il modello evidence e completato e riallineato post-Fase 15.
+
+Le famiglie principali sono:
+
+- runtime evidence;
+- Tekton validation evidence;
+- Argo CD deployment evidence;
+- evidence sanitization.
+
+Le evidence sono associate a ChangeRequest, ambiente, namespace e stato tecnico osservato.
+
+La sanitizzazione e un requisito fondamentale.
+
+### 43.10 UI e dashboard
+
+La UI e passata da MVP a superficie operativa evidence-aware.
+
+Funzionalita principali:
+
+- dashboard;
+- latest ChangeRequest;
+- recent changes;
+- `Environments / Namespaces`;
+- user box;
+- ChangeRequest detail;
+- runtime evidence card;
+- Tekton validation card;
+- Argo CD evidence;
+- raw sanitized evidence.
+
+La UI rende visibili dev, staging e production come ambienti logici distinti.
+
+### 43.11 Environment Catalog e Cluster Registry
+
+Environment Catalog e Cluster Registry sono completati come modello concettuale e tecnico.
+
+Environment Catalog descrive:
+
+- ambienti logici;
+- namespace Kubernetes;
+- namespace Tekton;
+- Argo CD Application;
+- validation path;
+- technical actions.
+
+Cluster Registry descrive:
+
+- cluster name;
+- enabled flag;
+- API URL, quando richiesta;
+- allowed namespaces;
+- Secret references;
+- provider metadata.
+
+Questi modelli alimentano la runtime target resolution.
+
+### 43.12 Multi-cluster code-ready baseline
+
+La readiness multi-cluster a livello codice e completata.
+
+Sono stati validati target simulati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+I test confermano:
+
+- nessun fallback silenzioso verso `ocp-dev`;
+- provider mancante fail-closed;
+- provider disabled fail-closed;
+- target metadata preservati.
+
+Questa e una validazione del modello codice, non una validazione fisica cross-cluster.
+
+### 43.13 Security e guardrail
+
+Il modello security e consolidato come baseline avanzata.
+
+Aree principali:
+
+- RBAC;
+- Secret reference model;
+- runtime Secret loader disabled-by-default;
+- runtime factories disabled-by-default;
+- AuthN/AuthZ;
+- OAuth proxy;
+- error handling fail-closed;
+- evidence sanitization.
+
+Il sistema privilegia errori espliciti e sicuri rispetto ad azioni implicite non controllate.
+
+### 43.14 Operability
+
+La baseline operativa e stata riallineata post-Fase 15.
+
+Elementi principali:
+
+- health check;
+- maintenance operations;
+- troubleshooting;
+- incident triage;
+- evidence package;
+- backup, restore e DR;
+- runbook post-Fase 15.
+
+La piattaforma dispone di una base operativa avanzata, pur non dichiarando production-hardening esaustivo.
+
+### 43.15 Cosa e deferred
+
+Restano deferred:
+
+- validazione fisica cross-cluster;
+- cluster staging fisico;
+- cluster production fisico;
+- onboarding reale di cluster non-production separato;
+- onboarding reale di cluster production separato;
+- Secret loading reale cross-cluster;
+- RBAC reale cross-cluster;
+- smoke test fisici cross-cluster;
+- rollback fisico cross-cluster;
+- produzione enterprise definitiva;
+- CLI `devopsctl`.
+
+Questi elementi non invalidano la baseline completata. Sono passi futuri legati a infrastruttura e roadmap.
+
+### 43.16 Cosa non deve essere dichiarato
+
+Il progetto non deve dichiarare:
+
+- production fisica separata gia validata;
+- staging fisico separato gia validato;
+- multi-cluster runtime fisico completato;
+- Secret reali cross-cluster gia caricati;
+- factory reali cross-cluster gia abilitate in produzione;
+- produzione enterprise definitiva.
+
+La guida deve mantenere sempre una formulazione accurata.
+
+### 43.17 Formulazione ufficiale dello stato
+
+La formulazione ufficiale e:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+Questa frase deve essere mantenuta come riferimento ogni volta che si parla di multi-cluster.
+
+### 43.18 Stato della guida finale
+
+La guida finale e in produzione incrementale.
+
+Sono gia stati scritti capitoli su:
+
+- concetti fondamentali;
+- architettura;
+- backend;
+- PostgreSQL;
+- modello dati;
+- workflow;
+- evidence;
+- UI;
+- Environment Catalog;
+- multi-cluster readiness;
+- security;
+- operability;
+- stato delle fasi.
+
+Restano da completare:
+
+- roadmap futura;
+- appendici;
+- revisione complessiva;
+- generazione Word.
+
+### 43.19 Sintesi
+
+Lo stato finale corrente e una baseline avanzata, funzionante e documentata.
+
+Il DevOps Control Plane e pronto come control plane applicativo multi-environment su namespace isolation.
+
+Il progetto e anche pronto a livello codice per il futuro multi-cluster, ma attende infrastruttura reale per validazione fisica cross-cluster.
+
+Questa distinzione e la chiave per descrivere correttamente lo stato del progetto.
