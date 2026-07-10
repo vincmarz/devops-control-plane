@@ -2834,3 +2834,334 @@ La baseline corrente e namespace-isolated su `ocp-dev`, ma include tutti gli ele
 - simulazione staging e production cluster.
 
 Questo capitolo chiude la parte dedicata ai workflow applicativi e prepara la guida ai capitoli sull'evidence model.
+
+## 21. Runtime evidence
+
+La runtime evidence e l'insieme delle prove tecniche raccolte osservando lo stato reale dei sistemi runtime.
+
+Nel DevOps Control Plane, una ChangeRequest non e considerata completa solo perche esiste nel database o perche una pipeline e stata avviata. Il sistema deve anche poter dimostrare cosa e stato osservato nell'ambiente target.
+
+La runtime evidence risponde alla domanda:
+
+```text
+Cosa risultava effettivamente in esecuzione nel cluster al momento del controllo?
+```
+
+Per questo motivo la runtime evidence e centrale per operability, troubleshooting, audit tecnico e UI evidence rendering.
+
+### 21.1 Perche serve la runtime evidence
+
+In un workflow DevOps distribuito, lo stato puo essere frammentato tra strumenti diversi.
+
+Per esempio:
+
+- GitLab conosce il codice e la merge request;
+- Argo CD conosce sync e health dell'applicazione;
+- Tekton conosce l'esito della pipeline;
+- Kubernetes/OpenShift conosce pod, deployment, service e route;
+- il database del DevOps Control Plane conosce ChangeRequest, eventi ed evidence.
+
+La runtime evidence collega la ChangeRequest allo stato osservato nel cluster. Questo permette di dimostrare che una richiesta non e solo stata processata, ma che il runtime e stato controllato e documentato.
+
+### 21.2 Cosa puo contenere la runtime evidence
+
+La runtime evidence puo includere informazioni come:
+
+- target environment;
+- cluster name;
+- Kubernetes namespace;
+- deployment name;
+- ready replicas;
+- desired replicas;
+- available replicas;
+- updated replicas;
+- pod status;
+- service status;
+- route host;
+- route health;
+- Argo CD sync status;
+- Argo CD health status;
+- timestamp del controllo;
+- stato di sanitizzazione.
+
+Queste informazioni aiutano un operatore a capire se l'ambiente target e coerente con lo stato atteso.
+
+### 21.3 Namespace e ambiente target
+
+La runtime evidence deve sempre conservare il contesto dell'ambiente target.
+
+Nel baseline attuale gli ambienti sono namespace-isolated sul cluster `ocp-dev`:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Per questo motivo non basta dire che un deployment e pronto. Bisogna dire in quale namespace e stato osservato.
+
+Un deployment pronto in `devops-ci-demo` non prova che staging o production siano pronti.
+
+### 21.4 Deployment evidence
+
+Una parte importante della runtime evidence e la deployment evidence.
+
+La deployment evidence descrive lo stato osservato del Deployment applicativo.
+
+Esempio:
+
+```text
+environment = production
+namespace = devops-ci-production
+deployment = demo-go-color-app
+readyReplicas = 2
+desiredReplicas = 2
+availableReplicas = 2
+updatedReplicas = 2
+```
+
+Questa evidence permette di distinguere tra deployment esistente ma non pronto, deployment pronto, deployment assente, numero di repliche non coerente o rollout non completato.
+
+### 21.5 Pod evidence
+
+La pod evidence aiuta a capire lo stato dei pod associati a un deployment.
+
+Informazioni utili:
+
+- nome pod;
+- fase pod;
+- container ready;
+- restart count;
+- eventi rilevanti.
+
+La pod evidence e utile quando il deployment non e pronto, per esempio per image pull error, crash del container, probe fallita o configurazione errata.
+
+### 21.6 Service e route evidence
+
+La runtime evidence puo includere informazioni su Service e Route.
+
+Nel progetto OpenShift, la Route e importante per verificare la raggiungibilita dell'applicazione.
+
+La smoke matrix finale ha validato `/healthz` per dev, staging e production.
+
+Risultato atteso:
+
+```text
+dev_healthz_http=200
+staging_healthz_http=200
+production_healthz_http=200
+```
+
+Questi controlli dimostrano che il workload non e solo presente nel cluster, ma risponde anche attraverso il percorso esposto.
+
+### 21.7 Argo CD runtime evidence
+
+Argo CD fornisce una vista GitOps dello stato dell'applicazione.
+
+Le informazioni piu importanti sono:
+
+- sync status;
+- health status;
+- revision;
+- Application name;
+- target namespace;
+- GitOps path.
+
+Stato atteso nella baseline validata:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+La Argo CD evidence e utile per confrontare lo stato desiderato GitOps con lo stato osservato nel cluster.
+
+### 21.8 Runtime evidence e Tekton validation evidence
+
+Runtime evidence e Tekton validation evidence sono collegate ma non identiche.
+
+La Tekton validation evidence risponde alla domanda:
+
+```text
+La pipeline di validazione tecnica e riuscita?
+```
+
+La runtime evidence risponde alla domanda:
+
+```text
+Il runtime osservato risulta coerente e sano?
+```
+
+Entrambe sono necessarie. Una pipeline Tekton puo riuscire, ma un deployment puo non essere pronto. Oppure un deployment puo essere pronto, ma la validazione GitOps puo fallire.
+
+### 21.9 Persistenza della runtime evidence
+
+La runtime evidence viene persistita in PostgreSQL come evidence associata a una ChangeRequest.
+
+Questo consente di:
+
+- consultare lo storico;
+- mostrare la evidence nella UI;
+- analizzare incidenti;
+- confrontare esecuzioni diverse;
+- preservare una fotografia dello stato osservato.
+
+La persistenza e importante perche lo stato runtime puo cambiare dopo il controllo.
+
+### 21.10 Runtime evidence nella UI
+
+La UI mostra la runtime evidence nelle pagine ChangeRequest.
+
+La UI deve aiutare l'operatore a capire:
+
+- quale ambiente era coinvolto;
+- quale namespace e stato osservato;
+- quale deployment e stato controllato;
+- se il deployment era pronto;
+- se la route rispondeva;
+- se Argo CD era `Synced` e `Healthy`.
+
+La UI puo offrire raw sanitized evidence come dettaglio diagnostico, ma non deve esporre dati sensibili.
+
+### 21.11 Sanitizzazione della runtime evidence
+
+La runtime evidence deve essere sanificata.
+
+Dati ammessi:
+
+- namespace;
+- nomi risorse;
+- stato deployment;
+- stato route;
+- status Argo CD;
+- reason;
+- timestamp;
+- validation path;
+- PipelineRun name, quando collegato.
+
+Dati vietati:
+
+- token;
+- password;
+- kubeconfig raw;
+- private key;
+- Secret decodificati;
+- credenziali applicative;
+- bearer token.
+
+La regola e:
+
+```text
+show operational metadata, never expose credentials
+```
+
+### 21.12 Runtime evidence e troubleshooting
+
+La runtime evidence e uno strumento di troubleshooting.
+
+Quando qualcosa non funziona, l'operatore puo usare le evidence per capire:
+
+- se il problema e nel deployment;
+- se il problema e nella route;
+- se il problema e in Argo CD;
+- se il problema e nel namespace sbagliato;
+- se il problema e nella validazione Tekton;
+- se il problema e nella UI o nella persistenza.
+
+Senza runtime evidence, il troubleshooting richiederebbe di interrogare manualmente molti sistemi diversi.
+
+### 21.13 Runtime evidence e operability
+
+I runbook operativi usano la runtime evidence come base per health check e manutenzione.
+
+Esempi di controlli:
+
+- `/readyz` del DevOps Control Plane;
+- dashboard HTTP;
+- Argo CD Application matrix;
+- deployment readiness matrix;
+- route health matrix;
+- Tekton validation matrix;
+- UI ChangeRequest detail.
+
+Questi controlli producono evidence directory e summary utili per incidenti e manutenzione.
+
+### 21.14 Dev evidence
+
+Per l'ambiente dev, la runtime evidence riguarda:
+
+```text
+environment = dev
+cluster = ocp-dev
+namespace = devops-ci-demo
+application = demo-go-color-app
+```
+
+Dev rappresenta la baseline iniziale del progetto.
+
+### 21.15 Staging evidence
+
+Per staging, la runtime evidence riguarda:
+
+```text
+environment = staging
+cluster = ocp-dev
+namespace = devops-ci-staging
+application = demo-go-color-app
+Argo CD Application = demo-go-color-app-staging
+```
+
+La staging evidence e collegata anche alla validation evidence della ChangeRequest `CHG-2026-0049`.
+
+### 21.16 Production evidence
+
+Per production, la runtime evidence riguarda:
+
+```text
+environment = production
+cluster = ocp-dev
+namespace = devops-ci-production
+application = demo-go-color-app
+Argo CD Application = demo-go-color-app-production
+```
+
+La production evidence e collegata anche alla validation evidence della ChangeRequest `CHG-2026-0050`.
+
+### 21.17 Relazione con multi-cluster readiness
+
+La runtime evidence deve essere compatibile con il futuro multi-cluster.
+
+Oggi staging e production sono namespace-isolated su `ocp-dev`. Domani potrebbero puntare a cluster fisici diversi.
+
+Per questo la evidence deve preservare sempre:
+
+- target environment;
+- cluster name;
+- namespace;
+- provider selection, quando disponibile;
+- Argo CD Application;
+- Tekton namespace;
+- validation path.
+
+Quando arriveranno cluster reali, la evidence dovra dimostrare che il workflow non e ricaduto per errore su `ocp-dev`.
+
+### 21.18 Cosa la runtime evidence non deve essere
+
+La runtime evidence non deve diventare:
+
+- un dump completo e non sanificato del cluster;
+- un contenitore di Secret;
+- una copia dei log grezzi senza controllo;
+- una fonte di credenziali;
+- una sostituzione dei runbook;
+- una dichiarazione automatica di successo production.
+
+La runtime evidence deve essere una prova tecnica utile, sicura e contestualizzata.
+
+### 21.19 Sintesi
+
+La runtime evidence e una delle funzioni piu importanti del DevOps Control Plane.
+
+Permette di collegare una ChangeRequest allo stato reale osservato in OpenShift, Argo CD e Tekton.
+
+Grazie alla runtime evidence, il sistema puo spiegare non solo che una richiesta e stata elaborata, ma anche cosa e stato osservato nel runtime e quali prove sono disponibili per verificarlo.
