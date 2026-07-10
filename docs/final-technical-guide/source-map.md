@@ -65,6 +65,25 @@ Uso previsto:
 - chiarire cosa è rinviato;
 - introdurre baseline namespace-isolated e multi-cluster code-ready baseline.
 
+### Capitolo 2 — Stato corrente del progetto
+
+Fonti principali:
+
+- `docs/multi-cluster-environment-enablement-request.md`
+- `docs/runtime-evidence-dashboard-maintenance-alignment.md`
+- `docs/phase-10-operability-closure.md`
+- `docs/final-technical-guide/outline.md`
+- `docs/final-technical-guide/final-technical-guide.md`
+
+Uso previsto:
+
+- descrivere lo stato corrente del progetto;
+- spiegare la baseline runtime namespace-isolated;
+- distinguere baseline validata e validazione fisica multi-cluster deferred;
+- riepilogare dev, staging e production su `ocp-dev`;
+- chiarire lo stato multi-cluster code-ready;
+- introdurre il contesto reale prima della visione e dello scope.
+
 ### Capitolo 3 — Visione del progetto
 
 Fonti principali:
@@ -94,6 +113,25 @@ Uso previsto:
 - esplicitare i limiti noti.
 
 ## 5. Parte 2 — Concetti fondamentali
+
+### Capitolo 5 — Concetti fondamentali
+
+Fonti principali:
+
+- `docs/05-architecture.md`
+- `docs/06-argocd-integration.md`
+- `docs/08-tekton-integration.md`
+- `docs/12-evidence-model.md`
+- `docs/environment-configuration-model.md`
+- `docs/final-technical-guide/outline.md`
+
+Uso previsto:
+
+- introdurre i concetti base prima del dettaglio tecnico;
+- collegare Kubernetes/OpenShift, namespace, GitOps, Argo CD, Tekton ed evidence;
+- preparare il lettore ai capitoli successivi;
+- spiegare perche questi concetti sono usati insieme nel DevOps Control Plane;
+- mantenere un linguaggio adatto anche a lettori non esperti.
 
 ### Capitolo 6 — Kubernetes e OpenShift in breve
 
