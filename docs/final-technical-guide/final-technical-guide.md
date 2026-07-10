@@ -5630,3 +5630,340 @@ Il Cluster Registry e il componente che rende esplicita la conoscenza dei cluste
 Insieme all'Environment Catalog, permette di trasformare un ambiente logico in un target runtime tecnico.
 
 Oggi rappresenta la baseline `ocp-dev` namespace-isolated. Domani permettera l'onboarding controllato di cluster fisici aggiuntivi, mantenendo fail-closed, Secret references e guardrail operativi.
+
+## 30. Runtime target resolution
+
+La runtime target resolution e il processo con cui il DevOps Control Plane trasforma un ambiente logico dichiarato in una `ChangeRequest` in un target tecnico utilizzabile dai workflow runtime.
+
+Una ChangeRequest contiene un campo come:
+
+```text
+targetEnvironment = staging
+```
+
+Questo valore, da solo, non e sufficiente per eseguire azioni tecniche. Il backend deve risolvere l'ambiente in informazioni operative concrete, come cluster, namespace, Argo CD Application, Tekton namespace e validation path.
+
+Il risultato di questa risoluzione e un `TechnicalRuntimeTarget`.
+
+Vista semplificata:
+
+```text
+ChangeRequest targetEnvironment
+      |
+      v
+Environment Catalog
+      |
+      v
+Cluster Registry
+      |
+      v
+TechnicalRuntimeTarget
+      |
+      +--> collect-evidence
+      +--> check-deployment
+      +--> validate
+      +--> check-validation
+```
+
+### 30.1 Perche serve la runtime target resolution
+
+La runtime target resolution evita che i workflow tecnici usino destinazioni hardcoded.
+
+Senza questo meccanismo, il codice rischierebbe di assumere implicitamente che ogni azione debba essere eseguita su `dev` o sul namespace `devops-ci-demo`.
+
+Questo sarebbe pericoloso perche il progetto oggi supporta tre ambienti logici:
+
+- `dev`;
+- `staging`;
+- `production`.
+
+Ognuno di questi ambienti ha namespace, Argo CD Application e validation path specifici.
+
+La runtime target resolution rende queste differenze esplicite e verificabili.
+
+### 30.2 Input principale: targetEnvironment
+
+Il punto di partenza e il `targetEnvironment` della ChangeRequest.
+
+Esempi:
+
+```text
+targetEnvironment = dev
+targetEnvironment = staging
+targetEnvironment = production
+```
+
+Questo campo indica l'ambiente logico richiesto dall'utente o dal workflow.
+
+Il backend non deve interpretare questo valore in modo arbitrario. Deve risolverlo tramite il modello configurato.
+
+### 30.3 Environment Catalog come primo livello
+
+Il primo livello della risoluzione e l'Environment Catalog.
+
+L'Environment Catalog descrive gli ambienti logici e i relativi metadati.
+
+Per esempio, per staging puo contenere:
+
+```text
+environment = staging
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-staging
+tektonNamespace = devops-ci-staging
+argocdApplicationName = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Questi dati permettono di passare da un ambiente logico a una configurazione tecnica iniziale.
+
+### 30.4 Cluster Registry come secondo livello
+
+Il secondo livello e il Cluster Registry.
+
+L'Environment Catalog puo dire che staging usa `ocp-dev`, ma il sistema deve poi sapere che cos'e `ocp-dev`.
+
+Il Cluster Registry descrive:
+
+- cluster name;
+- display name;
+- enabled flag;
+- API URL, quando richiesto;
+- namespace consentiti;
+- metadati cluster;
+- Secret references, quando previste;
+- condizioni per provider e factory runtime.
+
+La combinazione tra Environment Catalog e Cluster Registry produce una vista tecnica completa.
+
+### 30.5 TechnicalRuntimeTarget
+
+`TechnicalRuntimeTarget` e l'oggetto risultante dalla risoluzione.
+
+Contiene informazioni come:
+
+- target environment;
+- cluster name;
+- cluster display name;
+- cluster enabled flag;
+- Kubernetes namespace;
+- Tekton namespace;
+- Tekton pipeline name;
+- Argo CD Application name;
+- Git target branch;
+- validation path.
+
+Questo oggetto deve essere usato dai workflow runtime.
+
+Un'azione come `check-deployment` non deve scegliere autonomamente il namespace. Deve usare il namespace presente nel `TechnicalRuntimeTarget`.
+
+### 30.6 Esempio dev
+
+Esempio di risoluzione per dev:
+
+```text
+targetEnvironment = dev
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-demo
+tektonNamespace = devops-ci-demo
+argocdApplicationName = demo-go-color-app
+```
+
+Dev rappresenta il baseline iniziale e operativo del progetto.
+
+### 30.7 Esempio staging
+
+Esempio di risoluzione per staging:
+
+```text
+targetEnvironment = staging
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-staging
+tektonNamespace = devops-ci-staging
+argocdApplicationName = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Questa risoluzione garantisce che le azioni staging siano eseguite nel namespace staging e non in dev.
+
+### 30.8 Esempio production
+
+Esempio di risoluzione per production:
+
+```text
+targetEnvironment = production
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-production
+tektonNamespace = devops-ci-production
+argocdApplicationName = demo-go-color-app-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+Questa risoluzione garantisce che production logica abbia un target tecnico separato tramite namespace isolation.
+
+### 30.9 Relazione con provider selection
+
+Dopo aver risolto il `TechnicalRuntimeTarget`, il backend deve selezionare il provider runtime corretto.
+
+La provider selection usa il cluster name risolto.
+
+Esempio:
+
+```text
+TechnicalRuntimeTarget.clusterName = ocp-dev
+```
+
+Il provider registry deve trovare un provider per `ocp-dev`.
+
+Se il provider non esiste, l'operazione deve fallire.
+
+Se il provider e disabled, l'operazione deve fallire.
+
+Il sistema non deve usare un altro provider in modo implicito.
+
+### 30.10 No fallback a ocp-dev
+
+Una regola fondamentale e evitare fallback silenziosi verso `ocp-dev`.
+
+Oggi `ocp-dev` e il cluster fisico disponibile e validato.
+
+Tuttavia, in futuro staging e production potrebbero puntare a cluster fisici differenti.
+
+Se staging viene configurato per puntare a un cluster non-production reale, ma il provider manca, il sistema non deve tornare automaticamente a `ocp-dev`.
+
+Deve fallire in modo esplicito.
+
+Regola:
+
+```text
+wrong target is worse than explicit failure
+```
+
+### 30.11 Fail-closed cases
+
+La runtime target resolution deve fallire in modo controllato quando il target non e sicuro o completo.
+
+Esempi:
+
+- ambiente sconosciuto;
+- ambiente disabled;
+- cluster reference non valida;
+- cluster disabled;
+- namespace mancante;
+- validation path mancante quando richiesto;
+- provider mancante;
+- provider disabled;
+- Secret reference mancante quando richiesta;
+- factory runtime non configurata.
+
+Questi errori non sono necessariamente bug. Sono guardrail.
+
+### 30.12 Relazione con workflow runtime
+
+I workflow runtime dipendono dal target risolto.
+
+`collect-evidence` usa il Kubernetes namespace.
+
+`check-deployment` usa il deployment e il namespace.
+
+`validate` usa Tekton namespace e validation path.
+
+`check-validation` usa PipelineRun e Tekton namespace.
+
+Argo CD checks usano Argo CD Application name e target namespace.
+
+Tutti questi workflow devono usare il target tecnico risolto e non valori hardcoded.
+
+### 30.13 Relazione con evidence
+
+Le evidence devono preservare i dati del target risolto.
+
+Informazioni importanti:
+
+- target environment;
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application;
+- validation path.
+
+Questi campi permettono di interpretare correttamente una evidence.
+
+Senza questi dati, una evidence potrebbe indicare che una validazione e riuscita, ma non chiarire per quale ambiente.
+
+### 30.14 Relazione con UI
+
+La UI deve mostrare informazioni coerenti con il target risolto.
+
+La dashboard e la pagina ChangeRequest detail devono rendere visibili:
+
+- environment;
+- namespace;
+- Argo CD Application;
+- validation path;
+- evidence associate.
+
+Questo aiuta l'operatore a verificare che il workflow abbia agito sul target corretto.
+
+### 30.15 Simulazione staging e production cluster
+
+I test post-Fase 15 hanno rafforzato la runtime target resolution simulando cluster separati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+I test dimostrano che:
+
+- staging puo risolvere un cluster diverso da `ocp-dev`;
+- production puo risolvere un cluster diverso da `ocp-dev`;
+- il target risolto conserva il cluster simulato;
+- non avviene fallback silenzioso verso `ocp-dev`;
+- provider mancante fallisce fail-closed;
+- provider disabled fallisce fail-closed.
+
+Questa e una validazione di readiness del codice, non una validazione fisica cross-cluster.
+
+### 30.16 Relazione con real-cluster onboarding
+
+Quando sara disponibile un cluster reale aggiuntivo, la runtime target resolution sara il meccanismo che permettera di spostare un ambiente verso quel cluster.
+
+Esempio futuro:
+
+```text
+staging -> ocp-nonprod / devops-ci-staging
+```
+
+Per farlo in modo sicuro serviranno:
+
+- Environment Catalog aggiornato;
+- Cluster Registry aggiornato;
+- Secret references;
+- RBAC;
+- provider runtime;
+- runtime factories quando richieste;
+- readiness gates;
+- rollback plan.
+
+La runtime target resolution rende possibile questa evoluzione senza cambiare il significato del workflow.
+
+### 30.17 Errori da evitare
+
+Errori da evitare:
+
+- usare namespace hardcoded;
+- usare sempre `devops-ci-demo` come default;
+- ignorare targetEnvironment;
+- usare `ocp-dev` come fallback implicito;
+- validare production con path staging;
+- non mostrare il namespace nelle evidence;
+- non distinguere cluster simulato da cluster fisico reale;
+- abilitare provider incompleti per aggirare un errore.
+
+### 30.18 Sintesi
+
+La runtime target resolution e il ponte tra il modello logico e il runtime tecnico.
+
+Trasforma una ChangeRequest con `targetEnvironment` in un `TechnicalRuntimeTarget` usabile da workflow, evidence, UI e operability.
+
+Questo meccanismo e essenziale per la baseline namespace-isolated attuale e per il futuro multi-cluster reale.
