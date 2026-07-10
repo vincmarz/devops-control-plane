@@ -4159,3 +4159,251 @@ La regola finale e semplice:
 ```text
 le evidenze devono spiegare cosa e successo, non rivelare credenziali
 ```
+
+## 25. Dashboard
+
+La dashboard del DevOps Control Plane e la superficie operativa principale per avere una vista sintetica dello stato della piattaforma.
+
+Nelle prime fasi del progetto la UI era un MVP pensato soprattutto per visualizzare dati di base. Dopo le evoluzioni successive, la dashboard e diventata una vista operativa environment-aware ed evidence-aware.
+
+La dashboard oggi non deve essere vista come una semplice pagina grafica. Deve essere considerata un punto di ingresso per comprendere:
+
+- quale ChangeRequest e piu recente;
+- quali ambienti logici sono configurati;
+- quali namespace sono associati agli ambienti;
+- quali evidenze runtime sono disponibili;
+- quali evidenze Tekton sono disponibili;
+- se il modello dev, staging e production e visibile agli operatori.
+
+### 25.1 Scopo della dashboard
+
+Lo scopo della dashboard e fornire una sintesi rapida dello stato del DevOps Control Plane.
+
+Un operatore deve poter aprire la dashboard e capire rapidamente:
+
+- se il backend risponde;
+- se la UI e aggiornata;
+- qual e la ChangeRequest piu recente;
+- quali ambienti sono rappresentati;
+- quali evidenze sono disponibili;
+- se la piattaforma sta lavorando sul namespace corretto.
+
+La dashboard non sostituisce i runbook, ma aiuta a orientare l'analisi.
+
+### 25.2 Latest ChangeRequest
+
+La dashboard seleziona la ChangeRequest piu recente disponibile nel backend.
+
+Questo comportamento e importante perche evita una dashboard statica o legata a una richiesta storica hardcoded.
+
+Il comportamento atteso e:
+
+- mostrare la ChangeRequest piu recente;
+- mantenere le ChangeRequest precedenti accessibili nella lista;
+- permettere all'operatore di aprire il dettaglio della richiesta;
+- mostrare evidenze collegate quando disponibili.
+
+In questo modo la dashboard riflette l'attivita corrente del sistema.
+
+### 25.3 Recent changes
+
+La dashboard puo mostrare un elenco compatto di ChangeRequest recenti.
+
+Questa lista aiuta a vedere rapidamente il contesto operativo recente senza trasformare la dashboard in una cronologia completa.
+
+La cronologia dettagliata resta disponibile nelle viste dedicate e tramite il modello persistente su PostgreSQL.
+
+### 25.4 KPI e contatori
+
+La dashboard puo includere contatori o indicatori sintetici.
+
+Esempi:
+
+- numero di ChangeRequest;
+- richieste recenti;
+- stati principali;
+- evidenze disponibili;
+- stato operativo sintetico.
+
+Questi indicatori devono essere interpretati come supporto alla navigazione, non come sostituti delle evidenze tecniche.
+
+### 25.5 Environments / Namespaces
+
+Una funzionalita importante della dashboard post-Fase 15 e la sezione `Environments / Namespaces`.
+
+Questa sezione rende visibile la mappatura corrente:
+
+```text
+dev        -> devops-ci-demo
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+La visibilita di questa mappatura e fondamentale perche il progetto usa namespace isolation sul cluster `ocp-dev`.
+
+L'operatore deve poter vedere che staging e production sono ambienti logici distinti, anche se condividono lo stesso cluster fisico.
+
+### 25.6 User box
+
+La dashboard include una rappresentazione compatta del contesto utente.
+
+La user box aiuta a mostrare chi sta consultando la UI o quale identita e stata propagata tramite il layer di autenticazione.
+
+Questa informazione non deve oscurare la sezione degli ambienti. La priorita operativa resta rendere visibili environment, namespace ed evidenze.
+
+### 25.7 Runtime evidence summary
+
+La dashboard puo mostrare una sintesi delle runtime evidence disponibili.
+
+La runtime evidence aiuta a capire se lo stato osservato nel cluster e coerente con il risultato atteso.
+
+Esempi di informazioni utili:
+
+- ambiente target;
+- namespace;
+- deployment readiness;
+- Argo CD sync e health;
+- route health;
+- timestamp di raccolta.
+
+La dashboard deve sintetizzare queste informazioni, mentre la pagina di dettaglio della ChangeRequest puo mostrare informazioni piu ricche.
+
+### 25.8 Tekton validation summary
+
+La dashboard puo anche mostrare o collegare informazioni sulla validazione Tekton.
+
+Una sintesi utile include:
+
+- PipelineRun;
+- status;
+- reason;
+- failed task count;
+- validation path;
+- stato sanitized.
+
+Per analisi piu dettagliate, l'operatore deve aprire la pagina di dettaglio della ChangeRequest.
+
+### 25.9 Dashboard e ChangeRequest detail
+
+La dashboard e un punto di ingresso.
+
+Il dettaglio della ChangeRequest e il punto in cui l'operatore trova le informazioni complete.
+
+Flusso previsto:
+
+```text
+Dashboard
+      |
+      v
+Latest ChangeRequest
+      |
+      v
+ChangeRequest detail
+      |
+      +--> audit log
+      +--> runtime evidence
+      +--> Tekton validation evidence
+      +--> raw sanitized evidence
+```
+
+Questo flusso rende la UI utile sia per una vista rapida sia per l'analisi tecnica.
+
+### 25.10 Dashboard e namespace isolation
+
+La dashboard deve rappresentare correttamente la baseline namespace-isolated.
+
+Non deve suggerire che staging e production siano gia cluster fisici separati.
+
+La rappresentazione corretta e:
+
+```text
+cluster fisico disponibile: ocp-dev
+ambienti logici: dev, staging, production
+isolamento corrente: namespace separation
+```
+
+Questo evita claim errati e mantiene la documentazione coerente con la realta runtime.
+
+### 25.11 Dashboard e multi-cluster readiness
+
+La dashboard si appoggia a un backend multi-cluster code-ready.
+
+Il backend sa modellare ambienti, cluster, runtime target e provider.
+
+Tuttavia, la dashboard deve distinguere tra:
+
+- baseline fisica validata;
+- readiness multi-cluster a livello codice;
+- simulazioni staging e production;
+- validazione fisica futura.
+
+La UI non deve dichiarare validazione fisica cross-cluster finche non saranno disponibili cluster reali.
+
+### 25.12 Dashboard e sicurezza
+
+La dashboard non deve mostrare materiale sensibile.
+
+Dati ammessi:
+
+- numero ChangeRequest;
+- ambiente;
+- namespace;
+- stato;
+- reason;
+- nomi PipelineRun;
+- nomi Argo CD Application;
+- validation path;
+- evidence sanitized state.
+
+Dati vietati:
+
+- Secret raw;
+- token;
+- password;
+- kubeconfig;
+- private key;
+- bearer token;
+- contenuto Secret decodificato.
+
+La dashboard deve essere sicura da consultare e da usare durante troubleshooting e review operative.
+
+### 25.13 Dashboard e operability
+
+La dashboard e usata anche nelle procedure operative.
+
+Nei runbook post-Fase 15, un controllo dashboard positivo include:
+
+```text
+dashboard_http=200
+```
+
+Un operatore deve verificare anche che la dashboard mostri elementi coerenti con la baseline attuale:
+
+- latest ChangeRequest;
+- `Environments / Namespaces`;
+- user box;
+- evidenze se disponibili;
+- nessun dato sensibile.
+
+### 25.14 Errori tipici della dashboard
+
+Possibili problemi:
+
+- dashboard HTTP non 200;
+- latest ChangeRequest non aggiornata;
+- sezione `Environments / Namespaces` assente;
+- evidence non visualizzate;
+- user box non coerente;
+- pod con immagine non aggiornata;
+- browser cache;
+- problema OAuth proxy o forwarded headers.
+
+In questi casi bisogna distinguere se il problema e nella UI, nel backend, nella persistenza o nel runtime.
+
+### 25.15 Sintesi
+
+La dashboard e oggi una superficie operativa del DevOps Control Plane.
+
+Essa mostra lo stato recente, la visibilita degli ambienti, il contesto utente e l'accesso alle evidenze.
+
+La dashboard non e piu solo una UI MVP iniziale. E una vista evidence-aware ed environment-aware, coerente con la baseline namespace-isolated e con la readiness multi-cluster a livello codice.
