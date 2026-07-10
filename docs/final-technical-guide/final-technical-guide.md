@@ -4753,3 +4753,284 @@ La pagina ChangeRequest detail e il punto in cui il DevOps Control Plane rende c
 Essa collega dati di dominio, audit trail, runtime evidence, Tekton validation evidence, Argo CD evidence e azioni tecniche.
 
 Questa vista e essenziale per trasformare il control plane in uno strumento operativo reale, non solo in un archivio di richieste.
+
+## 27. UI environment awareness
+
+La UI environment awareness e la capacita della UI del DevOps Control Plane di rappresentare chiaramente gli ambienti logici, i namespace e il contesto runtime associato a una ChangeRequest.
+
+Questa funzionalita e importante perche il progetto non lavora piu con un'unica vista dev-only. La piattaforma gestisce oggi una baseline multi-environment namespace-isolated:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+La UI deve quindi aiutare l'operatore a capire in quale ambiente logico si trova, quale namespace e coinvolto e quali evidenze appartengono a quell'ambiente.
+
+### 27.1 Perche serve environment awareness nella UI
+
+Senza environment awareness, la UI rischia di nascondere informazioni operative fondamentali.
+
+Per esempio, se la UI mostrasse solo un'etichetta `dev`, l'operatore potrebbe non capire se una ChangeRequest riguarda staging o production.
+
+Questo sarebbe pericoloso perche:
+
+- staging e production hanno namespace diversi;
+- staging e production hanno Argo CD Applications diverse;
+- staging e production hanno validation path diversi;
+- staging e production hanno PipelineRun diverse;
+- le evidenze devono essere lette nel contesto dell'ambiente corretto.
+
+La UI deve quindi rendere esplicito il modello multi-environment.
+
+### 27.2 Ambiente logico, namespace e cluster fisico
+
+La UI deve aiutare a distinguere tre concetti.
+
+Ambiente logico:
+
+```text
+dev
+staging
+production
+```
+
+Namespace:
+
+```text
+devops-ci-demo
+devops-ci-staging
+devops-ci-production
+```
+
+Cluster fisico:
+
+```text
+ocp-dev
+```
+
+Nel baseline corrente tutti gli ambienti condividono il cluster fisico `ocp-dev`, ma restano separati come namespace e come contesto runtime.
+
+### 27.3 Environments / Namespaces
+
+La sezione `Environments / Namespaces` rende visibile la mappatura corrente degli ambienti.
+
+La UI deve mostrare una mappatura simile a:
+
+```text
+dev        -> devops-ci-demo
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+Questa sezione e utile per operatori, reviewer e sviluppatori perche chiarisce subito come il progetto sta rappresentando gli ambienti.
+
+### 27.4 Evitare rappresentazioni dev-only
+
+Una UI dev-only non e piu sufficiente.
+
+Nelle fasi iniziali del progetto poteva essere accettabile mostrare solo `dev` come placeholder. Dopo l'introduzione di Environment Catalog, runtime target resolution, staging e production namespace-isolated, la UI deve rappresentare tutti gli ambienti rilevanti.
+
+La UI deve evitare formulazioni che facciano pensare che:
+
+- esista solo dev;
+- staging non sia implementato;
+- production non sia rappresentata;
+- tutte le azioni vengano eseguite implicitamente su dev.
+
+### 27.5 Relazione con Environment Catalog
+
+La UI non dovrebbe inventare il modello degli ambienti.
+
+La fonte concettuale del modello e l'Environment Catalog.
+
+L'Environment Catalog contiene informazioni come:
+
+- nome ambiente;
+- namespace Kubernetes;
+- namespace Tekton;
+- Argo CD Application;
+- validation path;
+- stato enabled;
+- technical actions abilitate.
+
+La UI deve essere coerente con questo modello.
+
+### 27.6 Relazione con runtime target resolution
+
+Quando una ChangeRequest ha un `targetEnvironment`, il backend risolve un `TechnicalRuntimeTarget`.
+
+La UI deve mostrare informazioni coerenti con quel target.
+
+Esempio staging:
+
+```text
+targetEnvironment = staging
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-staging
+tektonNamespace = devops-ci-staging
+argocdApplicationName = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Esempio production:
+
+```text
+targetEnvironment = production
+clusterName = ocp-dev
+kubernetesNamespace = devops-ci-production
+tektonNamespace = devops-ci-production
+argocdApplicationName = demo-go-color-app-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+Queste informazioni aiutano l'operatore a verificare che il workflow stia agendo sul target corretto.
+
+### 27.7 UI e ChangeRequest detail
+
+La pagina ChangeRequest detail deve essere environment-aware.
+
+Deve mostrare o rendere chiaro:
+
+- target environment;
+- namespace Kubernetes;
+- namespace Tekton;
+- Argo CD Application;
+- validation path;
+- runtime evidence collegata;
+- Tekton validation evidence collegata;
+- stato sanitized delle evidence.
+
+Questo rende possibile analizzare una singola richiesta senza perdere il contesto dell'ambiente.
+
+### 27.8 UI e dashboard
+
+La dashboard deve fornire una vista sintetica degli ambienti.
+
+Elementi importanti:
+
+- latest ChangeRequest;
+- `Environments / Namespaces`;
+- user box;
+- summary delle evidence;
+- link al dettaglio della richiesta.
+
+La dashboard deve aiutare a capire rapidamente se la piattaforma rappresenta correttamente dev, staging e production.
+
+### 27.9 UI e evidence rendering
+
+Le evidence visualizzate nella UI devono mantenere il contesto environment-aware.
+
+Per esempio, una Tekton validation evidence deve indicare:
+
+- environment;
+- Tekton namespace;
+- PipelineRun;
+- validation path;
+- result;
+- failed task count.
+
+Una runtime evidence deve indicare:
+
+- environment;
+- cluster;
+- namespace;
+- deployment;
+- readiness;
+- Argo CD status, se disponibile.
+
+### 27.10 UI e multi-cluster readiness
+
+La UI deve essere pronta a rappresentare in futuro cluster fisici separati.
+
+Oggi lo stato validato e namespace-isolated su `ocp-dev`.
+
+Domani staging e production potrebbero essere associati a cluster diversi.
+
+La UI deve quindi evitare assunzioni rigide come:
+
+```text
+all environments always run on ocp-dev
+```
+
+La UI deve invece mostrare il target risolto e lasciare evidente la relazione tra ambiente, namespace e cluster.
+
+### 27.11 Simulazione staging e production cluster
+
+Il codice ha validato target simulati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+Questa simulazione e una validazione del modello codice, non una validazione fisica runtime.
+
+La UI deve quindi supportare il modello, ma non dichiarare validazione fisica cross-cluster finche non esistono cluster reali.
+
+### 27.12 Cosa mostrare
+
+La UI puo mostrare informazioni operative sicure:
+
+- ambiente;
+- cluster name;
+- namespace;
+- Argo CD Application;
+- PipelineRun;
+- validation path;
+- status;
+- reason;
+- failed task count;
+- sanitized state.
+
+Queste informazioni sono utili e non espongono credenziali.
+
+### 27.13 Cosa non mostrare
+
+La UI non deve mostrare:
+
+- Secret raw;
+- token;
+- password;
+- kubeconfig;
+- bearer token;
+- private key;
+- contenuto Secret decodificato;
+- credenziali Git o Argo CD.
+
+Environment awareness non deve compromettere la sicurezza.
+
+### 27.14 Errori da evitare
+
+Errori tipici da evitare nella UI:
+
+- mostrare sempre `dev` anche per staging o production;
+- non mostrare il namespace;
+- non mostrare il validation path;
+- nascondere il Tekton namespace;
+- confondere production logica con cluster production fisico;
+- non distinguere tra baseline validata e validazione fisica deferred;
+- mostrare evidence senza stato sanitized.
+
+### 27.15 Relazione con operability
+
+I runbook operativi richiedono di verificare che la UI esponga gli elementi corretti.
+
+Dopo manutenzione o rollout, l'operatore deve controllare:
+
+- dashboard HTTP `200`;
+- presenza di `Environments / Namespaces`;
+- latest ChangeRequest;
+- ChangeRequest detail;
+- runtime evidence card;
+- Tekton validation card;
+- assenza di dati sensibili.
+
+### 27.16 Sintesi
+
+La UI environment awareness rende visibile il modello multi-environment del DevOps Control Plane.
+
+Essa consente agli operatori di distinguere dev, staging e production, di vedere namespace e target runtime, e di interpretare le evidence nel contesto corretto.
+
+Questa funzionalita e essenziale nella baseline namespace-isolated e sara ancora piu importante quando saranno disponibili cluster fisici separati.
