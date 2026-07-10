@@ -6315,3 +6315,368 @@ La posizione corretta e:
 Physical cross-cluster runtime validation is deferred by infrastructure availability.
 Multi-cluster code readiness is completed, tested, documented and fail-closed.
 ```
+
+## 32. Deferred real-cluster onboarding contract
+
+Il deferred real-cluster onboarding contract descrive le regole da seguire quando sara disponibile un cluster OpenShift reale aggiuntivo.
+
+Questo capitolo e importante perche separa chiaramente due concetti:
+
+```text
+readiness multi-cluster a livello codice
+validazione fisica multi-cluster reale
+```
+
+La readiness a livello codice e completata, testata e documentata. La validazione fisica resta rinviata per indisponibilita di cluster aggiuntivi.
+
+Il contratto di onboarding serve a garantire che, quando un cluster reale sara disponibile, l'integrazione avvenga in modo controllato, sicuro, verificabile e reversibile.
+
+### 32.1 Perche l'onboarding reale e deferred
+
+L'onboarding reale e deferred per un motivo infrastrutturale: attualmente e disponibile solo il cluster `ocp-dev`.
+
+La baseline validata e:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+Non esiste ancora un cluster fisico separato per staging o production.
+
+Per questo motivo il progetto non deve dichiarare validazione fisica cross-cluster.
+
+La formulazione corretta resta:
+
+```text
+Physical cross-cluster runtime validation is deferred by infrastructure availability.
+Multi-cluster code readiness is completed, tested, documented and fail-closed.
+```
+
+### 32.2 Obiettivo del contratto di onboarding
+
+L'obiettivo del contratto e definire cosa deve essere disponibile prima di abilitare un cluster reale.
+
+Il contratto evita che l'onboarding venga fatto in modo improvvisato.
+
+Un nuovo cluster non deve essere aggiunto semplicemente modificando un nome o abilitando un provider.
+
+Deve essere aggiunto seguendo una sequenza chiara:
+
+1. identificare il cluster;
+2. aggiornare Environment Catalog;
+3. aggiornare Cluster Registry;
+4. definire Secret references;
+5. validare RBAC;
+6. validare Argo CD;
+7. validare Tekton;
+8. abilitare provider e factory solo quando sicuro;
+9. eseguire smoke test;
+10. documentare evidence;
+11. mantenere rollback pronto.
+
+### 32.3 Dati richiesti per un cluster reale
+
+Per registrare un cluster reale servono informazioni minime.
+
+Dati richiesti:
+
+- logical cluster name;
+- physical cluster name;
+- provider type;
+- OpenShift version;
+- API server URL;
+- console URL, se disponibile;
+- network reachability dal DevOps Control Plane;
+- target environment;
+- target namespace;
+- Tekton namespace;
+- Argo CD access model;
+- owner operativo;
+- procedura di rollback.
+
+Senza questi dati, il cluster non deve essere abilitato per azioni runtime.
+
+### 32.4 Esempio futuro staging
+
+Esempio ipotetico per staging:
+
+```text
+environment = staging
+clusterName = ocp-nonprod
+kubernetesNamespace = devops-ci-staging
+tektonNamespace = devops-ci-staging
+argocdApplicationName = demo-go-color-app-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Questo esempio non e una configurazione attiva.
+
+Serve solo a mostrare come potrebbe apparire un onboarding futuro.
+
+### 32.5 Aggiornamento Environment Catalog
+
+Il primo aggiornamento riguarda l'Environment Catalog.
+
+L'ambiente target deve puntare esplicitamente al nuovo cluster.
+
+Esempio futuro:
+
+```text
+staging -> ocp-nonprod / devops-ci-staging
+```
+
+Il catalogo deve continuare a definire:
+
+- environment name;
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application;
+- validation path;
+- flag enabled;
+- technical actions consentite.
+
+Un mapping incompleto deve fallire fail-closed.
+
+### 32.6 Aggiornamento Cluster Registry
+
+Il Cluster Registry deve contenere il nuovo cluster.
+
+Informazioni richieste:
+
+- cluster name;
+- display name;
+- enabled flag;
+- API URL;
+- default namespace;
+- allowed namespaces;
+- Secret references;
+- provider metadata;
+- descrizione operativa.
+
+Il cluster deve partire disabilitato o comunque non utilizzabile per runtime reale finche non sono completate le readiness gates.
+
+### 32.7 Secret references
+
+Un cluster reale richiede credenziali.
+
+Il modello corretto usa Secret references, non valori raw.
+
+Una Secret reference puo indicare:
+
+```text
+secretNamespace = devops-control-plane
+secretName = dcp-ocp-nonprod-runtime-token
+key = token
+```
+
+La guida e i log non devono contenere il valore del token.
+
+Regola:
+
+```text
+reference yes, raw secret no
+```
+
+### 32.8 Secret allow-list
+
+La lettura di Secret deve essere controllata tramite allow-list.
+
+La allow-list deve specificare quali riferimenti sono autorizzati per quali cluster.
+
+Se una Secret reference non e allow-listed, il sistema deve fallire.
+
+Questo comportamento e intenzionale e deve essere mantenuto.
+
+### 32.9 RBAC minimo
+
+L'onboarding deve usare il principio del minimo privilegio.
+
+Permessi tipici richiesti:
+
+- leggere Deployment;
+- leggere Pod;
+- leggere Service;
+- leggere Route;
+- creare PipelineRun, se previsto;
+- leggere PipelineRun;
+- leggere TaskRun;
+- leggere lo stato delle risorse necessarie.
+
+Da evitare:
+
+- cluster-admin;
+- wildcard troppo ampie;
+- accesso Secret non limitato;
+- accesso cross-namespace non controllato;
+- permessi concessi solo per bypassare un errore.
+
+### 32.10 Requisiti Argo CD
+
+Prima dell'onboarding reale bisogna chiarire il modello Argo CD.
+
+Informazioni richieste:
+
+- namespace Argo CD;
+- Application name;
+- repository Git;
+- path GitOps;
+- target namespace;
+- target cluster;
+- sync policy;
+- expected health state.
+
+Risultato atteso:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+Se Argo CD non puo osservare correttamente il target, l'onboarding non deve essere completato.
+
+### 32.11 Requisiti Tekton
+
+Tekton deve essere disponibile nel namespace previsto.
+
+Requisiti:
+
+- Pipeline disponibile;
+- Task disponibili;
+- ServiceAccount autorizzato;
+- workspace configurati;
+- parametri corretti;
+- accesso GitOps funzionante;
+- validation path corretto.
+
+Risultato atteso:
+
+```text
+PipelineRun status=True
+reason=Succeeded
+failedTaskCount=0
+evidence sanitized=true
+```
+
+### 32.12 Runtime provider
+
+Il runtime provider deve essere configurato in modo esplicito.
+
+Se il provider manca, il sistema deve fallire.
+
+Se il provider e disabled, il sistema deve fallire.
+
+Non deve esserci fallback verso `ocp-dev`.
+
+Questa e una regola fondamentale del contratto.
+
+### 32.13 Runtime factories
+
+Le runtime factories devono essere abilitate solo quando necessario.
+
+Esempi:
+
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory.
+
+Le factory devono restare disabled by default.
+
+Devono essere abilitate in modo esplicito e solo dopo che Secret references, RBAC e prerequisites sono stati validati.
+
+### 32.14 Readiness gates
+
+Prima di abilitare un cluster reale devono passare readiness gates chiare.
+
+Readiness gates minime:
+
+- cluster identity documentata;
+- Environment Catalog aggiornato;
+- Cluster Registry aggiornato;
+- Secret references definite;
+- allow-list definita;
+- RBAC minimo verificato;
+- Argo CD Application osservabile;
+- Tekton validation eseguibile;
+- runtime provider configurato;
+- factory abilitate solo se necessario;
+- no raw Secret exposure;
+- rollback documentato.
+
+Se una readiness gate fallisce, l'onboarding deve fermarsi.
+
+### 32.15 Smoke test iniziale
+
+Il primo smoke test su un cluster reale deve verificare:
+
+- `/readyz` del DevOps Control Plane;
+- risoluzione del target environment;
+- cluster name risolto;
+- namespace Kubernetes;
+- namespace Tekton;
+- Argo CD Application;
+- deployment readiness;
+- route health;
+- Tekton PipelineRun;
+- evidence sanitization;
+- UI ChangeRequest detail;
+- assenza di fallback a `ocp-dev`.
+
+Il test deve produrre evidence directory e summary.
+
+### 32.16 Rollback
+
+Ogni onboarding reale deve avere rollback.
+
+Azioni tipiche:
+
+- disabilitare il cluster target;
+- ripristinare mapping namespace-isolated precedente;
+- disabilitare Secret loader se abilitato solo per il test;
+- disabilitare factory runtime se abilitate solo per il test;
+- preservare evidence sanificata del fallimento;
+- verificare che dev resti operativo;
+- documentare causa e remediation.
+
+Il rollback deve essere preparato prima dell'onboarding, non dopo il fallimento.
+
+### 32.17 Exit criteria
+
+L'onboarding reale puo essere considerato completato solo se:
+
+- il cluster reale e documentato;
+- Environment Catalog e Cluster Registry sono coerenti;
+- Secret references e allow-list sono corrette;
+- RBAC minimo e verificato;
+- provider e factory sono configurati in modo sicuro;
+- Argo CD e `Synced` e `Healthy`;
+- Tekton validation e `Succeeded`;
+- runtime evidence e raccolta;
+- UI mostra evidence corretta;
+- no raw Secret e esposto;
+- rollback e documentato;
+- smoke test e superato.
+
+### 32.18 Errori da evitare
+
+Errori da evitare:
+
+- dichiarare cluster reale senza averlo validato fisicamente;
+- usare `ocp-dev` come fallback implicito;
+- abilitare provider senza RBAC;
+- abilitare factory senza Secret references validate;
+- usare token raw nei file di configurazione;
+- copiare Secret nei log;
+- saltare smoke test;
+- saltare rollback plan;
+- confondere cluster simulato con cluster reale.
+
+### 32.19 Sintesi
+
+Il deferred real-cluster onboarding contract consente al progetto di essere pronto per il futuro senza fare claim non verificati.
+
+Il DevOps Control Plane e multi-cluster code-ready, ma la validazione fisica cross-cluster resta deferred.
+
+Quando un cluster reale sara disponibile, l'onboarding dovra seguire questo contratto per mantenere sicurezza, tracciabilita, fail-closed behavior e operability.
