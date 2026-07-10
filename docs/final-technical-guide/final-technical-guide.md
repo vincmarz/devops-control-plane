@@ -3512,3 +3512,332 @@ La Tekton validation evidence rende verificabile il risultato della validazione 
 Essa collega ChangeRequest, PipelineRun, validation path, stato, reason, failed task count e UI.
 
 Insieme alla runtime evidence, permette al DevOps Control Plane di fornire una vista completa e auditabile del cambiamento.
+
+## 23. Argo CD deployment evidence
+
+La Argo CD deployment evidence descrive lo stato GitOps osservato da Argo CD per una applicazione gestita.
+
+Nel DevOps Control Plane, Argo CD e il componente che confronta lo stato desiderato nel repository GitOps con lo stato effettivo applicato nel cluster OpenShift. La deployment evidence proveniente da Argo CD permette di capire se l'applicazione e allineata al repository e se le risorse risultano sane.
+
+La domanda principale a cui risponde questa evidence e:
+
+```text
+Lo stato GitOps dell'applicazione e sincronizzato e sano per l'ambiente target?
+```
+
+Questa evidence completa la runtime evidence e la Tekton validation evidence.
+
+### 23.1 Perche serve la Argo CD deployment evidence
+
+In un modello GitOps, Git rappresenta lo stato desiderato.
+
+Argo CD osserva il repository Git e applica o confronta quello stato con il cluster.
+
+Senza Argo CD deployment evidence, un operatore potrebbe sapere che una pipeline Tekton e riuscita, ma non sapere se Argo CD vede l'applicazione come `Synced` e `Healthy`.
+
+Questa evidence e quindi fondamentale per rispondere a domande come:
+
+- l'applicazione e allineata con Git?
+- Argo CD vede differenze tra Git e cluster?
+- l'applicazione e sana?
+- quale revisione Git e osservata?
+- quale namespace e target dell'Application?
+- quale overlay GitOps e collegato all'ambiente?
+
+### 23.2 Application Argo CD
+
+Il concetto centrale di Argo CD e `Application`.
+
+Una Application descrive:
+
+- repository Git;
+- path GitOps;
+- cluster o destinazione;
+- namespace target;
+- stato di sync;
+- stato di health;
+- revisione osservata.
+
+Nel DevOps Control Plane, le Application rappresentano la vista GitOps degli ambienti logici.
+
+Esempi validati:
+
+- `demo-go-color-app`;
+- `demo-go-color-app-staging`;
+- `demo-go-color-app-production`.
+
+### 23.3 Sync status
+
+Il sync status indica se lo stato del cluster e allineato allo stato desiderato nel repository Git.
+
+Stato atteso nella baseline validata:
+
+```text
+sync=Synced
+```
+
+Se lo stato e `OutOfSync`, Argo CD vede una differenza tra Git e cluster.
+
+Questa condizione richiede analisi prima di dichiarare completato un workflow.
+
+### 23.4 Health status
+
+Il health status indica se le risorse gestite da Argo CD appaiono sane.
+
+Stato atteso nella baseline validata:
+
+```text
+health=Healthy
+```
+
+Se lo stato e `Degraded`, `Progressing` o un altro stato non atteso, l'applicazione potrebbe non essere pronta anche se il repository Git contiene la configurazione desiderata.
+
+### 23.5 Revision
+
+La revision indica quale revisione Git Argo CD sta osservando.
+
+Questa informazione e importante per collegare:
+
+- repository Git;
+- commit o branch;
+- Application Argo CD;
+- ChangeRequest;
+- evidence.
+
+In un workflow auditabile, e utile sapere quale revisione era associata allo stato osservato.
+
+### 23.6 Target namespace
+
+La Argo CD deployment evidence deve preservare il namespace target.
+
+Nel baseline corrente:
+
+```text
+dev        -> devops-ci-demo
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+Il namespace target e necessario per evitare ambiguita.
+
+Una Application `Healthy` per staging non dimostra automaticamente che production sia corretta.
+
+### 23.7 Application dev
+
+L'Application dev e associata all'ambiente di sviluppo.
+
+Mappatura concettuale:
+
+```text
+environment = dev
+Argo CD Application = demo-go-color-app
+namespace = devops-ci-demo
+```
+
+Dev rappresenta la baseline iniziale da cui il progetto e stato esteso verso staging e production.
+
+### 23.8 Application staging
+
+L'Application staging e associata all'ambiente logico staging.
+
+Mappatura concettuale:
+
+```text
+environment = staging
+Argo CD Application = demo-go-color-app-staging
+namespace = devops-ci-staging
+validationPath = apps/demo-go-color-app/overlays/staging
+```
+
+Lo stato atteso e:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+Questa Application dimostra che staging non e solo un'etichetta logica, ma ha un proprio namespace, un proprio overlay e una propria vista GitOps.
+
+### 23.9 Application production
+
+L'Application production e associata all'ambiente logico production.
+
+Mappatura concettuale:
+
+```text
+environment = production
+Argo CD Application = demo-go-color-app-production
+namespace = devops-ci-production
+validationPath = apps/demo-go-color-app/overlays/production
+```
+
+Lo stato atteso e:
+
+```text
+sync=Synced
+health=Healthy
+```
+
+Questa Application rappresenta la produzione logica nella baseline namespace-isolated.
+
+Non deve essere descritta come produzione fisica separata, perche il cluster fisico resta `ocp-dev`.
+
+### 23.10 Argo CD evidence e runtime evidence
+
+Argo CD deployment evidence e runtime evidence sono collegate.
+
+Argo CD deployment evidence dice se l'applicazione e allineata e sana dal punto di vista GitOps.
+
+Runtime evidence dice cosa e stato osservato nel cluster.
+
+Esempio di vista completa:
+
+```text
+Argo CD sync: Synced
+Argo CD health: Healthy
+Deployment ready: true
+Route health: HTTP 200
+```
+
+La combinazione dei due punti di vista rende il controllo piu affidabile.
+
+### 23.11 Argo CD evidence e Tekton validation evidence
+
+Argo CD e Tekton svolgono ruoli diversi.
+
+Tekton valida tecnicamente il contenuto o il path GitOps.
+
+Argo CD osserva e riconcilia lo stato GitOps sul cluster.
+
+Insieme, le evidenze rispondono a due domande complementari:
+
+```text
+Tekton: il contenuto e stato validato?
+Argo CD: lo stato desiderato e sincronizzato e sano?
+```
+
+Un workflow completo deve considerare entrambe.
+
+### 23.12 Argo CD evidence nella UI
+
+La UI deve rendere disponibili le informazioni Argo CD in modo utile per l'operatore.
+
+Informazioni da mostrare o rendere disponibili:
+
+- Application name;
+- environment;
+- namespace;
+- sync status;
+- health status;
+- revision;
+- eventuale stato non atteso.
+
+La UI non deve nascondere staging e production dietro una rappresentazione dev-only.
+
+### 23.13 Argo CD evidence e troubleshooting
+
+Quando Argo CD non e `Synced` o non e `Healthy`, l'operatore deve analizzare:
+
+- Application status;
+- events;
+- Git repository revision;
+- path GitOps;
+- target namespace;
+- risorse Kubernetes associate;
+- eventuali errori di sync;
+- drift manuale nel cluster.
+
+Esempi di problemi:
+
+- overlay errato;
+- namespace mancante;
+- manifest non valido;
+- risorsa non applicabile;
+- permessi insufficienti;
+- drift rispetto a Git;
+- risorsa degradata.
+
+Questi casi devono essere registrati come evidence sanificata quando collegati a una ChangeRequest.
+
+### 23.14 OutOfSync
+
+`OutOfSync` indica che il cluster non corrisponde allo stato desiderato in Git.
+
+Possibili cause:
+
+- modifica non ancora sincronizzata;
+- errore di sync;
+- modifica manuale nel cluster;
+- repository aggiornato ma non ancora riconciliato;
+- differenza tra overlay atteso e overlay configurato.
+
+Un workflow non dovrebbe essere considerato completamente sano se l'Application target e `OutOfSync`, salvo eccezioni operative esplicitamente documentate.
+
+### 23.15 Degraded
+
+`Degraded` indica che Argo CD considera non sane una o piu risorse gestite.
+
+Possibili cause:
+
+- pod non ready;
+- deployment non disponibile;
+- errore applicativo;
+- probe fallita;
+- risorsa Kubernetes non valida;
+- dipendenza non disponibile.
+
+In caso di `Degraded`, bisogna correlare Argo CD evidence con runtime evidence Kubernetes/OpenShift.
+
+### 23.16 Evidence sanitization
+
+La Argo CD deployment evidence deve essere sanificata.
+
+Dati ammessi:
+
+- Application name;
+- namespace;
+- sync status;
+- health status;
+- revision;
+- GitOps path;
+- resource status;
+- reason o message non sensibili.
+
+Dati vietati:
+
+- token Argo CD;
+- credenziali Git;
+- Secret;
+- bearer token;
+- dettagli sensibili non necessari;
+- payload non sanificati.
+
+### 23.17 Relazione con multi-cluster readiness
+
+In futuro, Argo CD dovra essere valutato anche rispetto a cluster fisici separati.
+
+Oggi la baseline e namespace-isolated su `ocp-dev`.
+
+Domani staging o production potrebbero avere cluster fisici dedicati.
+
+La Argo CD evidence dovra allora preservare anche il cluster target effettivo, per dimostrare che non c'e stato fallback verso `ocp-dev`.
+
+### 23.18 Stato corrente validato
+
+La smoke matrix finale ha confermato Applications `Synced` e `Healthy` per:
+
+```text
+dev
+staging
+production
+```
+
+Questa validazione sostiene la baseline namespace-isolated e fornisce un riferimento operativo per health check e manutenzione.
+
+### 23.19 Sintesi
+
+La Argo CD deployment evidence dimostra lo stato GitOps dell'applicazione.
+
+Essa collega repository Git, Application Argo CD, namespace target, stato di sync, stato di health e ChangeRequest.
+
+Insieme a runtime evidence e Tekton validation evidence, permette al DevOps Control Plane di fornire una vista completa del cambiamento: codice validato, GitOps sincronizzato e runtime osservato.
