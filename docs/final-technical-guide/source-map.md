@@ -471,7 +471,9 @@ Uso previsto:
 
 ## 11. Parte 8 — Security e guardrail
 
-### Capitolo 30 — RBAC
+Nota di allineamento: la guida tecnica finale ha introdotto un capitolo aggiuntivo dedicato a `Error handling`. Per questo motivo la numerazione della Parte 8 e delle parti successive e stata riallineata alla struttura corrente del documento sorgente `docs/final-technical-guide/final-technical-guide.md`.
+
+### Capitolo 33 — RBAC
 
 Fonti principali:
 
@@ -481,26 +483,31 @@ Fonti principali:
 
 Uso previsto:
 
-- spiegare principio minimo privilegio;
+- spiegare il principio del minimo privilegio;
 - spiegare namespace-scoped RBAC;
-- spiegare cosa evitare.
+- spiegare ServiceAccount, Role e RoleBinding;
+- spiegare i permessi per runtime evidence, Tekton e Argo CD;
+- spiegare cosa evitare, inclusi `cluster-admin`, wildcard e accessi cross-namespace non controllati;
+- collegare RBAC al futuro onboarding reale multi-cluster.
 
-### Capitolo 31 — Secret reference model
+### Capitolo 34 — Secret reference model
 
 Fonti principali:
 
 - `docs/runtime-client-secret-config-model.md`
 - `docs/runtime-client-secret-reference-loading.md`
 - `docs/controlled-runtime-secret-loader-and-factory-enablement-design.md`
+- `docs/runbooks/operability-health-check.md`
 
 Uso previsto:
 
-- spiegare Secret reference;
+- spiegare Secret reference vs Secret value;
 - spiegare allow-list;
-- spiegare loader disabled-by-default;
-- spiegare no raw Secret.
+- spiegare runtime Secret loader disabled-by-default;
+- spiegare no raw Secret in log, evidence, UI o documentazione;
+- collegare il modello al futuro multi-cluster e al deferred onboarding contract.
 
-### Capitolo 32 — Runtime factories
+### Capitolo 35 — Runtime factories
 
 Fonti principali:
 
@@ -508,15 +515,20 @@ Fonti principali:
 - `docs/real-runtime-client-factory-implementation-readiness.md`
 - `docs/runtime-non-regression-factories-disabled-results.md`
 - `docs/controlled-enablement-plumbing-validation-results.md`
+- `docs/factory-aware-runtime-provider-main-wiring-results.md`
 
 Uso previsto:
 
-- spiegare Kubernetes, Tekton e Argo CD factory;
+- spiegare Kubernetes runtime client factory;
+- spiegare Tekton runtime client factory;
+- spiegare Argo CD runtime client factory;
 - spiegare disabled-by-default;
+- spiegare capability-specific enablement;
 - spiegare fail-closed;
-- spiegare unsupported kubeconfig e raw CA.
+- spiegare unsupported kubeconfig, unsupported raw CA, missing token e missing API URL;
+- collegare le factories al Secret reference model e al provider registry.
 
-### Capitolo 33 — AuthN/AuthZ e OAuth proxy
+### Capitolo 36 — AuthN/AuthZ e OAuth proxy
 
 Fonti principali:
 
@@ -524,38 +536,78 @@ Fonti principali:
 - `docs/adr/ADR-0010-oauth-proxy-deployment-design.md`
 - `docs/runbooks/authn-authz.md`
 - `docs/runbooks/oauth-proxy.md`
+- `docs/runbooks/oauth-proxy-implementation.md`
+- `docs/runbooks/oauth-proxy-runtime-only-retry.md`
 
 Uso previsto:
 
-- spiegare proxy;
+- spiegare authentication e authorization;
+- spiegare il ruolo dell'OAuth proxy;
 - spiegare forwarded headers;
-- spiegare gruppi e autorizzazioni;
-- spiegare fail-closed.
+- spiegare gruppi e ruoli;
+- spiegare role-aware UI;
+- spiegare backend authorization;
+- spiegare fail-closed authorization;
+- collegare il modello alla sicurezza delle azioni tecniche e della UI.
+
+### Capitolo 37 — Error handling
+
+Fonti principali:
+
+- `docs/runbooks/operability-health-check.md`
+- `docs/runbooks/maintenance-operations.md`
+- `docs/11-change-workflows.md`
+- `docs/12-evidence-model.md`
+- `docs/multi-cluster-environment-enablement-request.md`
+- `docs/runtime-client-secret-reference-loading.md`
+- `docs/controlled-enablement-plumbing-validation-results.md`
+
+Uso previsto:
+
+- spiegare le categorie principali di errore;
+- spiegare input validation error;
+- spiegare authorization error;
+- spiegare environment resolution error;
+- spiegare runtime provider error;
+- spiegare Secret reference error;
+- spiegare runtime factory error;
+- spiegare errori GitLab, Argo CD, Tekton, Kubernetes/OpenShift e PostgreSQL;
+- spiegare errori fail-closed attesi;
+- spiegare evidence per errori, messaggi operativi, retry e troubleshooting;
+- collegare l'error handling alla readiness multi-cluster.
 
 ## 12. Parte 9 — Operability
 
-### Capitolo 34 — Health check
+### Capitolo 38 — Health check
 
 Fonti principali:
 
 - `docs/runbooks/operability-health-check.md`
 - `docs/phase-10-operability-closure.md`
+- `docs/runtime-evidence-dashboard-maintenance-alignment.md`
 
 Uso previsto:
 
-- spiegare health-check matrix post-Fase 15.
+- spiegare health-check matrix post-Fase 15;
+- spiegare evidence directory;
+- spiegare `/readyz`, dashboard HTTP, Argo CD matrix, deployment readiness matrix, route health matrix, Tekton validation matrix e UI ChangeRequest detail checks;
+- spiegare pass criteria e failure handling.
 
-### Capitolo 35 — Maintenance operations
+### Capitolo 39 — Maintenance operations
 
 Fonti principali:
 
 - `docs/runbooks/maintenance-operations.md`
+- `docs/phase-10-operability-closure.md`
 
 Uso previsto:
 
-- spiegare pre-maintenance, post-maintenance, smoke matrix e guardrail.
+- spiegare pre-maintenance checks;
+- spiegare post-maintenance smoke matrix;
+- spiegare Argo CD, Tekton, UI, Secret/RBAC/factory checks;
+- spiegare maintenance stop conditions e closure criteria.
 
-### Capitolo 36 — Troubleshooting
+### Capitolo 40 — Troubleshooting
 
 Fonti principali:
 
@@ -565,10 +617,12 @@ Fonti principali:
 Uso previsto:
 
 - spiegare incident triage;
+- spiegare layer-based troubleshooting;
 - spiegare evidence package;
-- spiegare stop conditions.
+- spiegare stop conditions;
+- spiegare come distinguere errori runtime, UI, Tekton, Argo CD, provider, Secret e factory.
 
-### Capitolo 37 — Backup, restore e disaster recovery
+### Capitolo 41 — Backup, restore e disaster recovery
 
 Fonti principali:
 
@@ -580,12 +634,14 @@ Uso previsto:
 
 - spiegare backup PostgreSQL;
 - spiegare restore isolato;
+- spiegare DR baseline;
 - spiegare RPO/RTO;
-- spiegare limiti GitLab, Argo CD e Tekton.
+- spiegare limiti GitLab, Argo CD e Tekton;
+- spiegare perche PostgreSQL e memoria applicativa del control plane.
 
 ## 13. Parte 10 — Stato corrente e roadmap
 
-### Capitolo 38 — Stato delle fasi
+### Capitolo 42 — Stato delle fasi
 
 Fonti principali:
 
@@ -598,23 +654,27 @@ Uso previsto:
 
 - riassumere stato fasi;
 - evidenziare Fase 10, Fase 13 e Fase 15;
-- esplicitare Fase 11 standby e Fase 12 in corso.
+- esplicitare Fase 11 standby;
+- esplicitare Fase 12 come documento tecnico finale in produzione incrementale.
 
-### Capitolo 39 — Stato finale corrente
+### Capitolo 43 — Stato finale corrente
 
 Fonti principali:
 
 - `docs/multi-cluster-environment-enablement-request.md`
 - `docs/runbooks/operability-health-check.md`
 - `docs/12-evidence-model.md`
+- `docs/final-technical-guide/final-technical-guide.md`
 
 Uso previsto:
 
-- sintetizzare cosa è completato;
-- sintetizzare cosa è rinviato;
-- sintetizzare cosa è pronto a livello codice.
+- sintetizzare cosa e completato;
+- sintetizzare cosa e rafforzato;
+- sintetizzare cosa e rinviato;
+- sintetizzare cosa e pronto a livello codice;
+- ribadire baseline namespace-isolated e multi-cluster code-ready baseline.
 
-### Capitolo 40 — Roadmap futura
+### Capitolo 44 — Roadmap futura
 
 Fonti principali:
 
@@ -624,10 +684,11 @@ Fonti principali:
 
 Uso previsto:
 
-- descrivere documento finale;
+- descrivere completamento guida finale;
 - descrivere real-cluster onboarding futuro;
 - descrivere eventuale CLI;
-- descrivere observability e produzione reale.
+- descrivere observability avanzata;
+- descrivere produzione reale e hardening futuri.
 
 ## 14. Appendici
 
@@ -636,7 +697,7 @@ Uso previsto:
 Fonti principali:
 
 - tutti i documenti principali;
-- in particolare `docs/05-architecture.md`, `docs/11-change-workflows.md`, `docs/12-evidence-model.md`.
+- in particolare `docs/05-architecture.md`, `docs/11-change-workflows.md`, `docs/12-evidence-model.md`, `docs/final-technical-guide/final-technical-guide.md`.
 
 ### Appendice B — Comandi operativi principali
 
@@ -652,7 +713,8 @@ Fonti principali:
 
 - cronologia Git;
 - `docs/multi-cluster-environment-enablement-request.md`;
-- `docs/runtime-evidence-dashboard-maintenance-alignment.md`.
+- `docs/runtime-evidence-dashboard-maintenance-alignment.md`;
+- `docs/final-technical-guide/final-technical-guide.md`.
 
 Commit e tag da includere:
 
@@ -663,6 +725,8 @@ Commit e tag da includere:
 - `215a790`
 - `e1e81d1`
 - `b6c7c61`
+- `21f1383`
+- `2b88cbc`
 
 ### Appendice D — Limitazioni note
 
