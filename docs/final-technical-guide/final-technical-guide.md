@@ -5034,3 +5034,260 @@ La UI environment awareness rende visibile il modello multi-environment del DevO
 Essa consente agli operatori di distinguere dev, staging e production, di vedere namespace e target runtime, e di interpretare le evidence nel contesto corretto.
 
 Questa funzionalita e essenziale nella baseline namespace-isolated e sara ancora piu importante quando saranno disponibili cluster fisici separati.
+
+## 28. Environment Catalog
+
+L'Environment Catalog e il modello con cui il DevOps Control Plane descrive gli ambienti logici supportati dalla piattaforma.
+
+Un ambiente logico non coincide necessariamente con un cluster fisico. Un ambiente logico rappresenta uno scopo operativo, come sviluppo, staging o produzione. Il catalogo serve a trasformare questo concetto logico in metadati tecnici utilizzabili dal backend, dai workflow, dalla UI e dai runbook operativi.
+
+Nel baseline corrente, gli ambienti sono:
+
+- `dev`;
+- `staging`;
+- `production`.
+
+La mappatura validata e namespace-isolated sul cluster OpenShift disponibile `ocp-dev`:
+
+```text
+dev        -> ocp-dev / devops-ci-demo
+staging    -> ocp-dev / devops-ci-staging
+production -> ocp-dev / devops-ci-production
+```
+
+L'Environment Catalog e quindi il punto in cui il DevOps Control Plane inizia a distinguere tra ambiente logico, namespace e cluster.
+
+### 28.1 Perche serve l'Environment Catalog
+
+Senza un Environment Catalog, il sistema rischierebbe di avere configurazioni hardcoded o sparse nel codice.
+
+Questo sarebbe fragile perche:
+
+- renderebbe difficile aggiungere nuovi ambienti;
+- renderebbe difficile distinguere staging e production;
+- aumenterebbe il rischio di azioni nel namespace sbagliato;
+- ridurrebbe la possibilita di supportare cluster futuri;
+- renderebbe meno chiara la UI.
+
+L'Environment Catalog centralizza la descrizione degli ambienti e consente al backend di risolvere target tecnici in modo coerente.
+
+### 28.2 Ambiente logico
+
+Un ambiente logico rappresenta il contesto operativo della ChangeRequest.
+
+Esempi:
+
+```text
+dev
+staging
+production
+```
+
+Quando una ChangeRequest indica `targetEnvironment = staging`, il DevOps Control Plane deve sapere quali namespace, Application Argo CD, path GitOps e pipeline usare per staging.
+
+L'Environment Catalog rende questa associazione esplicita.
+
+### 28.3 Metadati dell'ambiente
+
+Un ambiente nel catalogo puo includere metadati come:
+
+- nome ambiente;
+- display name;
+- flag enabled;
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application name;
+- Git target branch;
+- validation path;
+- flag per azioni tecniche abilitate.
+
+Questi campi non sono puramente descrittivi. Sono usati per costruire il runtime target tecnico.
+
+### 28.4 Namespace Kubernetes
+
+Il Kubernetes namespace indica dove il workload applicativo viene osservato o gestito.
+
+Nel baseline corrente:
+
+```text
+dev        -> devops-ci-demo
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+Questa informazione e usata da azioni come:
+
+- `collect-evidence`;
+- `check-deployment`;
+- runtime evidence;
+- route health check;
+- UI environment visibility.
+
+### 28.5 Namespace Tekton
+
+Il Tekton namespace indica dove vengono create o controllate le PipelineRun di validazione.
+
+Nel baseline corrente, staging e production usano namespace Tekton coerenti con il proprio namespace applicativo:
+
+```text
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+Questa informazione e essenziale per evitare che una validazione venga eseguita nel namespace sbagliato.
+
+### 28.6 Argo CD Application
+
+L'Environment Catalog deve associare ogni ambiente alla corretta Argo CD Application.
+
+Esempi:
+
+```text
+dev        -> demo-go-color-app
+staging    -> demo-go-color-app-staging
+production -> demo-go-color-app-production
+```
+
+Questa associazione permette al DevOps Control Plane di raccogliere Argo CD deployment evidence nel contesto corretto.
+
+### 28.7 Validation path
+
+Il validation path indica quale parte del repository GitOps deve essere validata da Tekton.
+
+Esempi validati:
+
+```text
+staging     apps/demo-go-color-app/overlays/staging
+production  apps/demo-go-color-app/overlays/production
+```
+
+Il validation path environment-specific e fondamentale. Se il path e sbagliato, una validazione potrebbe controllare l'overlay errato.
+
+### 28.8 Technical actions
+
+L'Environment Catalog puo indicare se un ambiente consente azioni tecniche.
+
+Esempi di azioni:
+
+- collect evidence;
+- check deployment;
+- validate;
+- check validation.
+
+Questo consente alla UI e al backend di applicare guardrail environment-aware.
+
+Un ambiente disabled o non abilitato alle azioni tecniche deve essere trattato in modo conservativo.
+
+### 28.9 Relazione con la UI
+
+La UI usa il modello environment-aware per mostrare informazioni corrette agli operatori.
+
+La dashboard e la pagina ChangeRequest detail devono rendere visibile:
+
+- ambiente target;
+- namespace;
+- Argo CD Application;
+- validation path;
+- evidence associate.
+
+La sezione `Environments / Namespaces` della dashboard e una rappresentazione diretta del fatto che il modello multi-environment e esplicito.
+
+### 28.10 Relazione con Runtime Target Resolution
+
+L'Environment Catalog e uno degli input della runtime target resolution.
+
+Il processo concettuale e:
+
+```text
+ChangeRequest targetEnvironment
+      |
+      v
+Environment Catalog
+      |
+      v
+Cluster Registry
+      |
+      v
+TechnicalRuntimeTarget
+```
+
+Il risultato e un target tecnico completo, usato da workflow runtime, evidence collection, Tekton validation e UI.
+
+### 28.11 Relazione con Cluster Registry
+
+L'Environment Catalog indica a quale cluster logico e associato un ambiente.
+
+Il Cluster Registry descrive invece il cluster.
+
+Quindi:
+
+- Environment Catalog risponde alla domanda: quale cluster usa questo ambiente?
+- Cluster Registry risponde alla domanda: che cosa sappiamo di quel cluster?
+
+Questa separazione e importante per il futuro multi-cluster.
+
+### 28.12 Baseline corrente
+
+Baseline corrente:
+
+```text
+Environment   Cluster   Kubernetes namespace     Tekton namespace       Argo CD Application
+----------    -------   ---------------------    ------------------     -------------------------------
+dev           ocp-dev   devops-ci-demo           devops-ci-demo         demo-go-color-app
+staging       ocp-dev   devops-ci-staging        devops-ci-staging      demo-go-color-app-staging
+production    ocp-dev   devops-ci-production     devops-ci-production   demo-go-color-app-production
+```
+
+Questa tabella descrive la baseline validata e non deve essere confusa con una topologia multi-cluster fisica.
+
+### 28.13 Relazione con multi-cluster readiness
+
+L'Environment Catalog e uno dei componenti che rende il codice multi-cluster-ready.
+
+Oggi staging e production puntano al cluster fisico disponibile `ocp-dev`.
+
+Nei test post-Fase 15, staging e production sono stati anche modellati come target simulati:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+Questi test dimostrano che il modello puo rappresentare cluster diversi.
+
+La validazione fisica resta deferred per indisponibilita di cluster aggiuntivi.
+
+### 28.14 Fail-closed
+
+L'Environment Catalog deve partecipare al comportamento fail-closed.
+
+Esempi di condizioni da bloccare:
+
+- ambiente sconosciuto;
+- ambiente disabled;
+- mapping incompleto;
+- namespace mancante;
+- cluster reference non valida;
+- validation path mancante per workflow che lo richiede.
+
+In questi casi il sistema deve fermarsi con errore esplicito, non procedere con default non sicuri.
+
+### 28.15 Errori da evitare
+
+Errori da evitare:
+
+- hardcodare staging o production nel codice;
+- usare sempre `devops-ci-demo` come default;
+- nascondere l'ambiente nella UI;
+- validare production con il path staging;
+- trattare production logica come cluster fisico production;
+- fare fallback silenzioso verso `ocp-dev` quando un ambiente dovrebbe puntare altrove.
+
+### 28.16 Sintesi
+
+L'Environment Catalog e il punto di controllo per descrivere gli ambienti logici del DevOps Control Plane.
+
+Collega ChangeRequest, namespace, Argo CD, Tekton, validation path, UI e runtime target resolution.
+
+Grazie a questo modello, il progetto puo operare oggi con namespace isolation e prepararsi domani a un vero multi-cluster senza riprogettare il workflow.
