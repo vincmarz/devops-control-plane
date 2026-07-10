@@ -5291,3 +5291,342 @@ L'Environment Catalog e il punto di controllo per descrivere gli ambienti logici
 Collega ChangeRequest, namespace, Argo CD, Tekton, validation path, UI e runtime target resolution.
 
 Grazie a questo modello, il progetto puo operare oggi con namespace isolation e prepararsi domani a un vero multi-cluster senza riprogettare il workflow.
+
+## 29. Cluster Registry
+
+Il Cluster Registry e il modello con cui il DevOps Control Plane descrive i cluster disponibili o previsti.
+
+Se l'Environment Catalog risponde alla domanda:
+
+```text
+Quale ambiente logico sto usando?
+```
+
+il Cluster Registry risponde alla domanda:
+
+```text
+Che cosa so del cluster associato a quell'ambiente?
+```
+
+Questa distinzione e importante perche un ambiente logico non deve essere confuso con un cluster fisico. Oggi `dev`, `staging` e `production` sono ambienti logici validati sullo stesso cluster `ocp-dev`, usando namespace separati. In futuro, staging e production potrebbero essere associati a cluster fisici distinti.
+
+### 29.1 Perche serve il Cluster Registry
+
+Senza Cluster Registry, le informazioni sui cluster rischierebbero di essere hardcoded o distribuite in punti diversi del codice.
+
+Questo sarebbe fragile perche:
+
+- renderebbe difficile aggiungere nuovi cluster;
+- renderebbe difficile disabilitare un cluster in modo controllato;
+- aumenterebbe il rischio di fallback verso il cluster sbagliato;
+- renderebbe poco chiara la separazione tra ambiente logico e runtime fisico;
+- complicherebbe l'onboarding futuro di cluster reali.
+
+Il Cluster Registry centralizza le informazioni essenziali sui cluster e permette al backend di applicare guardrail coerenti.
+
+### 29.2 Differenza tra Environment Catalog e Cluster Registry
+
+Environment Catalog e Cluster Registry hanno responsabilita diverse.
+
+Environment Catalog:
+
+- descrive ambienti logici;
+- associa un ambiente a namespace, Tekton namespace, Argo CD Application e validation path;
+- indica quale cluster logico usare per l'ambiente.
+
+Cluster Registry:
+
+- descrive i cluster;
+- indica se un cluster e abilitato;
+- conserva metadati tecnici del cluster;
+- definisce namespace consentiti;
+- prepara l'integrazione con Secret references e provider runtime.
+
+Vista concettuale:
+
+```text
+ChangeRequest targetEnvironment
+      |
+      v
+Environment Catalog
+      |
+      v
+clusterName
+      |
+      v
+Cluster Registry
+      |
+      v
+TechnicalRuntimeTarget
+```
+
+### 29.3 Cluster name
+
+Il `clusterName` e l'identificativo logico del cluster.
+
+Esempio corrente:
+
+```text
+ocp-dev
+```
+
+Esempi simulati usati nei test post-Fase 15:
+
+```text
+ocp-staging-simulated
+ocp-production-simulated
+```
+
+Il cluster name deve essere esplicito nelle risoluzioni runtime e nelle evidence quando rilevante.
+
+### 29.4 Enabled flag
+
+Un cluster deve poter essere abilitato o disabilitato.
+
+Il flag enabled e un guardrail operativo.
+
+Un cluster disabled non deve essere usato per azioni runtime.
+
+Comportamento atteso:
+
+```text
+cluster disabled -> fail closed
+```
+
+Questo evita che un cluster venga usato prima che siano completate readiness, RBAC, Secret references, provider e smoke test.
+
+### 29.5 API URL
+
+Il Cluster Registry puo includere l'API URL del cluster.
+
+Esempio concettuale:
+
+```text
+apiURL = https://api.ocp-dev.example:6443
+```
+
+L'API URL e necessaria quando il runtime deve costruire client reali verso un cluster.
+
+Se un client factory richiede API URL e quel valore manca, il comportamento corretto e fail-closed.
+
+### 29.6 Default namespace e allowed namespaces
+
+Il Cluster Registry puo descrivere namespace predefiniti e namespace consentiti.
+
+Esempio:
+
+```text
+cluster = ocp-dev
+defaultNamespace = devops-ci-demo
+allowedNamespaces = devops-ci-demo, devops-ci-staging, devops-ci-production
+```
+
+Questi dati aiutano a evitare accessi non intenzionali a namespace non previsti.
+
+Il principio operativo e:
+
+```text
+allow only what is required
+```
+
+### 29.7 Secret references
+
+Il Cluster Registry e collegato al modello Secret reference.
+
+Un cluster reale puo richiedere credenziali, token o CA reference per costruire client runtime.
+
+Il modello corretto non salva valori raw nel registry.
+
+Il registry o i modelli collegati devono fare riferimento a Secret references.
+
+Esempio accettabile:
+
+```text
+clusterName = ocp-nonprod
+secretRefName = dcp-ocp-nonprod-runtime-token
+secretNamespace = devops-control-plane
+```
+
+Esempio non accettabile:
+
+```text
+token = actual-token-value
+```
+
+### 29.8 Provider selection
+
+Il Cluster Registry contribuisce alla provider selection.
+
+Dopo aver risolto il cluster target, il backend deve selezionare un provider runtime adatto.
+
+Se il provider manca, l'azione deve fallire.
+
+Se il provider e disabled, l'azione deve fallire.
+
+Il sistema non deve ricadere automaticamente su `ocp-dev`.
+
+Questa regola e fondamentale per evitare azioni nel cluster sbagliato.
+
+### 29.9 Cluster corrente ocp-dev
+
+Nel baseline validato, il cluster fisico disponibile e:
+
+```text
+ocp-dev
+```
+
+Su questo cluster sono stati validati tre ambienti logici tramite namespace isolation:
+
+```text
+dev        -> devops-ci-demo
+staging    -> devops-ci-staging
+production -> devops-ci-production
+```
+
+Il Cluster Registry deve quindi rappresentare `ocp-dev` come cluster corrente della baseline operativa.
+
+### 29.10 Cluster simulati staging e production
+
+Dopo la chiusura della Fase 15, il codice e stato rafforzato con test per cluster simulati distinti:
+
+```text
+staging -> ocp-staging-simulated
+production -> ocp-production-simulated
+```
+
+Questi test dimostrano che il modello puo risolvere cluster diversi da `ocp-dev`.
+
+I test confermano:
+
+- nessun fallback silenzioso verso `ocp-dev`;
+- provider mancante fail-closed;
+- provider disabled fail-closed;
+- metadati runtime environment-specific preservati.
+
+Questa e una validazione del modello codice, non una validazione fisica runtime.
+
+### 29.11 Fail-closed behavior
+
+Il Cluster Registry deve supportare comportamenti fail-closed.
+
+Esempi:
+
+- cluster sconosciuto;
+- cluster disabled;
+- namespace non consentito;
+- API URL mancante quando richiesta;
+- Secret reference mancante;
+- provider mancante;
+- provider disabled.
+
+In tutti questi casi l'azione deve fermarsi con errore chiaro.
+
+Un errore esplicito e preferibile a un'azione eseguita sul cluster sbagliato.
+
+### 29.12 Relazione con Environment Catalog
+
+L'Environment Catalog indica quale cluster usare.
+
+Il Cluster Registry descrive quel cluster.
+
+Esempio:
+
+```text
+Environment Catalog
+  staging -> clusterName ocp-dev
+
+Cluster Registry
+  ocp-dev -> enabled, namespaces allowed, metadata
+```
+
+In futuro:
+
+```text
+Environment Catalog
+  staging -> clusterName ocp-nonprod
+
+Cluster Registry
+  ocp-nonprod -> enabled, API URL, allowed namespaces, Secret references
+```
+
+Questo modello permette di spostare un ambiente verso un cluster reale senza cambiare il significato della ChangeRequest.
+
+### 29.13 Relazione con runtime target resolution
+
+La runtime target resolution combina Environment Catalog e Cluster Registry.
+
+Il risultato e un `TechnicalRuntimeTarget`.
+
+Questo target contiene informazioni come:
+
+- target environment;
+- cluster name;
+- Kubernetes namespace;
+- Tekton namespace;
+- Argo CD Application;
+- validation path;
+- cluster enabled flag;
+- eventuali metadati cluster.
+
+Il workflow runtime deve usare questo target e non inventare destinazioni alternative.
+
+### 29.14 Relazione con runtime factories
+
+Quando si usano client runtime reali, le runtime factories possono richiedere dati provenienti dal Cluster Registry o dalla configurazione collegata.
+
+Esempi:
+
+- Kubernetes API URL;
+- Argo CD base URL;
+- token reference;
+- CA settings;
+- namespace consentiti.
+
+Se una factory non ha i dati necessari, deve fallire in modo esplicito.
+
+Esempi di fail-closed:
+
+- API URL mancante;
+- token mancante;
+- raw CA non supportata;
+- kubeconfig non supportato;
+- factory disabled.
+
+### 29.15 Real-cluster onboarding futuro
+
+Quando sara disponibile un cluster reale aggiuntivo, il Cluster Registry dovra essere aggiornato con dati controllati.
+
+Informazioni richieste:
+
+- cluster name;
+- display name;
+- enabled flag inizialmente conservativo;
+- API URL;
+- allowed namespaces;
+- Secret references;
+- RBAC previsto;
+- provider runtime;
+- readiness gates;
+- rollback plan.
+
+Il cluster non deve essere abilitato fino al completamento dei controlli di readiness.
+
+### 29.16 Errori da evitare
+
+Errori da evitare:
+
+- usare `ocp-dev` come fallback implicito;
+- abilitare un cluster senza readiness;
+- usare namespace non allow-listed;
+- salvare token raw nel registry;
+- confondere cluster simulato con cluster fisico reale;
+- dichiarare validazione fisica multi-cluster senza cluster reale;
+- abilitare provider o factory per bypassare un errore.
+
+### 29.17 Sintesi
+
+Il Cluster Registry e il componente che rende esplicita la conoscenza dei cluster nel DevOps Control Plane.
+
+Insieme all'Environment Catalog, permette di trasformare un ambiente logico in un target runtime tecnico.
+
+Oggi rappresenta la baseline `ocp-dev` namespace-isolated. Domani permettera l'onboarding controllato di cluster fisici aggiuntivi, mantenendo fail-closed, Secret references e guardrail operativi.
