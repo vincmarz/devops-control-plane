@@ -6959,3 +6959,330 @@ Permette al sistema di osservare e validare il runtime senza concedere privilegi
 Nella baseline namespace-isolated, RBAC deve essere verificato per dev, staging e production.
 
 Nel futuro multi-cluster, RBAC dovra essere validato per ogni cluster reale, mantenendo il principio del minimo privilegio e il comportamento fail-closed.
+
+## 34. Secret reference model
+
+Il Secret reference model e il modello con cui il DevOps Control Plane rappresenta credenziali e materiali sensibili senza salvarne o mostrarne i valori raw.
+
+Nel progetto, la regola e semplice:
+
+```text
+reference yes, raw secret no
+```
+
+Questo significa che il sistema puo conoscere il riferimento a un Secret, il namespace in cui si trova e la chiave attesa, ma non deve esporre il valore del Secret nei log, nelle evidence, nella UI, nella documentazione o nei commit.
+
+Il Secret reference model e uno dei guardrail piu importanti per la futura readiness multi-cluster.
+
+### 34.1 Perche serve un Secret reference model
+
+Il DevOps Control Plane integra sistemi che possono richiedere credenziali:
+
+- Kubernetes/OpenShift API;
+- Tekton API;
+- Argo CD API;
+- GitLab API;
+- cluster futuri non-production o production;
+- runtime client factories.
+
+Senza un modello a riferimenti, ci sarebbe il rischio di inserire token o credenziali direttamente in configurazioni, log, output o evidence.
+
+Il modello a Secret reference evita questo rischio separando:
+
+- metadati sicuri;
+- valori sensibili.
+
+I metadati possono essere documentati e tracciati.
+
+I valori sensibili devono restare nei Secret e non devono essere stampati.
+
+### 34.2 Secret reference vs Secret value
+
+Una Secret reference descrive dove si trova un Secret.
+
+Esempio accettabile:
+
+```text
+secretNamespace = devops-control-plane
+secretName = dcp-ocp-nonprod-runtime-token
+key = token
+```
+
+Un Secret value e invece il valore effettivo della credenziale.
+
+Esempio non accettabile:
+
+```text
+token = actual-token-value
+```
+
+La documentazione, la UI e le evidence possono contenere il primo tipo di informazione, ma non il secondo.
+
+### 34.3 Informazioni ammesse
+
+Informazioni sicure che possono essere usate come riferimento:
+
+- nome del cluster;
+- nome dell'ambiente;
+- namespace del Secret;
+- nome del Secret;
+- nome della key;
+- tipo di credenziale attesa;
+- stato di validazione della reference;
+- stato allow-listed;
+- indicazione che il valore non e stato esposto.
+
+Queste informazioni aiutano un operatore a capire quale credenziale e richiesta senza vedere la credenziale.
+
+### 34.4 Informazioni vietate
+
+Informazioni che non devono essere salvate o mostrate:
+
+- token raw;
+- password;
+- kubeconfig raw;
+- bearer token;
+- private key;
+- contenuto Secret decodificato;
+- CA private material;
+- output di comandi che espongono valori sensibili.
+
+Questi dati non devono comparire in:
+
+- Git;
+- log applicativi;
+- evidence;
+- UI;
+- ticket;
+- documentazione;
+- summary operativi.
+
+### 34.5 RuntimeClientSecretRefs
+
+Nel modello del DevOps Control Plane, le Secret references sono rappresentate come metadati associabili ai runtime provider.
+
+Il concetto `RuntimeClientSecretRefs` permette di descrivere quali Secret references sono necessarie per costruire client runtime futuri.
+
+Esempi di references:
+
+- token Kubernetes;
+- CA reference;
+- token Tekton, se separato;
+- token Argo CD;
+- altri materiali richiesti da un provider futuro.
+
+Queste references non devono contenere il valore della credenziale.
+
+### 34.6 Secret reference registry
+
+Il Secret reference registry permette di associare references ai cluster o ai provider.
+
+In questo modo, quando il backend risolve un target runtime, puo anche determinare quali references sarebbero necessarie per operare su quel target.
+
+Esempio concettuale:
+
+```text
+clusterName = ocp-nonprod
+requires tokenRef = dcp-ocp-nonprod-runtime-token
+requires caRef = dcp-ocp-nonprod-ca
+```
+
+Questa informazione e utile per readiness, ma non espone credenziali.
+
+### 34.7 Allow-list
+
+La lettura di Secret deve essere controllata da una allow-list.
+
+La allow-list definisce quali Secret references sono autorizzate per quali cluster o contesti.
+
+Se una reference non e allow-listed, il sistema deve fallire fail-closed.
+
+Questo comportamento impedisce letture accidentali o non autorizzate.
+
+Regola:
+
+```text
+not allow-listed means not readable
+```
+
+### 34.8 Runtime Secret loader
+
+Il runtime Secret loader e il componente che puo caricare valori reali dai Secret.
+
+Nel baseline corrente, il loader resta disabled by default.
+
+Questo e intenzionale.
+
+Il loader deve essere abilitato solo quando:
+
+- il cluster reale e documentato;
+- Secret references sono definite;
+- allow-list e configurata;
+- RBAC e minimo e approvato;
+- logging e evidence sono sanificati;
+- esiste rollback;
+- l'onboarding reale e approvato.
+
+### 34.9 Disabled by default
+
+Il comportamento disabled by default e un guardrail.
+
+Se un componente non deve ancora leggere Secret reali, deve restare disabilitato.
+
+Questo vale soprattutto per:
+
+- runtime Secret loader;
+- runtime client factories;
+- provider per cluster futuri;
+- real-cluster onboarding.
+
+Abilitare questi componenti solo per superare un errore non e una pratica accettabile.
+
+### 34.10 Relazione con RBAC
+
+Il Secret reference model deve lavorare insieme a RBAC.
+
+Anche se una Secret reference e corretta, il ServiceAccount non deve avere accesso indiscriminato ai Secret.
+
+RBAC deve limitare:
+
+- quali Secret possono essere letti;
+- in quale namespace;
+- da quale identita tecnica;
+- per quale workflow.
+
+La combinazione corretta e:
+
+```text
+Secret reference + allow-list + minimal RBAC
+```
+
+### 34.11 Relazione con runtime factories
+
+Le runtime factories possono aver bisogno di token o riferimenti per costruire client reali.
+
+Esempi:
+
+- Kubernetes runtime client factory;
+- Tekton runtime client factory;
+- Argo CD runtime client factory.
+
+Queste factory devono ricevere valori solo attraverso un percorso controllato.
+
+Non devono leggere token hardcoded.
+
+Non devono accettare credenziali raw in configurazioni non sicure.
+
+### 34.12 Relazione con evidence sanitization
+
+Il Secret reference model e strettamente collegato alla evidence sanitization.
+
+Le evidence possono indicare che una Secret reference esiste o che e stata validata.
+
+Le evidence non devono mostrare il valore del Secret.
+
+Esempio accettabile:
+
+```text
+secretRefName = dcp-ocp-nonprod-runtime-token
+secretRefAllowed = true
+secretValueExposed = false
+```
+
+Esempio vietato:
+
+```text
+token = actual-token-value
+```
+
+### 34.13 Relazione con UI
+
+La UI puo mostrare metadati sicuri sulle references, se utile.
+
+Esempi di dati mostrabili:
+
+- reference name;
+- namespace;
+- stato configurato o mancante;
+- stato allow-listed;
+- errore fail-closed.
+
+La UI non deve mostrare:
+
+- token;
+- Secret raw;
+- bearer token;
+- kubeconfig;
+- password.
+
+La UI deve aiutare l'operatore senza trasformarsi in una superficie di esposizione di credenziali.
+
+### 34.14 Relazione con multi-cluster readiness
+
+Il Secret reference model e essenziale per il futuro multi-cluster.
+
+Quando un cluster reale sara disponibile, il sistema dovra sapere quali credenziali usare per quel cluster.
+
+Tuttavia, deve continuare a non salvare valori raw.
+
+Per esempio, un cluster futuro potrebbe richiedere:
+
+```text
+clusterName = ocp-nonprod
+tokenRef = dcp-ocp-nonprod-runtime-token
+caRef = dcp-ocp-nonprod-ca
+```
+
+Questi riferimenti fanno parte del contratto di onboarding reale.
+
+### 34.15 Fail-closed cases
+
+Condizioni che devono fallire fail-closed:
+
+- Secret reference mancante;
+- Secret reference non allow-listed;
+- Secret getter non configurato;
+- required key mancante;
+- runtime Secret loader disabled;
+- RBAC insufficiente;
+- provider che richiede credenziali non disponibili;
+- factory che richiede token ma token non caricabile.
+
+Questi errori proteggono il sistema.
+
+### 34.16 Errori da evitare
+
+Errori da evitare:
+
+- inserire token in file Markdown;
+- usare token in URL Git remoti;
+- stampare Secret in terminale;
+- copiare token nei ticket;
+- salvare kubeconfig in evidence;
+- abilitare lettura Secret senza allow-list;
+- concedere accesso globale ai Secret;
+- disabilitare controlli fail-closed.
+
+### 34.17 Checklist operativa
+
+Prima di usare Secret references per un cluster reale, verificare:
+
+- cluster documentato;
+- ambiente target documentato;
+- namespace del Secret documentato;
+- nome Secret documentato;
+- key richiesta documentata;
+- allow-list configurata;
+- RBAC minimo presente;
+- loader abilitato solo se necessario;
+- nessun valore raw stampato;
+- rollback disponibile;
+- evidence sanificata.
+
+### 34.18 Sintesi
+
+Il Secret reference model permette al DevOps Control Plane di prepararsi al multi-cluster senza esporre credenziali.
+
+Il modello conserva riferimenti, non valori.
+
+Insieme a allow-list, RBAC, runtime Secret loader disabled-by-default e evidence sanitization, rappresenta uno dei guardrail di sicurezza piu importanti della piattaforma.
