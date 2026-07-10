@@ -1,0 +1,11 @@
+12.15 Generate Word document
+Status: PASS
+Method: Python standard library OOXML writer
+Source: /opt/devops/devops-control-plane/docs/final-technical-guide/final-technical-guide.md
+Output: /opt/devops/devops-control-plane/docs/final-technical-guide/outputs/DevOps_Control_Plane_Guida_Tecnica_Finale.docx
+Output size: 109138 bytes
+Number of parsed block elements: 6411
+Notes:
+- Static table of contents generated from Markdown headings.
+- Markdown remains the source of truth.
+- Review DOCX visually in Word or LibreOffice before final external distribution.
