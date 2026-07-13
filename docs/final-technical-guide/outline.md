@@ -766,3 +766,47 @@ Output Word previsto:
 Il Word sarà generato solo dopo il completamento e la revisione del contenuto Markdown.
 
 Il Word non deve essere la sorgente primaria.
+
+<!-- CI_GUIDE_OUTLINE_START -->
+### Continuous Integration e test automatizzati
+
+Scopo del capitolo:
+
+- descrivere la baseline CI implementata con GitHub Actions;
+- spiegare i quality gate applicati alle pull request e ai push su `main`;
+- distinguere test unitari, test HTTP end-to-end e test PostgreSQL con build tag `integration`;
+- descrivere race detector, coverage atomica e artifact di coverage;
+- spiegare la protezione della concorrenza lifecycle con `SELECT ... FOR UPDATE`;
+- documentare gli invarianti TLS secure-by-default per configurazione, Argo CD, GitLab, Kubernetes e Tekton;
+- chiarire cosa dimostra una pipeline CI verde e cosa resta fuori dal suo perimetro.
+
+Fonte autorevole:
+
+- `docs/continuous-integration-and-automated-testing.md`
+
+Elementi tecnici da includere:
+
+- workflow `.github/workflows/ci.yml`;
+- trigger `pull_request` e push su `main`;
+- Go 1.22 e cache delle dipendenze;
+- controllo `gofmt`;
+- `go vet ./...`;
+- `go test ./... -race -covermode=atomic -coverprofile=coverage.out`;
+- PostgreSQL 16 disposable service container;
+- `go test -tags=integration ./internal/database/... -run Integration -v`;
+- test HTTP per health, readiness, ChangeRequest API e lifecycle routes;
+- test `TestConcurrentApproveOnlyOneWins`;
+- test TLS `TestNewVerifiesTLSByDefault` e opt-in esplicito per la modalità insecure;
+- required status check `test` e branch protection su `main`;
+- limitazioni correnti della CI.
+
+Posizionamento proposto:
+
+- Parte 3 - Architettura del DevOps Control Plane;
+- dopo il capitolo Backend Go e prima di PostgreSQL e persistenza.
+
+Impatto sulla numerazione:
+
+- l'inserimento richiede il riallineamento controllato dei capitoli successivi nella guida italiana e nella source map;
+- il documento Word deve essere rigenerato solo dopo l'aggiornamento del Markdown e i controlli strutturali.
+<!-- CI_GUIDE_OUTLINE_END -->

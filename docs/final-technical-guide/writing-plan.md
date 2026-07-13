@@ -468,3 +468,89 @@ Questa fase è completata quando:
 - il piano definisce regole per comandi e diagrammi;
 - il piano definisce criteri di revisione;
 - il piano è committato nel repository.
+
+<!-- CI_GUIDE_WRITING_PLAN_START -->
+## Integrazione della baseline CI nella guida finale
+
+### Obiettivo
+
+Integrare nella guida tecnica italiana la baseline Continuous Integration e automated testing usando esclusivamente il documento autorevole:
+
+```text
+docs/continuous-integration-and-automated-testing.md
+```
+
+La guida non deve essere aggiornata direttamente dal log Git, dai file Go o dal workflow YAML senza passare dalla fonte Markdown approvata.
+
+### Ordine di lavoro
+
+1. aggiornare `docs/README.md` con il collegamento alla fonte CI;
+2. aggiornare `docs/final-technical-guide/source-map.md`;
+3. aggiornare `docs/final-technical-guide/outline.md`;
+4. aggiornare `docs/final-technical-guide/writing-plan.md`;
+5. aggiungere il capitolo italiano in `docs/final-technical-guide/final-technical-guide-it.md`;
+6. riallineare la numerazione dei capitoli successivi;
+7. aggiornare le sezioni Stato delle fasi, Stato finale corrente e Roadmap futura solo dove giustificato dalla fonte CI;
+8. aggiornare Appendice C con PR e commit CI rilevanti;
+9. eseguire i controlli strutturali e di secret scanning;
+10. rigenerare il documento Word derivato;
+11. aggiornare report di generazione e README finale.
+
+### Contenuti da derivare dalla fonte CI
+
+Il capitolo italiano deve coprire:
+
+- scopo e perimetro della CI;
+- workflow GitHub Actions;
+- modello di trigger;
+- formatting gate;
+- static analysis con `go vet`;
+- unit test, race detector e coverage;
+- integration test PostgreSQL;
+- test HTTP end-to-end;
+- invariante di concorrenza lifecycle;
+- invarianti TLS secure-by-default;
+- modello di validazione tramite pull request;
+- validazione locale degli sviluppatori;
+- considerazioni di sicurezza;
+- limitazioni correnti;
+- evidenze e Definition of Done.
+
+### Regole di scrittura
+
+- scrivere il capitolo finale in italiano;
+- mantenere comandi, nomi file, variabili, funzioni di test e identificativi tecnici nel formato originale;
+- non presentare le credenziali disposable PostgreSQL della CI come credenziali runtime;
+- non dichiarare che una pipeline verde valida il runtime OpenShift;
+- non dichiarare test browser/UI se non esistono;
+- non dichiarare pubblicazione automatica di immagini container;
+- non dichiarare una coverage threshold minima finché non è configurata;
+- non presentare la CI come validazione fisica multi-cluster;
+- mantenere il Markdown italiano come source of truth del Word.
+
+### Criteri di qualità
+
+Prima della rigenerazione Word verificare:
+
+- capitolo CI presente e coerente con la fonte autorevole;
+- source map e numerazione allineate;
+- riferimenti a `.github/workflows/ci.yml` corretti;
+- comandi CI identici alla fonte;
+- limitazioni CI esplicitate;
+- nessun token, Secret, kubeconfig o credenziale reale;
+- controlli strutturali PASS;
+- working tree pulito prima della generazione finale.
+
+### Definition of Done
+
+L'integrazione CI nella guida finale è completata quando:
+
+- outline e writing plan sono aggiornati;
+- source map include la fonte CI;
+- il capitolo italiano è presente;
+- la numerazione è sequenziale;
+- Stato corrente e appendici sono coerenti;
+- i controlli strutturali non producono errori o warning;
+- il Word è rigenerato dalla nuova sorgente italiana;
+- README e report finali indicano il nuovo output.
+<!-- CI_GUIDE_WRITING_PLAN_END -->
