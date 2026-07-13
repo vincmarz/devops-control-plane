@@ -1,11 +1,17 @@
-12.15 Generate Word document
+Regenerate final technical guide Word - 44 chapter CI baseline
 Status: PASS
 Method: Python standard library OOXML writer
-Source: /opt/devops/devops-control-plane/docs/final-technical-guide/final-technical-guide.md
-Output: /opt/devops/devops-control-plane/docs/final-technical-guide/outputs/DevOps_Control_Plane_Guida_Tecnica_Finale.docx
-Output size: 109138 bytes
-Number of parsed block elements: 6411
+Source: /home/vmarzario/devops-control-plane/docs/final-technical-guide/final-technical-guide-it.md
+Source map: /home/vmarzario/devops-control-plane/docs/final-technical-guide/source-map.md
+Expected chapters: 44
+Guide chapters found: 44
+Source-map chapters found: 44
+CI chapter: 14. Continuous Integration e test automatizzati
+Output: /home/vmarzario/devops-control-plane/docs/final-technical-guide/outputs/DevOps_Control_Plane_Guida_Tecnica_Finale.docx
+Output size: 114553 bytes
+Parsed blocks: 6623
+Quality evidence: /tmp/dcp-final-guide-44-quality-20260713-155304
 Notes:
-- Static table of contents generated from Markdown headings.
-- Markdown remains the source of truth.
-- Review DOCX visually in Word or LibreOffice before final external distribution.
+- Static table of contents regenerated from Markdown headings.
+- final-technical-guide-it.md remains the source of truth.
+- Open the DOCX in Word or LibreOffice for final visual review before external distribution.
