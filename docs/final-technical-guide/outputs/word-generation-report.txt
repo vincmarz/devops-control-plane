@@ -15,3 +15,7 @@ Notes:
 - Static table of contents regenerated from Markdown headings.
 - final-technical-guide-it.md remains the source of truth.
 - Open the DOCX in Word or LibreOffice for final visual review before external distribution.
+Bullet-list correction:
+- Status: PASS
+- Paragraphs converted from automatic numbering to literal bullets: 3186
+- Reason: Word rendered intended bullet-list numId=1 as a continuous decimal sequence.
