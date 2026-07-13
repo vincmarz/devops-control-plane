@@ -1,6 +1,6 @@
-Regenerate final technical guide Word - 44 chapter CI baseline
+Generate final technical guide Word - versioned generator
 Status: PASS
-Method: Python standard library OOXML writer
+Generator: docs/final-technical-guide/scripts/generate_word.py
 Source: /home/vmarzario/devops-control-plane/docs/final-technical-guide/final-technical-guide-it.md
 Source map: /home/vmarzario/devops-control-plane/docs/final-technical-guide/source-map.md
 Expected chapters: 44
@@ -8,14 +8,16 @@ Guide chapters found: 44
 Source-map chapters found: 44
 CI chapter: 14. Continuous Integration e test automatizzati
 Output: /home/vmarzario/devops-control-plane/docs/final-technical-guide/outputs/DevOps_Control_Plane_Guida_Tecnica_Finale.docx
-Output size: 114553 bytes
-Parsed blocks: 6623
+Output size: 124728 bytes
+Markdown bullet paragraphs: 3186
+Generated literal bullet paragraphs: 3186
+Markdown numbered paragraphs: 36
+Generated literal numbered paragraphs: 36
+Automatic Word numbering blocks: 0
+DOCX ZIP validation: PASS
 Quality evidence: /tmp/dcp-final-guide-44-quality-20260713-155304
 Notes:
-- Static table of contents regenerated from Markdown headings.
+- Bullet lists use literal bullet markers with tab and hanging indentation.
+- Numbered lists use the number written in the Markdown source.
 - final-technical-guide-it.md remains the source of truth.
-- Open the DOCX in Word or LibreOffice for final visual review before external distribution.
-Bullet-list correction:
-- Status: PASS
-- Paragraphs converted from automatic numbering to literal bullets: 3186
-- Reason: Word rendered intended bullet-list numId=1 as a continuous decimal sequence.
+- Perform final visual review in Word or LibreOffice before external distribution.
