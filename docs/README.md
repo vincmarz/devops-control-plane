@@ -169,3 +169,32 @@ reference — expect them to reflect the state at the time they were written.
 When adding a document, add it to the correct section above. When adding an
 ADR, also update [adr/README.md](adr/README.md). Keep filenames in lowercase
 kebab-case and all new content in English.
+
+<!-- CI_AUTOMATED_TESTING_START -->
+## Continuous Integration and automated testing
+
+The DevOps Control Plane repository includes a GitHub Actions Continuous Integration baseline covering source quality, automated tests, PostgreSQL integration behavior, HTTP API behavior, lifecycle concurrency, and TLS security invariants.
+
+Authoritative documentation:
+
+- [`continuous-integration-and-automated-testing.md`](continuous-integration-and-automated-testing.md)
+
+CI workflow:
+
+- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
+
+The current CI quality gates include:
+
+- `gofmt` validation;
+- `go vet ./...`;
+- unit and package tests with the Go race detector;
+- atomic coverage generation and artifact upload;
+- PostgreSQL 16 integration tests using a disposable service container;
+- HTTP end-to-end tests for health, readiness, authenticated ChangeRequest APIs, and lifecycle routes;
+- lifecycle concurrency validation backed by PostgreSQL `SELECT ... FOR UPDATE`;
+- TLS secure-by-default invariants for configuration, Argo CD, GitLab, Kubernetes, and Tekton clients.
+
+The CI workflow runs for pull requests and pushes to `main`. Repository rules require changes to `main` to be merged through a pull request after the required `test` status check succeeds.
+
+A successful CI run validates the source-level and integration-test baseline. It does not replace OpenShift runtime smoke tests, operational runbooks, browser-based UI testing, or physical multi-cluster validation.
+<!-- CI_AUTOMATED_TESTING_END -->
