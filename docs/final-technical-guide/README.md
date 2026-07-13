@@ -53,7 +53,7 @@ Il Word e un output derivato dal Markdown. In caso di modifiche future, aggiorna
 
 La guida finale contiene:
 
-- 43 capitoli numerati;
+- 44 capitoli numerati;
 - Appendice A - Glossario;
 - Appendice B - Comandi operativi principali;
 - Appendice C - Commit e tag rilevanti;
@@ -66,8 +66,9 @@ La numerazione dei capitoli e stata revisionata e riallineata con la source map.
 Sono stati completati i controlli strutturali finali:
 
 ```text
-12.14.3 Final structural quality checks
+Final structural quality checks - 44 chapter CI baseline
 Status: PASS
+Expected chapters: 44
 Errors: none
 Warnings: none
 ```
@@ -75,19 +76,55 @@ Warnings: none
 Evidence directory del controllo:
 
 ```text
-/tmp/dcp-final-guide-12-14-3-20260710-130040
+/tmp/dcp-final-guide-44-quality-20260713-155304
 ```
 
 Il controllo ha verificato:
 
 - presenza dei file principali;
 - working tree pulito all'avvio del check;
-- numerazione guida sequenziale 1..43;
+- numerazione guida sequenziale 1..44;
 - presenza delle appendici A/B/C/D;
-- source-map sequenziale 1..43;
+- source-map sequenziale 1..44;
 - allineamento tra guida e source-map;
 - assenza di pattern di secret reali;
 - presenza delle frasi chiave sulla readiness multi-cluster e sulla validazione fisica deferred.
+
+### Integrazione Continuous Integration
+
+La guida tecnica finale include ora il capitolo:
+
+```text
+14. Continuous Integration e test automatizzati
+```
+
+La fonte Markdown autorevole è:
+
+```text
+docs/continuous-integration-and-automated-testing.md
+```
+
+L'integrazione documentale ha aggiornato:
+
+- indice documentale generale;
+- outline della guida finale;
+- writing plan;
+- source map;
+- guida italiana, ora composta da 44 capitoli;
+- evidenze delle pull request CI nell'Appendice C.
+
+Il quality check aggiornato ha verificato la presenza dei contenuti fondamentali relativi a GitHub Actions, `go vet`, race detector, coverage, integration test PostgreSQL, test HTTP end-to-end, concorrenza lifecycle, `SELECT ... FOR UPDATE`, TLS secure-by-default e required status check `test`.
+
+Commit e merge rilevanti:
+
+```text
+170bad2 Document continuous integration and automated testing baseline
+58103a9 Merge pull request #8 from vincmarz/docs/ci-automated-testing
+cc504e8 Merge pull request #9 from vincmarz/docs/index-ci-baseline
+23c7468 Merge pull request #10 from vincmarz/docs/final-guide-ci-planning
+bb91c6c Merge pull request #11 from vincmarz/docs/final-guide-ci-source-map
+c4d46b5 Merge pull request #13 from vincmarz/docs/final-guide-ci-italian-chapter
+```
 
 ### Pulizia linguistica
 
