@@ -878,7 +878,453 @@ Le sue responsabilità principali sono:
 
 Grazie a questa architettura, il progetto può oggi operare sulla baseline namespace-isolated e, allo stesso tempo, essere pronto a supportare il futuro multi-cluster reale quando l’infrastruttura sarà disponibile.
 
-## 14. PostgreSQL e persistenza
+## 14. Continuous Integration e test automatizzati
+
+La Continuous Integration, abbreviata in CI, è il processo con cui ogni modifica al codice viene sottoposta automaticamente a controlli di qualità prima di essere integrata nella baseline principale del progetto.
+
+Nel DevOps Control Plane la CI è implementata con GitHub Actions e agisce come quality gate per le pull request e per i push sul branch `main`.
+
+La fonte tecnica autorevole di questo capitolo è:
+
+```text
+docs/continuous-integration-and-automated-testing.md
+```
+
+Il workflow è definito in:
+
+```text
+.github/workflows/ci.yml
+```
+
+Una pipeline verde dimostra che il codice ha superato i controlli source-level, i test Go, i test HTTP, i controlli di concorrenza, gli integration test PostgreSQL e gli invarianti TLS coperti dalla suite. Non dimostra invece che il runtime OpenShift sia operativo e non sostituisce gli health check, i runbook o la validazione fisica multi-cluster.
+
+### 14.1 Scopo della baseline CI
+
+La baseline CI ha lo scopo di intercettare regressioni prima del merge.
+
+I controlli principali sono:
+
+- formattazione Go;
+- analisi statica;
+- unit test e package test;
+- race detector;
+- coverage atomica;
+- integration test PostgreSQL;
+- test HTTP end-to-end;
+- concorrenza delle transizioni lifecycle;
+- invarianti TLS secure-by-default.
+
+La CI integra il processo di review, ma non sostituisce la revisione umana.
+
+### 14.2 Trigger del workflow
+
+Il workflow viene eseguito per:
+
+```yaml
+push:
+  branches: [main]
+pull_request:
+```
+
+Questo significa che:
+
+- ogni pull request viene validata prima del merge;
+- ogni push su `main` viene verificato nuovamente;
+- il branch principale resta protetto da modifiche dirette non validate;
+- il required status check `test` deve completarsi con successo.
+
+Le repository rules richiedono che le modifiche a `main` passino attraverso una pull request.
+
+### 14.3 Runner e toolchain
+
+Il job CI viene eseguito su:
+
+```text
+ubuntu-latest
+```
+
+La toolchain Go è:
+
+```text
+Go 1.22
+```
+
+Il setup abilita la cache delle dipendenze per ridurre i tempi delle esecuzioni successive.
+
+### 14.4 Formatting gate
+
+Il primo quality gate applicativo verifica la formattazione con `gofmt`.
+
+Il workflow esegue una logica equivalente a:
+
+```bash
+unformatted="$(gofmt -l .)"
+if [ -n "$unformatted" ]; then
+  echo "The following files are not gofmt-clean:"
+  echo "$unformatted"
+  exit 1
+fi
+```
+
+Se uno o più file non sono formattati correttamente, il job fallisce e la pull request non può soddisfare il required check.
+
+Il comando locale equivalente è:
+
+```bash
+gofmt -l .
+```
+
+Il risultato atteso è nessun output.
+
+### 14.5 Analisi statica con go vet
+
+La pipeline esegue:
+
+```bash
+go vet ./...
+```
+
+`go vet` analizza tutti i package Go e segnala costrutti sospetti o problemi di correttezza che possono non essere rilevati dal compilatore.
+
+Il completamento positivo di `go vet` è obbligatorio per il superamento del job CI.
+
+### 14.6 Unit test, race detector e coverage
+
+La suite principale viene eseguita con:
+
+```bash
+go test ./... -race -covermode=atomic -coverprofile=coverage.out
+```
+
+Questo comando combina tre controlli.
+
+#### 14.6.1 Unit test e package test
+
+Vengono eseguiti tutti i test standard del repository, esclusi quelli che richiedono il build tag `integration`.
+
+La separazione mantiene la suite principale veloce e indipendente dalla disponibilità di un database esterno.
+
+#### 14.6.2 Race detector
+
+L'opzione `-race` abilita il race detector di Go.
+
+Il controllo cerca accessi concorrenti non sicuri alla memoria del processo durante l'esecuzione dei test.
+
+Questo controllo è complementare al test di concorrenza PostgreSQL: il race detector verifica la memoria del processo, mentre il test database verifica l'atomicità delle transizioni tra transazioni concorrenti.
+
+#### 14.6.3 Coverage atomica
+
+La coverage viene prodotta con:
+
+```text
+-covermode=atomic
+-coverprofile=coverage.out
+```
+
+La modalità atomica è adatta all'esecuzione concorrente e al race detector.
+
+Il file `coverage.out` viene caricato come artifact GitHub Actions con nome:
+
+```text
+coverage
+```
+
+La pipeline conserva il report, ma non applica ancora una soglia minima obbligatoria di coverage.
+
+### 14.7 PostgreSQL disposable nella CI
+
+Il workflow avvia un service container PostgreSQL 16 nuovo per ogni run.
+
+Configurazione esclusivamente CI:
+
+```text
+POSTGRES_USER=dcp
+POSTGRES_PASSWORD=dcp
+POSTGRES_DB=dcp_test
+```
+
+URL di test:
+
+```text
+TEST_DATABASE_URL=postgres://dcp:dcp@localhost:5432/dcp_test?sslmode=disable
+```
+
+Queste sono credenziali effimere del container isolato di GitHub Actions. Non sono credenziali runtime, OpenShift o production.
+
+Lo stato del database viene verificato con:
+
+```bash
+pg_isready -U dcp
+```
+
+### 14.8 Integration test PostgreSQL
+
+Gli integration test database vengono eseguiti separatamente:
+
+```bash
+go test -tags=integration ./internal/database/... -run Integration -v
+```
+
+La fonte principale è:
+
+```text
+internal/database/change_repository_integration_test.go
+```
+
+La copertura include:
+
+- lifecycle completo di una ChangeRequest su PostgreSQL reale;
+- persistenza delle transizioni;
+- rifiuto delle transizioni lifecycle non valide;
+- comportamento del repository sul motore PostgreSQL effettivo.
+
+Il build tag `integration` evita che questi test dipendano implicitamente da un database durante le normali esecuzioni locali.
+
+### 14.9 Test HTTP end-to-end
+
+La baseline include test HTTP che attraversano handler, middleware, routing, autorizzazione, validazione delle richieste e service layer.
+
+#### 14.9.1 Health e readiness
+
+Fonte:
+
+```text
+internal/api/health_handlers_test.go
+```
+
+Test principali:
+
+```text
+TestHealthzEndpoint
+TestReadyzWhenDatabaseHealthy
+TestReadyzWhenDatabaseDown
+```
+
+Questi test verificano sia il contratto HTTP sia la dipendenza della readiness dalla salute del database.
+
+#### 14.9.2 API ChangeRequest autenticata
+
+Fonte:
+
+```text
+internal/api/change_handlers_test.go
+```
+
+Gli scenari coperti includono:
+
+- lettura autenticata da parte di un viewer;
+- autenticazione obbligatoria;
+- operazione mutativa negata al viewer;
+- creazione consentita all'operator;
+- JSON malformato;
+- errore di validazione del dominio.
+
+#### 14.9.3 Route lifecycle
+
+Fonte:
+
+```text
+internal/api/change_lifecycle_handlers_test.go
+```
+
+Gli scenari coperti includono:
+
+- approvazione consentita all'approver;
+- approvazione negata al viewer;
+- transizione non valida;
+- actor lifecycle mancante.
+
+La suite continua inoltre a eseguire i test esistenti su middleware AuthN/AuthZ, visibilità delle azioni tecniche, dashboard environment-aware ed evidence Tekton.
+
+### 14.10 Invariante di concorrenza lifecycle
+
+Le transizioni lifecycle concorrenti richiedono serializzazione a livello database.
+
+Il repository usa:
+
+```sql
+SELECT ... FOR UPDATE
+```
+
+nel percorso di transizione.
+
+Implementazione:
+
+```text
+internal/database/change_repository.go
+```
+
+Test:
+
+```text
+internal/database/change_repository_concurrency_test.go
+```
+
+Invariante principale:
+
+```text
+TestConcurrentApproveOnlyOneWins
+```
+
+Il test invia approvazioni concorrenti sulla stessa ChangeRequest e verifica che una sola possa completarsi con successo.
+
+Questo impedisce che transazioni diverse leggano lo stesso stato iniziale e applichino entrambe una transizione incompatibile.
+
+### 14.11 TLS secure-by-default
+
+La suite protegge esplicitamente l'invariante secondo cui la verifica dei certificati TLS deve essere attiva per default.
+
+La modalità insecure è consentita solo tramite opt-in esplicito.
+
+#### 14.11.1 Default di configurazione
+
+Fonte:
+
+```text
+internal/config/tls_defaults_test.go
+```
+
+Test:
+
+```text
+TestLoadDefaultsInsecureTLSFlagsToFalse
+TestLoadParsesInsecureTLSFlagsWhenExplicitlyEnabled
+```
+
+Variabili coperte:
+
+```text
+ARGOCD_INSECURE_TLS
+GITLAB_INSECURE_TLS
+KUBERNETES_INSECURE_TLS
+```
+
+In assenza di configurazione esplicita, i flag insecure devono restare `false`.
+
+#### 14.11.2 Adapter runtime
+
+Sono coperti:
+
+- Argo CD;
+- GitLab;
+- Kubernetes;
+- Tekton.
+
+Per ogni adapter vengono verificati:
+
+```text
+TestNewVerifiesTLSByDefault
+TestNewDisablesTLSVerificationOnlyWhenRequested
+```
+
+L'invariante è:
+
+```text
+La costruzione standard del client non deve impostare InsecureSkipVerify=true.
+InsecureSkipVerify=true è ammesso solo dopo un opt-in InsecureTLS esplicito.
+```
+
+Questi test riducono il rischio che un refactoring indebolisca silenziosamente la sicurezza del trasporto.
+
+### 14.12 Modello Pull Request e branch protection
+
+La baseline CI è stata introdotta incrementalmente attraverso pull request dedicate.
+
+Le repository rules applicano:
+
+- modifiche a `main` solo tramite pull request;
+- required status check `test`;
+- merge consentito solo dopo il completamento positivo del check.
+
+Il rifiuto di push diretti su `main` è stato verificato operativamente.
+
+La CI ha inoltre rilevato file di test non `gofmt`-clean, che sono stati corretti prima del merge. Questo dimostra che il workflow agisce come quality gate effettivo.
+
+### 14.13 Validazione locale
+
+Prima di aprire una pull request, il controllo minimo locale è:
+
+```bash
+gofmt -l .
+go vet ./...
+go test ./...
+```
+
+Per gli integration test PostgreSQL serve un database di test raggiungibile e la variabile `TEST_DATABASE_URL`.
+
+Esempio:
+
+```bash
+go test -tags=integration ./internal/database/... -run Integration -v
+```
+
+La baseline corrente è stata verificata localmente con `gofmt -l .` senza output e `go test ./...` con tutti i package testati in stato positivo.
+
+### 14.14 Considerazioni di sicurezza
+
+La CI rispetta le seguenti regole:
+
+- nessuna credenziale reale deve essere committata;
+- le credenziali PostgreSQL del workflow sono disposable e limitate al service container;
+- token come `test-token` sono placeholder isolati nei test;
+- la verifica TLS è attiva per default;
+- la modalità insecure richiede opt-in esplicito;
+- log e artifact non devono contenere Secret reali;
+- pull request e coverage artifact non devono includere token, kubeconfig o private key.
+
+La CI rafforza, ma non sostituisce, Secret reference model, RBAC, evidence sanitization e guardrail fail-closed.
+
+### 14.15 Limitazioni correnti
+
+La pipeline attuale non:
+
+- esegue deploy del DevOps Control Plane su OpenShift;
+- esegue smoke test runtime su `ocp-dev`;
+- testa Argo CD contro un'istanza reale;
+- testa Tekton contro un control plane reale;
+- esegue validazione fisica multi-cluster;
+- esegue test browser-based della UI;
+- costruisce o pubblica automaticamente immagini production;
+- applica una soglia minima di coverage;
+- sostituisce i runbook di health check e manutenzione.
+
+Una CI verde dimostra quindi la baseline automatizzata coperta dalla suite, non la salute del runtime OpenShift attivo.
+
+### 14.16 Evidenze e pull request rilevanti
+
+La baseline è stata consolidata attraverso:
+
+```text
+PR #1 - GitHub Actions e PostgreSQL integration test
+PR #2 - HTTP test health e readiness
+PR #3 - HTTP test ChangeRequest API autenticata
+PR #4 - HTTP test lifecycle routes
+PR #5 - Concorrenza approval e SELECT FOR UPDATE
+PR #6 - Invarianti TLS configurazione e Argo CD
+PR #7 - Invarianti TLS GitLab, Kubernetes e Tekton
+PR #8 - Documento Markdown autorevole della baseline CI
+PR #9 - Indice documentale aggiornato
+PR #10 - Piano di integrazione CI nella guida finale
+```
+
+Il documento autorevole contiene i commit tecnici associati e costituisce la fonte per aggiornamenti futuri di questo capitolo.
+
+### 14.17 Definition of Done
+
+La baseline CI è considerata documentata nella guida quando:
+
+- il workflow GitHub Actions è descritto;
+- trigger e branch protection sono esplicitati;
+- formatting e static analysis sono documentati;
+- race detector e coverage sono documentati;
+- gli integration test PostgreSQL sono distinti dai test standard;
+- i test HTTP end-to-end sono descritti;
+- la concorrenza lifecycle e `SELECT ... FOR UPDATE` sono spiegati;
+- gli invarianti TLS secure-by-default sono descritti;
+- le limitazioni della CI sono esplicite;
+- la pipeline non viene presentata come validazione runtime OpenShift o multi-cluster fisica.
+
+## 15. PostgreSQL e persistenza
 
 PostgreSQL è il database relazionale usato dal DevOps Control Plane per conservare lo stato applicativo della piattaforma.
 
@@ -900,7 +1346,7 @@ ChangeRequest
 
 PostgreSQL rappresenta quindi la memoria applicativa del control plane.
 
-### 14.1 Perché PostgreSQL
+### 15.1 Perché PostgreSQL
 
 PostgreSQL è stato scelto perché offre caratteristiche adatte a una piattaforma di controllo e audit:
 
@@ -914,7 +1360,7 @@ PostgreSQL è stato scelto perché offre caratteristiche adatte a una piattaform
 
 Nel progetto, PostgreSQL conserva lo stato delle ChangeRequest e delle informazioni correlate. Questo permette alla UI, alle API e ai runbook operativi di lavorare su dati persistenti e non su informazioni volatili.
 
-### 14.2 Cosa viene persistito
+### 15.2 Cosa viene persistito
 
 Le entità principali persistite sono:
 
@@ -942,7 +1388,7 @@ Quali eventi sono avvenuti durante il ciclo di vita della richiesta?
 Quali prove tecniche sono state raccolte per dimostrare lo stato osservato?
 ```
 
-### 14.3 ChangeRequest persistence
+### 15.3 ChangeRequest persistence
 
 Una `ChangeRequest` rappresenta una richiesta di cambiamento applicativo o tecnico.
 
@@ -968,7 +1414,7 @@ Esempi reali usati durante la validazione:
 
 Questi record sono stati usati dalla UI per mostrare runtime evidence e Tekton validation evidence.
 
-### 14.4 ChangeEvent persistence
+### 15.4 ChangeEvent persistence
 
 Un `ChangeEvent` rappresenta un evento di audit collegato a una ChangeRequest.
 
@@ -990,7 +1436,7 @@ Questo è importante perché un operatore non deve vedere solo lo stato finale. 
 
 Gli eventi sono quindi la base dell’audit trail applicativo.
 
-### 14.5 Evidence persistence
+### 15.5 Evidence persistence
 
 `Evidence` rappresenta una prova tecnica raccolta dal sistema.
 
@@ -1018,7 +1464,7 @@ Le evidenze devono essere associate alla ChangeRequest corretta.
 
 Questo collegamento è fondamentale perché consente alla UI di mostrare, nel dettaglio di una ChangeRequest, esattamente le prove tecniche relative a quella richiesta.
 
-### 14.6 Sanitizzazione delle evidenze
+### 15.6 Sanitizzazione delle evidenze
 
 Le evidenze devono essere sanificate prima di essere considerate sicure per persistenza, visualizzazione o condivisione.
 
@@ -1050,7 +1496,7 @@ La regola operativa è:
 persist readable evidence, never persist raw credentials
 ```
 
-### 14.7 Relazione tra PostgreSQL e UI
+### 15.7 Relazione tra PostgreSQL e UI
 
 La UI non deve ricostruire lo stato operativo interrogando direttamente tutti i sistemi esterni.
 
@@ -1067,7 +1513,7 @@ Questo vale per:
 
 La UI può quindi presentare una vista coerente anche quando le evidenze sono state raccolte in momenti diversi.
 
-### 14.8 Relazione tra PostgreSQL e runtime evidence
+### 15.8 Relazione tra PostgreSQL e runtime evidence
 
 La runtime evidence osserva il mondo esterno, ma viene conservata nel mondo applicativo.
 
@@ -1106,7 +1552,7 @@ PostgreSQL
 UI evidence card
 ```
 
-### 14.9 Backup e restore
+### 15.9 Backup e restore
 
 PostgreSQL è incluso nella baseline operativa del progetto.
 
@@ -1130,7 +1576,7 @@ La perdita del database non cancella necessariamente lo stato GitOps presente ne
 
 Per questo motivo il database deve essere trattato come componente critico.
 
-### 14.10 Restore isolato
+### 15.10 Restore isolato
 
 Il restore isolato è preferibile durante test e verifiche.
 
@@ -1146,7 +1592,7 @@ validate restore safely before considering active replacement
 
 Un restore in ambiente attivo deve essere eseguito solo con procedura approvata, evidenze raccolte e chiara responsabilità operativa.
 
-### 14.11 Relazione con operability
+### 15.11 Relazione con operability
 
 PostgreSQL è parte della Fase 10 di operability.
 
@@ -1163,7 +1609,7 @@ La readiness applicativa `/readyz` dipende anche dalla possibilità del backend 
 
 Se PostgreSQL non è disponibile, il DevOps Control Plane può perdere la capacità di leggere o aggiornare ChangeRequest, eventi ed evidenze.
 
-### 14.12 Relazione con audit e compliance
+### 15.12 Relazione con audit e compliance
 
 La persistenza su PostgreSQL supporta audit e compliance applicativa.
 
@@ -1181,7 +1627,7 @@ Questo rende il DevOps Control Plane più di un semplice orchestratore tecnico.
 
 Il sistema diventa anche una fonte di tracciabilità.
 
-### 14.13 Limiti attuali
+### 15.13 Limiti attuali
 
 La baseline attuale include PostgreSQL funzionante e runbook operativi, ma non rappresenta ancora necessariamente una configurazione enterprise definitiva per ogni contesto produttivo.
 
@@ -1196,7 +1642,7 @@ Restano possibili evoluzioni future:
 
 Questi aspetti fanno parte del percorso di production hardening e non invalidano la baseline attuale.
 
-### 14.14 Sintesi
+### 15.14 Sintesi
 
 PostgreSQL è la memoria persistente del DevOps Control Plane.
 
@@ -1219,7 +1665,7 @@ Grazie a PostgreSQL, il progetto può offrire:
 
 La persistenza è quindi uno dei pilastri che trasformano il DevOps Control Plane da automazione temporanea a piattaforma di controllo strutturata.
 
-## 15. Modello dati
+## 16. Modello dati
 
 Il modello dati del DevOps Control Plane descrive le informazioni che la piattaforma deve conservare per governare un cambiamento in modo tracciabile, auditabile e verificabile.
 
@@ -1249,7 +1695,7 @@ Che cosa e successo durante il workflow?
 Quali prove tecniche dimostrano lo stato osservato?
 ```
 
-### 15.1 ChangeRequest
+### 16.1 ChangeRequest
 
 `ChangeRequest` e l'entita principale del dominio.
 
@@ -1276,7 +1722,7 @@ Esempi reali usati nella baseline:
 
 Queste ChangeRequest sono importanti perché hanno validato il workflow namespace-isolated per staging e production, includendo Tekton validation evidence e UI rendering.
 
-### 15.2 Numero ChangeRequest
+### 16.2 Numero ChangeRequest
 
 Il numero della ChangeRequest e l'identificativo leggibile usato da operatori e UI.
 
@@ -1289,7 +1735,7 @@ CHG-2026-0050
 
 Il numero deve essere stabile e riconoscibile, perché compare in dashboard, pagine di dettaglio, audit, evidence, troubleshooting e runbook operativi.
 
-### 15.3 Target environment
+### 16.3 Target environment
 
 `targetEnvironment` indica l'ambiente logico richiesto per la ChangeRequest.
 
@@ -1311,7 +1757,7 @@ production -> ocp-dev / devops-ci-production
 
 Il target environment deve essere persistito perché tutte le operazioni successive devono sapere quale ambiente era stato richiesto. Senza questo campo, non sarebbe possibile distinguere correttamente una validazione staging da una validazione production.
 
-### 15.4 Stato del processo
+### 16.4 Stato del processo
 
 Lo stato del processo descrive l'avanzamento logico della ChangeRequest.
 
@@ -1326,7 +1772,7 @@ Esempi concettuali:
 
 Questo stato non deve essere confuso con lo stato runtime. Una richiesta può essere stata processata correttamente dal backend, ma il deployment può comunque non essere pronto.
 
-### 15.5 Stato runtime
+### 16.5 Stato runtime
 
 Lo stato runtime descrive cosa e stato osservato nei sistemi tecnici.
 
@@ -1340,7 +1786,7 @@ Può derivare da:
 
 Questa distinzione evita di dichiarare riuscito un cambiamento solo perché il processo applicativo e avanzato. Il DevOps Control Plane deve distinguere successo del processo, successo tecnico del runtime, fallimento della validazione, fallimento del deployment, evidence mancante o evidence incompleta.
 
-### 15.6 ChangeEvent
+### 16.6 ChangeEvent
 
 `ChangeEvent` rappresenta un evento di audit collegato a una ChangeRequest.
 
@@ -1370,7 +1816,7 @@ ChangeRequest CHG-2026-0050
       +--> event: evidence stored
 ```
 
-### 15.7 Audit trail
+### 16.7 Audit trail
 
 L'audit trail e la sequenza degli eventi associati a una ChangeRequest.
 
@@ -1384,7 +1830,7 @@ L'audit trail e utile per:
 
 Il valore dell'audit trail non e solo tecnico. L'audit trail aiuta anche a spiegare perché una richiesta si trova in un certo stato.
 
-### 15.8 Evidence
+### 16.8 Evidence
 
 `Evidence` rappresenta una prova tecnica associata a una ChangeRequest.
 
@@ -1409,7 +1855,7 @@ Esempi di evidence:
 
 La evidence deve sempre essere collegata al contesto corretto: ChangeRequest, target environment, namespace, timestamp e tipo di evidence.
 
-### 15.9 Tipi di evidence
+### 16.9 Tipi di evidence
 
 Nel progetto si possono distinguere varie famiglie di evidence:
 
@@ -1423,7 +1869,7 @@ Nel progetto si possono distinguere varie famiglie di evidence:
 
 Queste famiglie non devono essere confuse. Una Tekton validation evidence dimostra l'esito di una PipelineRun. Una runtime evidence dimostra invece lo stato osservato nel cluster.
 
-### 15.10 Evidence sanitization
+### 16.10 Evidence sanitization
 
 La evidence deve essere sanificata.
 
@@ -1452,7 +1898,7 @@ Dati vietati:
 
 La sanitizzazione e un requisito di sicurezza, non un dettaglio secondario.
 
-### 15.11 Relazione tra ChangeRequest ed Evidence
+### 16.11 Relazione tra ChangeRequest ed Evidence
 
 Una ChangeRequest può avere più evidence nel tempo.
 
@@ -1469,7 +1915,7 @@ CHG-2026-0050
 
 Questo e importante perché il workflow può essere eseguito in più passaggi. La UI deve mostrare le evidence più rilevanti per l'operatore, in particolare la latest validation evidence quando disponibile.
 
-### 15.12 Latest validation evidence
+### 16.12 Latest validation evidence
 
 La latest validation evidence e l'evidenza di validazione più recente associata a una ChangeRequest.
 
@@ -1497,7 +1943,7 @@ evidence sanitized: true
 result: Succeeded
 ```
 
-### 15.13 Relazione con Environment Catalog
+### 16.13 Relazione con Environment Catalog
 
 Il modello dati e collegato all'Environment Catalog perché la ChangeRequest contiene il target environment.
 
@@ -1511,7 +1957,7 @@ Il target environment viene risolto in:
 
 Queste informazioni possono poi comparire nelle evidence. Questo collegamento e essenziale per evitare ambiguita tra ambienti.
 
-### 15.14 Relazione con Cluster Registry
+### 16.14 Relazione con Cluster Registry
 
 Il modello dati deve essere compatibile con il Cluster Registry.
 
@@ -1526,7 +1972,7 @@ Per questo motivo le evidence e i runtime target devono preservare informazioni 
 
 Quando arrivera un cluster reale, sarà importante dimostrare che il workflow non e ricaduto per errore su `ocp-dev`.
 
-### 15.15 Relazione con la UI
+### 16.15 Relazione con la UI
 
 La UI e una vista del modello dati e delle evidenze.
 
@@ -1542,7 +1988,7 @@ La UI usa questi dati per mostrare:
 
 La UI non deve inventare uno stato. La UI deve rappresentare lo stato persistito e le evidence raccolte.
 
-### 15.16 Relazione con operability
+### 16.16 Relazione con operability
 
 Il modello dati sostiene anche l'operability.
 
@@ -1558,7 +2004,7 @@ Durante troubleshooting o manutenzione, un operatore può usare ChangeRequest, e
 
 Senza modello dati persistente, l'operatore dovrebbe ricostruire tutto da log e sistemi esterni.
 
-### 15.17 Relazione con security
+### 16.17 Relazione con security
 
 Il modello dati deve rispettare i guardrail di sicurezza.
 
@@ -1573,7 +2019,7 @@ In particolare:
 
 La sicurezza del modello dati e parte della sicurezza della piattaforma.
 
-### 15.18 Relazione con multi-cluster readiness
+### 16.18 Relazione con multi-cluster readiness
 
 Il modello dati supporta la readiness multi-cluster perché conserva il target environment e le informazioni runtime correlate.
 
@@ -1592,7 +2038,7 @@ Il comportamento atteso e:
 
 Il modello dati deve continuare a rendere visibile quale ambiente e quale cluster erano attesi.
 
-### 15.19 Esempio completo
+### 16.19 Esempio completo
 
 Esempio concettuale basato sulla validazione production:
 
@@ -1619,7 +2065,7 @@ Evidence
 
 Questo esempio mostra come dominio, runtime target ed evidence siano collegati.
 
-### 15.20 Sintesi
+### 16.20 Sintesi
 
 Il modello dati del DevOps Control Plane permette di trasformare workflow tecnici distribuiti in una storia coerente e persistente.
 
@@ -1633,7 +2079,7 @@ Il modello dati collega governance, automazione, audit, runtime evidence, UI e o
 
 Questo e uno dei motivi per cui il DevOps Control Plane può essere considerato una piattaforma di controllo e non una semplice raccolta di script.
 
-## 16. ChangeRequest lifecycle
+## 17. ChangeRequest lifecycle
 
 Una `ChangeRequest` rappresenta il punto centrale del DevOps Control Plane.
 
@@ -1957,7 +2403,7 @@ La ChangeRequest collega:
 
 Questo modello consente di trasformare operazioni tecniche distribuite in un processo unico, persistente, verificabile e comprensibile.
 
-## 17. GitLab Merge Request workflow
+## 18. GitLab Merge Request workflow
 
 Il workflow GitLab collega una `ChangeRequest` al ciclo di vita del codice e della configurazione GitOps.
 
@@ -2211,7 +2657,7 @@ Il workflow collega una richiesta di cambiamento a una modifica versionata, revi
 
 Grazie a questo collegamento, il DevOps Control Plane può dimostrare non solo che una validazione e stata eseguita, ma anche quale contenuto Git e stato validato e da quale ChangeRequest e nato il cambiamento.
 
-## 18. Workflow runtime
+## 19. Workflow runtime
 
 Il workflow runtime e l'insieme delle azioni tecniche che il DevOps Control Plane esegue o coordina dopo la creazione di una `ChangeRequest`.
 
@@ -2524,7 +2970,7 @@ Attraverso `collect-evidence`, `check-deployment`, `validate` e `check-validatio
 
 Questo workflow rende possibile osservare, validare e spiegare lo stato di dev, staging e production nella baseline namespace-isolated e prepara il progetto al futuro multi-cluster reale.
 
-## 19. Workflow dev, staging e production
+## 20. Workflow dev, staging e production
 
 Il DevOps Control Plane supporta un modello multi-environment basato su tre ambienti logici:
 
@@ -2837,7 +3283,7 @@ La baseline corrente e namespace-isolated su `ocp-dev`, ma include tutti gli ele
 
 Questo capitolo chiude la parte dedicata ai workflow applicativi e prepara la guida ai capitoli sull'evidence model.
 
-## 20. Runtime evidence
+## 21. Runtime evidence
 
 La runtime evidence e l'insieme delle prove tecniche raccolte osservando lo stato reale dei sistemi runtime.
 
@@ -3168,7 +3614,7 @@ Permette di collegare una ChangeRequest allo stato reale osservato in OpenShift,
 
 Grazie alla runtime evidence, il sistema può spiegare non solo che una richiesta e stata elaborata, ma anche cosa e stato osservato nel runtime e quali prove sono disponibili per verificarlo.
 
-## 21. Tekton validation evidence
+## 22. Tekton validation evidence
 
 La Tekton validation evidence e l'evidenza che descrive il risultato di una validazione tecnica eseguita tramite Tekton.
 
@@ -3515,7 +3961,7 @@ Essa collega ChangeRequest, PipelineRun, validation path, stato, reason, failed 
 
 Insieme alla runtime evidence, permette al DevOps Control Plane di fornire una vista completa e auditabile del cambiamento.
 
-## 22. Argo CD deployment evidence
+## 23. Argo CD deployment evidence
 
 La Argo CD deployment evidence descrive lo stato GitOps osservato da Argo CD per una applicazione gestita.
 
@@ -3844,7 +4290,7 @@ Essa collega repository Git, Application Argo CD, namespace target, stato di syn
 
 Insieme a runtime evidence e Tekton validation evidence, permette al DevOps Control Plane di fornire una vista completa del cambiamento: codice validato, GitOps sincronizzato e runtime osservato.
 
-## 23. Evidence sanitization
+## 24. Evidence sanitization
 
 La evidence sanitization e il processo con cui il DevOps Control Plane conserva e mostra solo informazioni tecniche sicure, evitando di esporre credenziali, token, Secret o altri dati sensibili.
 
@@ -4162,7 +4608,7 @@ La regola finale e semplice:
 le evidenze devono spiegare cosa e successo, non rivelare credenziali
 ```
 
-## 24. Dashboard
+## 25. Dashboard
 
 La dashboard del DevOps Control Plane e la superficie operativa principale per avere una vista sintetica dello stato della piattaforma.
 
@@ -4410,7 +4856,7 @@ Essa mostra lo stato recente, la visibilita degli ambienti, il contesto utente e
 
 La dashboard non e più solo una UI MVP iniziale. E una vista evidence-aware ed environment-aware, coerente con la baseline namespace-isolated e con la readiness multi-cluster a livello codice.
 
-## 25. ChangeRequest detail
+## 26. ChangeRequest detail
 
 La pagina di dettaglio della `ChangeRequest` e la vista più importante per analizzare una richiesta specifica.
 
@@ -4756,7 +5202,7 @@ Essa collega dati di dominio, audit trail, runtime evidence, Tekton validation e
 
 Questa vista e essenziale per trasformare il control plane in uno strumento operativo reale, non solo in un archivio di richieste.
 
-## 26. UI environment awareness
+## 27. UI environment awareness
 
 La UI environment awareness e la capacità della UI del DevOps Control Plane di rappresentare chiaramente gli ambienti logici, i namespace e il contesto runtime associato a una ChangeRequest.
 
@@ -5037,7 +5483,7 @@ Essa consente agli operatori di distinguere dev, staging e production, di vedere
 
 Questa funzionalita e essenziale nella baseline namespace-isolated e sarà ancora più importante quando saranno disponibili cluster fisici separati.
 
-## 27. Environment Catalog
+## 28. Environment Catalog
 
 L'Environment Catalog e il modello con cui il DevOps Control Plane descrive gli ambienti logici supportati dalla piattaforma.
 
@@ -5294,7 +5740,7 @@ Collega ChangeRequest, namespace, Argo CD, Tekton, validation path, UI e runtime
 
 Grazie a questo modello, il progetto può operare oggi con namespace isolation e prepararsi domani a un vero multi-cluster senza riprogettare il workflow.
 
-## 28. Cluster Registry
+## 29. Cluster Registry
 
 Il Cluster Registry e il modello con cui il DevOps Control Plane descrive i cluster disponibili o previsti.
 
@@ -5633,7 +6079,7 @@ Insieme all'Environment Catalog, permette di trasformare un ambiente logico in u
 
 Oggi rappresenta la baseline `ocp-dev` namespace-isolated. Domani permetterà l'onboarding controllato di cluster fisici aggiuntivi, mantenendo fail-closed, Secret references e guardrail operativi.
 
-## 29. Runtime target resolution
+## 30. Runtime target resolution
 
 La runtime target resolution e il processo con cui il DevOps Control Plane trasforma un ambiente logico dichiarato in una `ChangeRequest` in un target tecnico utilizzabile dai workflow runtime.
 
@@ -5970,7 +6416,7 @@ Trasforma una ChangeRequest con `targetEnvironment` in un `TechnicalRuntimeTarge
 
 Questo meccanismo e essenziale per la baseline namespace-isolated attuale e per il futuro multi-cluster reale.
 
-## 30. Multi-cluster code-ready baseline
+## 31. Multi-cluster code-ready baseline
 
 La multi-cluster code-ready baseline rappresenta lo stato in cui il DevOps Control Plane e pronto, a livello di codice e modello operativo, per supportare cluster fisici separati in futuro.
 
@@ -6318,7 +6764,7 @@ Physical cross-cluster runtime validation is deferred by infrastructure availabi
 Multi-cluster code readiness is completed, tested, documented and fail-closed.
 ```
 
-## 31. Deferred real-cluster onboarding contract
+## 32. Deferred real-cluster onboarding contract
 
 Il deferred real-cluster onboarding contract descrive le regole da seguire quando sarà disponibile un cluster OpenShift reale aggiuntivo.
 
@@ -6683,7 +7129,7 @@ Il DevOps Control Plane e multi-cluster code-ready, ma la validazione fisica cro
 
 Quando un cluster reale sarà disponibile, l'onboarding dovrà seguire questo contratto per mantenere sicurezza, tracciabilita, fail-closed behavior e operability.
 
-## 32. RBAC
+## 33. RBAC
 
 RBAC, cioè Role-Based Access Control, e il modello con cui Kubernetes e OpenShift controllano quali azioni possono essere eseguite da utenti, gruppi e ServiceAccount.
 
@@ -6962,7 +7408,7 @@ Nella baseline namespace-isolated, RBAC deve essere verificato per dev, staging 
 
 Nel futuro multi-cluster, RBAC dovrà essere validato per ogni cluster reale, mantenendo il principio del minimo privilegio e il comportamento fail-closed.
 
-## 33. Secret reference model
+## 34. Secret reference model
 
 Il Secret reference model e il modello con cui il DevOps Control Plane rappresenta credenziali e materiali sensibili senza salvarne o mostrarne i valori raw.
 
@@ -7289,7 +7735,7 @@ Il modello conserva riferimenti, non valori.
 
 Insieme a allow-list, RBAC, runtime Secret loader disabled-by-default e evidence sanitization, rappresenta uno dei guardrail di sicurezza più importanti della piattaforma.
 
-## 34. Runtime factories
+## 35. Runtime factories
 
 Le runtime factories sono i componenti che preparano o costruiscono client runtime per interagire con sistemi esterni come Kubernetes/OpenShift, Tekton e Argo CD.
 
@@ -7610,7 +8056,7 @@ Per questo devono essere disabilitate per default, abilitate solo in modo esplic
 
 Questo comportamento e essenziale per la sicurezza attuale e per il futuro multi-cluster reale.
 
-## 35. AuthN/AuthZ e OAuth proxy
+## 36. AuthN/AuthZ e OAuth proxy
 
 AuthN e AuthZ rappresentano due aspetti distinti della sicurezza applicativa.
 
@@ -7915,7 +8361,7 @@ Il backend deve applicare autorizzazione fail-closed per le azioni sensibili.
 
 Insieme a RBAC, Secret references, evidence sanitization e runtime factories disabled-by-default, AuthN/AuthZ completa il modello di sicurezza applicativa della piattaforma.
 
-## 36. Error handling
+## 37. Error handling
 
 L'error handling del DevOps Control Plane definisce come il sistema deve comportarsi quando un'operazione non può essere completata correttamente.
 
@@ -8371,7 +8817,7 @@ La regola finale e:
 an explicit fail-closed error is safer than an implicit unsafe action
 ```
 
-## 37. Health check
+## 38. Health check
 
 Il capitolo Health check descrive come verificare rapidamente lo stato operativo del DevOps Control Plane e della baseline runtime corrente.
 
@@ -8688,7 +9134,7 @@ Verifica backend, UI, Argo CD, deployment, route, Tekton e ChangeRequest detail.
 
 E il primo strumento da usare per capire se la piattaforma e operativa e coerente con la baseline validata.
 
-## 38. Maintenance operations
+## 39. Maintenance operations
 
 Le maintenance operations descrivono come eseguire attività controllate di manutenzione sul DevOps Control Plane senza compromettere la baseline validata, le evidenze operative, la UI, i workflow Tekton, lo stato Argo CD o i guardrail di sicurezza.
 
@@ -9026,7 +9472,7 @@ Ogni manutenzione deve produrre evidence, rispettare guardrail, verificare dev, 
 
 La manutenzione e parte integrante dell'operability della piattaforma.
 
-## 39. Troubleshooting
+## 40. Troubleshooting
 
 Il troubleshooting del DevOps Control Plane e il processo con cui un operatore identifica, classifica e risolve problemi che possono emergere durante il normale funzionamento della piattaforma.
 
@@ -9416,7 +9862,7 @@ L'operatore deve identificare il layer coinvolto, preservare evidence sanificata
 
 Un errore esplicito e sicuro e preferibile a una correzione rapida ma ambigua.
 
-## 40. Backup, restore e disaster recovery
+## 41. Backup, restore e disaster recovery
 
 Backup, restore e disaster recovery sono le pratiche che permettono di proteggere la memoria applicativa e la continuità operativa del DevOps Control Plane.
 
@@ -9745,7 +10191,7 @@ GitOps, Argo CD, Tekton e GitLab hanno ruoli importanti, ma non sostituiscono il
 
 Una strategia DR completa deve essere provata, documentata e sanificata.
 
-## 41. Stato delle fasi
+## 42. Stato delle fasi
 
 Questo capitolo riepiloga lo stato delle fasi principali del progetto DevOps Control Plane.
 
@@ -10168,7 +10614,7 @@ final technical guide in corso
 
 Questa guida serve a consolidare tutto il lavoro svolto in un documento organico, utile per onboarding, handover e operatività futura.
 
-## 42. Stato finale corrente
+## 43. Stato finale corrente
 
 Questo capitolo descrive lo stato finale corrente del progetto DevOps Control Plane alla data di redazione della guida tecnica finale.
 
@@ -10416,6 +10862,14 @@ I test confermano:
 
 Questa e una validazione del modello codice, non una validazione fisica cross-cluster.
 
+### Baseline CI e test automatizzati
+
+La baseline corrente include una pipeline GitHub Actions operativa e protetta da repository rules.
+
+La CI verifica formattazione, analisi statica, unit test, race detector, coverage, integration test PostgreSQL, test HTTP end-to-end, concorrenza lifecycle e invarianti TLS secure-by-default.
+
+Una pipeline verde non sostituisce gli health check OpenShift o la validazione fisica multi-cluster.
+
 ### 43.13 Security e guardrail
 
 Il modello security e consolidato come baseline avanzata.
@@ -10528,7 +10982,7 @@ Il progetto e anche pronto a livello codice per il futuro multi-cluster, ma atte
 
 Questa distinzione e la chiave per descrivere correttamente lo stato del progetto.
 
-## 43. Roadmap futura
+## 44. Roadmap futura
 
 La roadmap futura descrive le evoluzioni successive alla baseline corrente del DevOps Control Plane.
 
@@ -11405,6 +11859,29 @@ a370844 Add runtime target resolution chapter to final technical guide
 21f1383 Add multi-cluster code-ready baseline chapter to final technical guide
 2b88cbc Add deferred real-cluster onboarding chapter to final technical guide
 2957fb2 Add future roadmap chapter to final technical guide
+```
+
+### Baseline CI e test automatizzati
+
+Fonte autorevole:
+
+```text
+docs/continuous-integration-and-automated-testing.md
+```
+
+Pull request principali:
+
+```text
+PR #1  CI workflow e PostgreSQL integration test
+PR #2  Health/readiness HTTP E2E
+PR #3  Authenticated ChangeRequest API E2E
+PR #4  Lifecycle routes E2E
+PR #5  Concurrency e SELECT FOR UPDATE
+PR #6  Config e Argo CD TLS invariants
+PR #7  GitLab, Kubernetes e Tekton TLS invariants
+PR #8  Documento CI autorevole
+PR #9  Indice documentale CI
+PR #10 Pianificazione integrazione CI nella guida finale
 ```
 
 ## Appendice D - Limitazioni note
