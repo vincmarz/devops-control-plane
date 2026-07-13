@@ -307,6 +307,7 @@ func (r *ChangeRepository) TransitionLifecycle(ctx context.Context, idOrNumber s
 		SELECT id::text, change_number, status
 		FROM change_requests
 		WHERE id::text = $1 OR change_number = $1
+		FOR UPDATE
 	`, idOrNumber).Scan(&id, &changeNumber, &previousStatus); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("change not found: %s", idOrNumber)
