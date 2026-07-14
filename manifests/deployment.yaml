@@ -30,6 +30,9 @@ spec:
             - name: dcp-trust-bundle
               mountPath: /etc/dcp-trust
               readOnly: true
+            - name: dcp-applications
+              mountPath: /etc/dcp-applications
+              readOnly: true
             - name: dcp-environments
               mountPath: /etc/dcp-environments
               readOnly: true
@@ -72,6 +75,12 @@ spec:
             items:
               - key: ca-bundle.crt
                 path: ca-bundle.crt
+        - name: dcp-applications
+          configMap:
+            name: devops-control-plane-applications
+            items:
+              - key: applications.yaml
+                path: applications.yaml
         - name: dcp-environments
           configMap:
             name: devops-control-plane-environments

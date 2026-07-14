@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - serviceaccount.yaml
   - configmap.yaml
+  - configmap-applications.yaml
   - role.yaml
   - rolebinding.yaml
   - postgresql-service.yaml

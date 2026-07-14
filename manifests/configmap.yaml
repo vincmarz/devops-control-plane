@@ -44,6 +44,9 @@ data:
   KUBERNETES_NAMESPACE: "devops-ci-demo"
   EVIDENCE_BASE_PATH: ""
 
+  # Application Catalog runtime loading. File is mounted from devops-control-plane-applications ConfigMap.
+  APPLICATION_CATALOG_FILE: "/etc/dcp-applications/applications.yaml"
+
   # Environment Catalog runtime loading. File is mounted from devops-control-plane-environments ConfigMap.
   ENVIRONMENT_CATALOG_FILE: "/etc/dcp-environments/environments.yaml"
 
