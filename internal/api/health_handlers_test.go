@@ -27,8 +27,10 @@ type responseEnvelope struct {
 	Data  map[string]any `json:"data"`
 	Meta  map[string]any `json:"meta"`
 	Error *struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
+		Code             string `json:"code"`
+		Message          string `json:"message"`
+		TechnicalMessage string `json:"technicalMessage"`
+		Recoverable      bool   `json:"recoverable"`
 	} `json:"error"`
 }
 
