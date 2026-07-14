@@ -207,6 +207,48 @@ func TestCreateChangeAsOperator(t *testing.T) {
 	}
 }
 
+// TestCreateChangeRejectsApplicationEnvironmentMismatch verifies that a
+// ChangeRequest cannot target an environment configured for a different
+// logical application. The request must fail before store persistence.
+func TestCreateChangeRejectsApplicationEnvironmentMismatch(t *testing.T) {
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_GROUP_OPERATOR", "cp-operators")
+
+	store := &fakeChangeStore{}
+	srv := newChangesServer(t, store)
+
+	body := `{"title":"Reject mismatching application binding","applicationName":"payments","changeType":"config","targetEnvironment":"dev"}`
+	resp := doRequest(t, http.MethodPost, srv.URL+"/api/v1/changes", body, operatorHeaders())
+
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		resp.Body.Close()
+		t.Fatalf("expected 422 for an application environment mismatch, got %d", resp.StatusCode)
+	}
+
+	env := decodeEnvelope(t, resp)
+	if env.Error == nil {
+		t.Fatal("expected an error object in the envelope")
+	}
+	if env.Error.Code != "VALIDATION_INVALID_REQUEST" {
+		t.Errorf("error code = %q, want VALIDATION_INVALID_REQUEST", env.Error.Code)
+	}
+	if env.Error.Message != "Unable to create ChangeRequest" {
+		t.Errorf("error message = %q, want Unable to create ChangeRequest", env.Error.Message)
+	}
+
+	expectedTechnicalMessage := `applicationName "payments" is not configured for targetEnvironment "dev"; expected "demo-go-color-app"`
+	if env.Error.TechnicalMessage != expectedTechnicalMessage {
+		t.Errorf("technical message = %q, want %q", env.Error.TechnicalMessage, expectedTechnicalMessage)
+	}
+	if !env.Error.Recoverable {
+		t.Error("expected recoverable validation error")
+	}
+
+	if store.createdWith.Title != "" || store.createdWith.ApplicationName != "" || store.createdWith.TargetEnvironment != "" {
+		t.Fatalf("store.Create was unexpectedly called with %#v", store.createdWith)
+	}
+}
+
 // TestCreateChangeRejectsMalformedJSON verifies malformed input yields 400.
 func TestCreateChangeRejectsMalformedJSON(t *testing.T) {
 	t.Setenv("AUTH_ENABLED", "true")
