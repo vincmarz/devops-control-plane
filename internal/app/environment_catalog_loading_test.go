@@ -14,7 +14,9 @@ environments:
     enabled: true
     allowTechnicalActions: true
   - name: staging
+    applicationName: demo-go-color-app
     displayName: Staging
+    argocdApplicationName: demo-go-color-app-staging
     enabled: true
     allowTechnicalActions: true
   - name: production
@@ -32,6 +34,16 @@ environments:
 	}
 	if err := catalog.ValidateCreateTargetEnvironment("staging"); err != nil {
 		t.Fatalf("staging should be enabled from runtime catalog: %v", err)
+	}
+	staging, ok := catalog.Resolve("staging")
+	if !ok {
+		t.Fatal("staging environment was not resolved")
+	}
+	if staging.ApplicationName != "demo-go-color-app" {
+		t.Fatalf("ApplicationName = %q, want demo-go-color-app", staging.ApplicationName)
+	}
+	if staging.ArgoCDApplicationName != "demo-go-color-app-staging" {
+		t.Fatalf("ArgoCDApplicationName = %q, want demo-go-color-app-staging", staging.ArgoCDApplicationName)
 	}
 	if catalog.AllowsTechnicalActions("production") {
 		t.Fatal("production should not allow technical actions from runtime catalog")
