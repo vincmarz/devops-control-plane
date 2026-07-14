@@ -311,26 +311,30 @@ Quando saranno disponibili cluster fisici separati, il progetto non dovrà ripro
 Dovrà applicare il contratto di onboarding reale già documentato.
 
 ## 8. GitOps
-
+<br>
 GitOps è un modello operativo in cui Git rappresenta la fonte di verità dello stato desiderato.
-
-In un modello GitOps, invece di modificare direttamente il cluster, si modifica un repository Git.
-
-Uno strumento come Argo CD osserva il repository e porta il cluster verso lo stato dichiarato.
-
-Nel progetto DevOps Control Plane, GitOps è centrale perché:
-
-- le modifiche applicative sono versionate;
-- le modifiche sono tracciabili;
+<br>
+Invece di modificare direttamente il cluster, si modifica un repository Git e uno strumento come Argo CD riconcilia il runtime verso lo stato dichiarato.
+<br>
+Nel DevOps Control Plane, GitOps è centrale perché:
+<br>
+- le modifiche applicative sono versionate e tracciabili;
 - Argo CD può sincronizzare lo stato desiderato;
 - Tekton può validare il contenuto GitOps;
-- il DevOps Control Plane può collegare ChangeRequest, Git revision, validation path ed evidence.
-
+- ChangeRequest, revisione Git, validation path ed evidence possono essere correlati.
+<br>
+La baseline distingue due ruoli Git differenti:
+<br>
+- GitLab CE è il provider SCM reale usato per validare branch, aggiornamento file, Merge Request e merge tramite API;
+- il repository GitHub `https://github.com/vincmarz/demo-app-gitops.git` è la source of truth attualmente consumata da Argo CD e Tekton.
+<br>
+Non è stata dimostrata una sincronizzazione automatica, un mirror o una promotion dal progetto GitLab interno al repository GitHub consumato dal runtime. Le due integrazioni sono state validate separatamente e non devono essere descritte come una singola catena automatica.
+<br>
 Esempi di path GitOps validati:
-
+<br>
 - `apps/demo-go-color-app/overlays/staging`;
 - `apps/demo-go-color-app/overlays/production`.
-
+<br>
 ## 9. Kustomize base e overlays
 
 Kustomize permette di definire una base comune e overlay specifici per ambiente.
@@ -357,43 +361,44 @@ Un errore di validation path potrebbe portare a validare staging mentre si pensa
 Per questo la correzione del validation path environment-specific è stata una parte importante della baseline.
 
 ## 10. Argo CD
-
-Argo CD è il motore GitOps usato dal progetto.
-
-Il compito di Argo CD è confrontare lo stato desiderato nel repository Git con lo stato effettivo del cluster.
-
+<br>
+Argo CD è il motore GitOps usato dal progetto. Confronta lo stato desiderato nel repository Git con lo stato effettivo del cluster.
+<br>
 I due stati principali sono:
-
+<br>
 - sync;
 - health.
-
+<br>
 ### 10.1 Sync
-
-Lo stato `Synced` indica che il cluster è allineato con il repository Git.
-
+<br>
+Lo stato `Synced` indica che il cluster è allineato con il repository Git configurato nella Argo CD Application.
+<br>
 ### 10.2 Health
-
+<br>
 Lo stato `Healthy` indica che le risorse applicative risultano sane dal punto di vista di Argo CD.
-
-### 10.3 Applications validate
-
-Nel progetto sono state validate Argo CD Applications per:
-
-- dev;
-- staging;
-- production.
-
-Esempi:
-
-- `demo-go-color-app`;
-- `demo-go-color-app-staging`;
-- `demo-go-color-app-production`.
-
-La smoke matrix finale ha confermato stato:
-
-- `Synced`;
-- `Healthy`.
-
+<br>
+### 10.3 Applicazione logica e Applications validate
+<br>
+La baseline principale contiene una sola applicazione logica, `demo-go-color-app`, distribuita in tre istanze ambientali:
+<br>
+```text
+dev        -> demo-go-color-app
+staging    -> demo-go-color-app-staging
+production -> demo-go-color-app-production
+```
+<br>
+Le tre risorse sono Argo CD Applications environment-specific, tutte validate nello stato `Synced` e `Healthy`.
+<br>
+Argo CD restituisce inoltre `demo-app`, una Application storica e standalone distinta dalla baseline principale. La risorsa usa il path `manifests` e presenta `OrphanedResourceWarning`; non è dimostrato che abbia attraversato il workflow GitLab end-to-end.
+<br>
+La UI rappresenta quindi:
+<br>
+```text
+applicazioni logiche                   1
+istanze ambientali                     3
+Argo CD Applications standalone        1
+```
+<br>
 ## 11. Tekton
 
 Tekton è il motore di pipeline usato per validare tecnicamente il cambiamento.
@@ -2404,259 +2409,104 @@ La ChangeRequest collega:
 Questo modello consente di trasformare operazioni tecniche distribuite in un processo unico, persistente, verificabile e comprensibile.
 
 ## 18. GitLab Merge Request workflow
-
-Il workflow GitLab collega una `ChangeRequest` al ciclo di vita del codice e della configurazione GitOps.
-
-Nel DevOps Control Plane, GitLab non viene usato solo come repository remoto. GitLab rappresenta il punto in cui una modifica viene preparata, versionata, proposta e infine resa disponibile al modello GitOps.
-
-Il workflow GitLab permette di collegare:
-
-- richiesta di cambiamento;
-- branch Git;
-- commit;
-- merge request;
-- merge;
-- revisione usata da Argo CD e Tekton;
-- audit ed evidence.
-
-Vista semplificata:
-
+<br>
+Il workflow GitLab collega una `ChangeRequest` alle operazioni SCM necessarie per preparare, versionare, revisionare e approvare una modifica.
+<br>
+Nella baseline validata, GitLab CE è il provider SCM reale usato dal backend tramite API REST. Le operazioni completate end-to-end comprendono:
+<br>
+- creazione del branch;
+- creazione o aggiornamento dei file;
+- apertura e ricerca della Merge Request;
+- merge della Merge Request;
+- registrazione di eventi e riferimenti collegati alla ChangeRequest.
+<br>
+### 18.1 Confine tra SCM e runtime GitOps
+<br>
+Il workflow GitLab dimostra la dimensione SCM del cambiamento. Non dimostra, da solo, che la revisione fusa in GitLab sia la stessa revisione osservata da Argo CD o validata da Tekton.
+<br>
+La baseline osservata distingue:
+<br>
 ```text
-ChangeRequest
-      |
-      +--> branch Git
-      +--> commit
-      +--> Merge Request
-      +--> merge
-      +--> GitOps revision
-      +--> Argo CD / Tekton validation
+GitLab CE
+-> workflow SCM branch, file, Merge Request e merge
+
+GitHub demo-app-gitops
+-> source of truth consumata da Argo CD e Tekton
 ```
-
-### 18.1 Perché GitLab e importante
-
-GitLab e importante perché conserva la storia delle modifiche.
-
-In un flusso GitOps, una modifica al runtime non dovrebbe essere un'azione manuale e non tracciata sul cluster. La modifica dovrebbe passare dal repository, essere revisionabile e avere un collegamento con una richiesta di cambiamento.
-
-Il DevOps Control Plane usa GitLab per rendere il cambiamento:
-
-- tracciabile;
-- revisionabile;
-- collegato a una ChangeRequest;
-- auditabile;
-- compatibile con GitOps.
-
+<br>
+Non è stata dimostrata una sincronizzazione automatica, un mirror o una promotion tra il progetto GitLab interno e il repository GitHub `demo-app-gitops`.
+<br>
 ### 18.2 Branch workflow
-
-Il workflow può creare o usare un branch dedicato alla ChangeRequest.
-
-Il branch rappresenta l'area di lavoro tecnica del cambiamento.
-
-Esempio concettuale:
-
+<br>
+Il branch rappresenta l'area di lavoro tecnica della ChangeRequest e separa la modifica dal branch target fino alla revisione.
+<br>
 ```text
 ChangeRequest: CHG-2026-0050
 branch: change/CHG-2026-0050
 ```
-
-Il branch permette di separare la modifica dal branch principale finché non e stata validata e approvata.
-
-### 18.3 Commit workflow
-
-Il commit rappresenta la modifica effettiva salvata in Git.
-
-Nel contesto GitOps, un commit può modificare manifest, overlay, configurazioni o altri file dichiarativi.
-
-Il commit deve essere collegabile alla ChangeRequest.
-
-Questo collegamento permette di sapere quale richiesta ha introdotto una modifica nel repository.
-
+<br>
+### 18.3 Commit e aggiornamento file
+<br>
+Il workflow salva in Git il contenuto tecnico associato alla richiesta. Il riferimento alla revisione deve restare collegabile alla ChangeRequest, senza assumere una propagazione automatica al repository GitOps runtime.
+<br>
 ### 18.4 Merge Request
-
-La Merge Request e il punto di revisione.
-
-Una MR permette di confrontare la modifica proposta con il branch di destinazione, analizzare il diff e decidere se procedere.
-
-Nel DevOps Control Plane, la MR e parte del workflow controllato.
-
-La piattaforma può conservare riferimenti come:
-
-- branch sorgente;
-- branch target;
-- URL o identificativo della MR;
-- stato della MR;
-- risultato del merge.
-
+<br>
+La Merge Request è il punto di revisione. Il DevOps Control Plane può conservare branch sorgente, branch target, identificativo o URL della MR, stato e risultato del merge.
+<br>
 ### 18.5 Merge
-
-Il merge porta la modifica nel branch principale o nel branch GitOps target.
-
-Dopo il merge, gli strumenti GitOps possono osservare la revisione aggiornata.
-
-Argo CD può quindi confrontare il repository con lo stato del cluster.
-
-Tekton può validare path e contenuti GitOps in modo coerente con l'ambiente target.
-
+<br>
+Il merge conclude il workflow SCM nel repository GitLab configurato. Un aggiornamento del repository consumato da Argo CD richiede una correlazione esplicita o un meccanismo di sincronizzazione dimostrato. Tale meccanismo non fa parte della baseline verificata.
+<br>
 ### 18.6 Relazione con GitOps
-
-Il workflow GitLab e collegato direttamente al modello GitOps.
-
-GitLab conserva la modifica.
-
-Argo CD legge la modifica.
-
-Tekton valida la modifica.
-
-Il DevOps Control Plane coordina il processo e conserva stato, eventi ed evidence.
-
-Vista semplificata:
-
+<br>
+La relazione con GitOps è modellata esplicitamente attraverso ChangeRequest, ambiente, catalogo ed evidence:
+<br>
 ```text
-GitLab repository
-      |
-      v
-GitOps manifests
-      |
-      +--> Argo CD sync and health
-      +--> Tekton validation
-      +--> DevOps Control Plane evidence
+ChangeRequest
+|-- workflow SCM GitLab validato
+|-- targetEnvironment
+|-- validationPath
+|-- Argo CD Application risolta dal catalogo
+`-- evidence runtime e Tekton
 ```
-
+<br>
+GitLab conserva il workflow SCM validato. Argo CD e Tekton consumano attualmente il repository GitHub `demo-app-gitops`. Questi percorsi non costituiscono una pipeline automatica unica nella baseline osservata.
+<br>
 ### 18.7 Relazione con Kustomize overlays
-
-Per staging e production, il workflow deve considerare i path GitOps corretti.
-
-Esempi validati:
-
+<br>
+I path environment-specific validati sono:
+<br>
 ```text
 apps/demo-go-color-app/overlays/staging
 apps/demo-go-color-app/overlays/production
 ```
-
-Questi path sono importanti perché una validazione staging non deve validare per errore l'overlay production, e una validazione production non deve validare per errore l'overlay staging.
-
-Il validation path environment-specific e una parte essenziale del workflow.
-
-### 18.8 Relazione con ChangeRequest
-
-Il workflow GitLab deve restare collegato alla ChangeRequest.
-
-La ChangeRequest conserva il contesto funzionale e operativo.
-
-GitLab conserva il contesto tecnico della modifica.
-
-Il collegamento tra i due permette di rispondere a domande come:
-
-- quale ChangeRequest ha generato questo branch;
-- quale MR e collegata alla richiesta;
-- quale commit e stato validato;
-- quale revisione e stata osservata da Argo CD;
-- quale path e stato validato da Tekton.
-
-### 18.9 Relazione con audit
-
-Ogni passaggio importante del workflow GitLab può produrre un ChangeEvent.
-
-Esempi:
-
-- branch creato;
-- commit creato;
-- merge request aperta;
-- merge request aggiornata;
-- merge completato;
-- errore GitLab;
-- workflow GitLab completato.
-
-Questi eventi diventano parte dell'audit trail della ChangeRequest.
-
-### 18.10 Relazione con evidence
-
-Il workflow GitLab può contribuire indirettamente alle evidence.
-
-Per esempio, una Tekton validation evidence può contenere o riferire:
-
-- Git revision;
-- branch;
-- validation path;
-- repository path.
-
-Questi dati aiutano a capire quale contenuto e stato validato.
-
-### 18.11 Relazione con Argo CD
-
-Dopo che una modifica GitOps e disponibile nel repository, Argo CD può osservarla.
-
-Argo CD produce stato come:
-
-- `Synced`;
-- `OutOfSync`;
-- `Healthy`;
-- `Degraded`.
-
-Il DevOps Control Plane raccoglie o rappresenta queste informazioni come deployment evidence o runtime evidence.
-
-### 18.12 Relazione con Tekton
-
-Tekton valida tecnicamente il contenuto GitOps.
-
-Nel progetto, le validazioni importanti includono i path environment-specific:
-
-- staging: `apps/demo-go-color-app/overlays/staging`;
-- production: `apps/demo-go-color-app/overlays/production`.
-
-Il risultato Tekton viene raccolto tramite `check-validation` e collegato alla ChangeRequest.
-
-### 18.13 Errori tipici del workflow GitLab
-
-Possibili errori:
-
-- repository non raggiungibile;
-- branch già esistente;
-- branch target errato;
-- commit fallito;
-- merge request non creata;
-- merge request non mergeabile;
-- problema di permessi;
-- token GitLab non valido;
-- errore TLS o trust bundle.
-
-In questi casi il DevOps Control Plane deve registrare l'errore e preservare il contesto nella ChangeRequest.
-
-### 18.14 Sicurezza del workflow GitLab
-
-Il workflow GitLab può richiedere token o credenziali.
-
-Questi valori non devono essere stampati nei log, nelle evidence o nella documentazione.
-
-La documentazione può citare nomi di Secret o riferimenti, ma non deve contenere valori raw.
-
-La regola operativa resta:
-
+<br>
+### 18.8 Relazione con ChangeRequest, audit ed evidence
+<br>
+La ChangeRequest conserva il contesto funzionale e operativo. Gli eventi GitLab registrano branch, aggiornamento file, apertura MR, merge ed errori. Le evidence possono contenere revisione e validation path, ma non provano una sincronizzazione GitLab-GitHub senza evidence dedicata.
+<br>
+### 18.9 Relazione con Argo CD e Tekton
+<br>
+Argo CD osserva sync e health delle Applications configurate sul repository GitHub `demo-app-gitops`. Tekton valida i path GitOps per ambiente. Il DevOps Control Plane correla i risultati tramite ambiente, catalogo, eventi ed evidence.
+<br>
+### 18.10 Errori e sicurezza
+<br>
+Gli errori possibili includono repository non raggiungibile, branch già esistente, branch target errato, aggiornamento file fallito, MR non creata o non mergeabile, permessi insufficienti, token non valido ed errori TLS.
+<br>
+Token e credenziali non devono essere stampati nei log, nelle evidence o nella documentazione:
+<br>
 ```text
 reference yes, raw secret no
 ```
-
-### 18.15 Stato corrente
-
-Il workflow GitLab e stato completato end-to-end nelle fasi precedenti del progetto.
-
-Oggi il suo ruolo nella guida finale e spiegare come la parte Git si integra con:
-
-- ChangeRequest lifecycle;
-- GitOps;
-- Argo CD;
-- Tekton;
-- evidence;
-- audit trail.
-
-### 18.16 Sintesi
-
-Il GitLab Merge Request workflow fornisce la dimensione Git del DevOps Control Plane.
-
-Il workflow collega una richiesta di cambiamento a una modifica versionata, revisionabile e compatibile con GitOps.
-
-Grazie a questo collegamento, il DevOps Control Plane può dimostrare non solo che una validazione e stata eseguita, ma anche quale contenuto Git e stato validato e da quale ChangeRequest e nato il cambiamento.
-
+<br>
+### 18.11 Stato corrente
+<br>
+Il workflow GitLab è completato e validato come integrazione SCM reale. Il deployment GitLab CE corrente è una baseline di sviluppo e validazione su OpenShift, non una architettura GitLab HA o production-grade.
+<br>
+### 18.12 Sintesi
+<br>
+Il workflow GitLab fornisce la dimensione versionata, revisionabile e auditabile del cambiamento. La sincronizzazione automatica GitLab-GitHub resta non dimostrata.
+<br>
 ## 19. Workflow runtime
 
 Il workflow runtime e l'insieme delle azioni tecniche che il DevOps Control Plane esegue o coordina dopo la creazione di una `ChangeRequest`.
@@ -5540,6 +5390,7 @@ L'Environment Catalog rende questa associazione esplicita.
 Un ambiente nel catalogo può includere metadati come:
 
 - nome ambiente;
+- nome dell'applicazione logica;
 - display name;
 - flag enabled;
 - cluster name;
@@ -5585,20 +5436,28 @@ production -> devops-ci-production
 
 Questa informazione e essenziale per evitare che una validazione venga eseguita nel namespace sbagliato.
 
-### 28.6 Argo CD Application
+### 28.6 Applicazione logica e Argo CD Application
+<br>
+L'Environment Catalog distingue due identità:
+<br>
+```text
+applicationName
+-> applicazione logica usata dalla ChangeRequest
 
-L'Environment Catalog deve associare ogni ambiente alla corretta Argo CD Application.
-
-Esempi:
-
+argocdApplicationName
+-> Argo CD Application concreta dell'ambiente
+```
+<br>
+La baseline configura `applicationName: demo-go-color-app` per dev, staging e production. Le Argo CD Applications associate sono:
+<br>
 ```text
 dev        -> demo-go-color-app
 staging    -> demo-go-color-app-staging
 production -> demo-go-color-app-production
 ```
-
-Questa associazione permette al DevOps Control Plane di raccogliere Argo CD deployment evidence nel contesto corretto.
-
+<br>
+La correlazione è esplicita e non viene dedotta dai suffissi. Le Applications non referenziate dal catalogo, come `demo-app`, sono classificate dalla UI come standalone.
+<br>
 ### 28.7 Validation path
 
 Il validation path indica quale parte del repository GitOps deve essere validata da Tekton.
@@ -5680,11 +5539,11 @@ Questa separazione e importante per il futuro multi-cluster.
 Baseline corrente:
 
 ```text
-Environment   Cluster   Kubernetes namespace     Tekton namespace       Argo CD Application
-----------    -------   ---------------------    ------------------     -------------------------------
-dev           ocp-dev   devops-ci-demo           devops-ci-demo         demo-go-color-app
-staging       ocp-dev   devops-ci-staging        devops-ci-staging      demo-go-color-app-staging
-production    ocp-dev   devops-ci-production     devops-ci-production   demo-go-color-app-production
+Environment   Logical application    Cluster   Kubernetes namespace     Argo CD Application
+----------    -------------------    -------   ---------------------    -------------------------------
+dev           demo-go-color-app      ocp-dev   devops-ci-demo           demo-go-color-app
+staging       demo-go-color-app      ocp-dev   devops-ci-staging        demo-go-color-app-staging
+production    demo-go-color-app      ocp-dev   devops-ci-production     demo-go-color-app-production
 ```
 
 Questa tabella descrive la baseline validata e non deve essere confusa con una topologia multi-cluster fisica.
@@ -10800,11 +10659,11 @@ Le evidence sono associate a ChangeRequest, ambiente, namespace e stato tecnico 
 La sanitizzazione e un requisito fondamentale.
 
 ### 43.10 UI e dashboard
-
-La UI e passata da MVP a superficie operativa evidence-aware.
-
-Funzionalita principali:
-
+<br>
+La UI è passata da MVP a superficie operativa evidence-aware.
+<br>
+Funzionalità principali:
+<br>
 - dashboard;
 - latest ChangeRequest;
 - recent changes;
@@ -10815,33 +10674,46 @@ Funzionalita principali:
 - Tekton validation card;
 - Argo CD evidence;
 - raw sanitized evidence.
-
+<br>
 La UI rende visibili dev, staging e production come ambienti logici distinti.
-
+<br>
+La rappresentazione applicativa corrente è:
+<br>
+```text
+applicazioni logiche                   1
+istanze ambientali                     3
+Argo CD Applications standalone        1
+```
+<br>
+`demo-go-color-app` è l'applicazione logica distribuita nei tre ambienti. `demo-app` resta una Argo CD Application storica e standalone.
+<br>
+La modifica è stata distribuita con PR `#19`, merge commit `61783d2`, image tag `61783d2` e digest `sha256:7d9297431d370fe8c23a32cc68a52f300fa0332fbe34ef28fd99ede5bfecdd7e`.
+<br>
 ### 43.11 Environment Catalog e Cluster Registry
-
+<br>
 Environment Catalog e Cluster Registry sono completati come modello concettuale e tecnico.
-
+<br>
 Environment Catalog descrive:
-
+<br>
 - ambienti logici;
+- applicazione logica tramite `applicationName`;
 - namespace Kubernetes;
 - namespace Tekton;
-- Argo CD Application;
+- Argo CD Application concreta tramite `argocdApplicationName`;
 - validation path;
 - technical actions.
-
+<br>
 Cluster Registry descrive:
-
+<br>
 - cluster name;
 - enabled flag;
 - API URL, quando richiesta;
 - allowed namespaces;
 - Secret references;
 - provider metadata.
-
-Questi modelli alimentano la runtime target resolution.
-
+<br>
+Questi modelli alimentano la runtime target resolution. Il binding applicativo è esplicito e non viene dedotto dai suffissi dei nomi delle Argo CD Applications.
+<br>
 ### 43.12 Multi-cluster code-ready baseline
 
 La readiness multi-cluster a livello codice e completata.
@@ -10903,10 +10775,10 @@ Elementi principali:
 
 La piattaforma dispone di una base operativa avanzata, pur non dichiarando production-hardening esaustivo.
 
-### 43.15 Cosa e deferred
-
+### 43.15 Cosa è deferred
+<br>
 Restano deferred:
-
+<br>
 - validazione fisica cross-cluster;
 - cluster staging fisico;
 - cluster production fisico;
@@ -10917,10 +10789,11 @@ Restano deferred:
 - smoke test fisici cross-cluster;
 - rollback fisico cross-cluster;
 - produzione enterprise definitiva;
+- sincronizzazione o promotion automatica GitLab-GitHub formalizzata;
 - CLI `devopsctl`.
-
+<br>
 Questi elementi non invalidano la baseline completata. Sono passi futuri legati a infrastruttura e roadmap.
-
+<br>
 ### 43.16 Cosa non deve essere dichiarato
 
 Il progetto non deve dichiarare:
@@ -10946,32 +10819,11 @@ Multi-cluster code readiness is completed, tested, documented and fail-closed.
 Questa frase deve essere mantenuta come riferimento ogni volta che si parla di multi-cluster.
 
 ### 43.18 Stato della guida finale
-
-La guida finale e in produzione incrementale.
-
-Sono già stati scritti capitoli su:
-
-- concetti fondamentali;
-- architettura;
-- backend;
-- PostgreSQL;
-- modello dati;
-- workflow;
-- evidence;
-- UI;
-- Environment Catalog;
-- multi-cluster readiness;
-- security;
-- operability;
-- stato delle fasi.
-
-Restano da completare:
-
-- roadmap futura;
-- appendici;
-- revisione complessiva;
-- generazione Word.
-
+<br>
+La guida finale italiana è composta da 44 capitoli e appendici. Il file `final-technical-guide-it.md` è la sorgente autorevole localizzata; il DOCX viene generato tramite lo script versionato `docs/final-technical-guide/scripts/generate_word.py`.
+<br>
+Outline, source map, controlli strutturali e generatore Word sono presenti nel repository. Ogni aggiornamento deve mantenere allineati guida e source map a 44 capitoli prima della rigenerazione del DOCX.
+<br>
 ### 43.19 Sintesi
 
 Lo stato finale corrente e una baseline avanzata, funzionante e documentata.

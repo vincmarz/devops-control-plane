@@ -173,11 +173,14 @@ Fonti principali:
 - `docs/11-change-workflows.md`
 - `docs/adr/ADR-0001-git-source-of-truth.md`
 - `docs/adr/ADR-0002-argocd-as-gitops-engine.md`
+- `docs/git-provider-and-gitops-runtime-correlation.md`
 
 Uso previsto:
 
 - spiegare Git come fonte di verità;
 - spiegare il ruolo dei repository GitOps;
+- distinguere GitLab SCM dal repository GitHub consumato da Argo CD e Tekton;
+- dichiarare non dimostrata la sincronizzazione GitLab-GitHub;
 - collegare GitOps a ChangeRequest, Argo CD e audit.
 
 ### Capitolo 9 — Kustomize base e overlays
@@ -204,11 +207,13 @@ Fonti principali:
 - `docs/05-architecture.md`
 - `docs/runbooks/operability-health-check.md`
 - `docs/runbooks/maintenance-operations.md`
+- `docs/git-provider-and-gitops-runtime-correlation.md`
 
 Uso previsto:
 
 - spiegare Application, sync, health e target namespace;
-- descrivere Applications dev, staging e production;
+- descrivere una applicazione logica con tre Applications environment-specific;
+- classificare `demo-app` come Application storica standalone;
 - spiegare stato `Synced` e `Healthy`.
 
 ### Capitolo 11 — Tekton
@@ -329,10 +334,15 @@ Fonti principali:
 - `docs/07-gitlab-integration.md`
 - `docs/11-change-workflows.md`
 - `docs/adr/ADR-0007-gitlab-api-as-git-provider.md`
+- `docs/git-provider-and-gitops-runtime-correlation.md`
+- `docs/gitlab-ce-openshift-lab-installation.md`
 
 Uso previsto:
 
-- spiegare branch, commit, MR, merge e relazione con GitOps.
+- spiegare branch, aggiornamento file, MR e merge;
+- distinguere il workflow SCM GitLab dal repository GitHub consumato dal runtime;
+- evitare claim di sincronizzazione GitLab-GitHub non dimostrati;
+- descrivere la baseline di sviluppo e validazione del deployment GitLab CE.
 
 ### Capitolo 19 — Workflow runtime
 
@@ -470,10 +480,13 @@ Fonti principali:
 - `docs/environment-configuration-model.md`
 - `docs/multi-environment-model.md`
 - `docs/environment-catalog-ui-action-results.md`
+- `docs/git-provider-and-gitops-runtime-correlation.md`
 
 Uso previsto:
 
-- descrivere ambiente logico, namespace, Tekton namespace, Argo CD Application e validation path.
+- descrivere ambiente logico, namespace, Tekton namespace, Argo CD Application e validation path;
+- distinguere `applicationName` da `argocdApplicationName`;
+- documentare il raggruppamento esplicito per ambiente e la classificazione standalone.
 
 ### Capitolo 29 — Cluster Registry
 
@@ -726,6 +739,8 @@ Fonti principali:
 - `docs/runbooks/operability-health-check.md`
 - `docs/12-evidence-model.md`
 - `docs/final-technical-guide/final-technical-guide-it.md`
+- `docs/git-provider-and-gitops-runtime-correlation.md`
+- `docs/gitlab-ce-openshift-lab-installation.md`
 
 Uso previsto:
 
@@ -733,7 +748,10 @@ Uso previsto:
 - sintetizzare cosa e rafforzato;
 - sintetizzare cosa e rinviato;
 - sintetizzare cosa e pronto a livello codice;
-- ribadire baseline namespace-isolated e multi-cluster code-ready baseline.
+- ribadire baseline namespace-isolated e multi-cluster code-ready baseline;
+- riportare una applicazione logica, tre istanze ambientali e una Application standalone;
+- registrare PR, commit, image tag e digest della baseline UI;
+- dichiarare non dimostrata la sincronizzazione GitLab-GitHub.
 
 ### Capitolo 44 — Roadmap futura
 
