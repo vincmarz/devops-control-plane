@@ -13,6 +13,7 @@ const environmentCatalogFileEnv = "ENVIRONMENT_CATALOG_FILE"
 
 type EnvironmentDefinition struct {
 	Name                  string `yaml:"name"`
+	ApplicationName       string `yaml:"applicationName"`
 	DisplayName           string `yaml:"displayName"`
 	Enabled               bool   `yaml:"enabled"`
 	Category              string `yaml:"category"`
@@ -51,6 +52,7 @@ func DefaultEnvironmentCatalogFallback() EnvironmentCatalog {
 	return NewEnvironmentCatalog([]EnvironmentDefinition{
 		{
 			Name:                  "dev",
+			ApplicationName:       "demo-go-color-app",
 			DisplayName:           "Development",
 			Enabled:               true,
 			Category:              "development",
@@ -129,7 +131,9 @@ func NewEnvironmentCatalog(definitions []EnvironmentDefinition, defaultEnvironme
 			continue
 		}
 		definition.Name = name
+		definition.ApplicationName = strings.TrimSpace(definition.ApplicationName)
 		definition.ClusterName = normalizeClusterName(definition.ClusterName)
+		definition.ArgoCDApplicationName = strings.TrimSpace(definition.ArgoCDApplicationName)
 		definition.ValidationPath = strings.TrimSpace(definition.ValidationPath)
 		catalog.environments[name] = definition
 	}
