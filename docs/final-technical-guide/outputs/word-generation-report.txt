@@ -8,9 +8,9 @@ Guide chapters found: 44
 Source-map chapters found: 44
 CI chapter: 14. Continuous Integration e test automatizzati
 Output: /home/vmarzario/devops-control-plane/docs/final-technical-guide/outputs/DevOps_Control_Plane_Guida_Tecnica_Finale.docx
-Output size: 124728 bytes
-Markdown bullet paragraphs: 3186
-Generated literal bullet paragraphs: 3186
+Output size: 125064 bytes
+Markdown bullet paragraphs: 3116
+Generated literal bullet paragraphs: 3116
 Markdown numbered paragraphs: 36
 Generated literal numbered paragraphs: 36
 Automatic Word numbering blocks: 0
