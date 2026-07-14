@@ -43,24 +43,19 @@ func (s *ApplicationService) Get(ctx context.Context, name string) (domain.Appli
 	return s.argocd.GetApplication(ctx, name)
 }
 
-type ApplicationGrouping struct {
-	LogicalApplications    []map[string]any
-	StandaloneApplications []map[string]any
-}
-
 // GroupByEnvironment correlates explicit Environment Catalog bindings with
 // observed Argo CD Applications. It does not infer relationships from names or
 // suffixes. Applications not referenced by the catalog remain standalone.
-func (s *ApplicationService) GroupByEnvironment(applications []map[string]any, catalog EnvironmentCatalog) ApplicationGrouping {
-	observed := make(map[string]map[string]any, len(applications))
+func (s *ApplicationService) GroupByEnvironment(applications []domain.Application, catalog EnvironmentCatalog) ApplicationTopology {
+	observed := make(map[string]domain.Application, len(applications))
 	for _, application := range applications {
-		name := applicationMapString(application, "name")
+		name := strings.TrimSpace(application.Name)
 		if name != "" {
 			observed[name] = application
 		}
 	}
 
-	logicalByName := map[string]map[string]any{}
+	logicalByName := map[string]*LogicalApplication{}
 	logicalOrder := []string{}
 	used := map[string]bool{}
 	for _, environmentName := range []string{"dev", "staging", "production"} {
@@ -74,63 +69,52 @@ func (s *ApplicationService) GroupByEnvironment(applications []map[string]any, c
 			continue
 		}
 
-		group, ok := logicalByName[logicalName]
+		logical, ok := logicalByName[logicalName]
 		if !ok {
-			group = map[string]any{"name": logicalName, "environments": []map[string]any{}}
-			logicalByName[logicalName] = group
+			logical = &LogicalApplication{Name: logicalName, Environments: []EnvironmentInstance{}}
+			logicalByName[logicalName] = logical
 			logicalOrder = append(logicalOrder, logicalName)
 		}
 
-		instance := map[string]any{
-			"environment":           definition.Name,
-			"displayName":           definition.DisplayName,
-			"clusterName":           definition.ClusterName,
-			"kubernetesNamespace":   definition.KubernetesNamespace,
-			"argocdApplicationName": argoCDName,
-			"observed":              false,
-			"syncStatus":            "Not observed",
-			"healthStatus":          "Not observed",
+		instance := EnvironmentInstance{
+			Environment:           definition.Name,
+			DisplayName:           definition.DisplayName,
+			ClusterName:           definition.ClusterName,
+			KubernetesNamespace:   definition.KubernetesNamespace,
+			ArgoCDApplicationName: argoCDName,
+			Observed:              false,
+			SyncStatus:            "Not observed",
+			HealthStatus:          "Not observed",
 		}
 		if application, found := observed[argoCDName]; found {
-			instance["observed"] = true
-			instance["syncStatus"] = application["syncStatus"]
-			instance["healthStatus"] = application["healthStatus"]
-			instance["revision"] = application["currentRevision"]
-			instance["repoURL"] = application["repoURL"]
-			instance["path"] = application["path"]
+			instance.Observed = true
+			instance.SyncStatus = application.SyncStatus
+			instance.HealthStatus = application.HealthStatus
+			instance.Revision = application.CurrentRevision
+			instance.RepositoryURL = application.RepoURL
+			instance.Path = application.Path
 			used[argoCDName] = true
 		}
-		group["environments"] = append(group["environments"].([]map[string]any), instance)
+		logical.Environments = append(logical.Environments, instance)
 	}
 
-	logical := make([]map[string]any, 0, len(logicalOrder))
+	logicalApplications := make([]LogicalApplication, 0, len(logicalOrder))
 	for _, name := range logicalOrder {
-		logical = append(logical, logicalByName[name])
+		logicalApplications = append(logicalApplications, *logicalByName[name])
 	}
-	standalone := make([]map[string]any, 0)
+
+	standalone := make([]ArgoCDApplicationSummary, 0)
 	for _, application := range applications {
-		name := applicationMapString(application, "name")
+		name := strings.TrimSpace(application.Name)
 		if name != "" && !used[name] {
-			standalone = append(standalone, application)
+			standalone = append(standalone, NewArgoCDApplicationSummary(application))
 		}
 	}
 
-	return ApplicationGrouping{
-		LogicalApplications:    logical,
+	return ApplicationTopology{
+		LogicalApplications:    logicalApplications,
 		StandaloneApplications: standalone,
 	}
-}
-
-func applicationMapString(application map[string]any, key string) string {
-	value, ok := application[key]
-	if !ok || value == nil {
-		return ""
-	}
-	text, ok := value.(string)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(text)
 }
 
 func (s *ApplicationService) Resources(ctx context.Context, name string) []domain.ApplicationResource {
