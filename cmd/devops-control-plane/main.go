@@ -42,57 +42,28 @@ func main() {
 
 	changeServiceOptions := []app.ChangeServiceOption{
 		app.WithTechnicalRuntimeTargetResolver(app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName)), app.WithRuntimeClientProviderRegistry(app.DefaultRuntimeClientProviderRegistry()), app.WithRuntimeClientSecretRefsRegistry(app.DefaultRuntimeClientSecretRefsRegistry()), app.WithEvidenceStore(repositories.Evidences)}
-	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" || cfg.GitLabProjectID > 0 {
-		gitLabClient, err := gitlabadapter.New(gitlabadapter.Config{
-			BaseURL:        cfg.GitLabBaseURL,
-			Token:          cfg.GitLabToken,
-			TimeoutSeconds: cfg.GitLabTimeoutSeconds,
-			InsecureTLS:    cfg.GitLabInsecureTLS,
-			CAFile:         cfg.GitLabCAFile,
-		})
+	applicationCatalog := app.DefaultApplicationCatalog()
+	changeServiceOptions = append(changeServiceOptions, app.WithGitSourceBindingResolverFunc(applicationCatalog.ResolveSourceBinding))
+	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" {
+		gitLabClient, err := gitlabadapter.New(gitlabadapter.Config{BaseURL: cfg.GitLabBaseURL, Token: cfg.GitLabToken, TimeoutSeconds: cfg.GitLabTimeoutSeconds, InsecureTLS: cfg.GitLabInsecureTLS, CAFile: cfg.GitLabCAFile})
 		if err != nil {
 			logger.Error("gitlab client initialization failed", "error", err)
 			os.Exit(1)
 		}
-		if cfg.GitLabProjectID <= 0 {
-			logger.Error("gitlab project ID must be configured when GitLab integration is enabled")
+		gitLabProvider, err := gitlabadapter.NewProvider("gitlab-lab", gitLabClient)
+		if err != nil {
+			logger.Error("gitlab provider initialization failed", "error", err)
 			os.Exit(1)
 		}
-		changeServiceOptions = append(changeServiceOptions,
-			app.WithGitCreateBranch(
-				func(ctx context.Context, projectID int, branch string, ref string) error {
-					_, err := gitLabClient.CreateBranch(ctx, projectID, branch, ref)
-					return err
-				},
-				cfg.GitLabProjectID,
-				cfg.GitLabDefaultBranch,
-			),
-			app.WithGitCreateOrUpdateFile(
-				func(ctx context.Context, projectID int, branch string, filePath string, commitMessage string, content string) error {
-					_, err := gitLabClient.CreateOrUpdateFile(ctx, projectID, branch, filePath, commitMessage, content)
-					return err
-				},
-			),
-			app.WithGitOpenMergeRequest(
-				func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, title string, description string) (int, string, error) {
-					mr, err := gitLabClient.OpenMergeRequest(ctx, projectID, sourceBranch, targetBranch, title, description)
-					return mr.IID, mr.WebURL, err
-				},
-			),
-			app.WithGitMergeRequest(
-				func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error) {
-					mr, err := gitLabClient.FindOpenMergeRequest(ctx, projectID, sourceBranch, targetBranch)
-					if err != nil {
-						return 0, "", "", err
-					}
-					merged, err := gitLabClient.MergeMergeRequest(ctx, projectID, mr.IID, mr.SHA, mergeCommitMessage)
-					return merged.IID, merged.WebURL, merged.MergeCommitSHA, err
-				},
-			),
-		)
-		logger.Info("gitlab integration enabled", "baseURL", cfg.GitLabBaseURL, "projectID", cfg.GitLabProjectID, "defaultBranch", cfg.GitLabDefaultBranch, "insecureTLS", cfg.GitLabInsecureTLS)
+		gitProviderRegistry, err := app.NewGitProviderRegistry([]app.GitProvider{gitLabProvider})
+		if err != nil {
+			logger.Error("git provider registry initialization failed", "error", err)
+			os.Exit(1)
+		}
+		changeServiceOptions = append(changeServiceOptions, app.WithGitProviderResolver(gitProviderRegistry))
+		logger.Info("gitlab provider enabled", "baseURL", cfg.GitLabBaseURL, "providerRef", gitLabProvider.ProviderRef(), "insecureTLS", cfg.GitLabInsecureTLS)
 	} else {
-		logger.Info("gitlab integration disabled; create-branch endpoint will require GitLab configuration")
+		logger.Info("git provider integration disabled; Git workflow endpoints require a registered provider")
 	}
 
 	var runtimeSecretValueLoader app.RuntimeSecretValueLoader = app.EmptyRuntimeSecretValueLoader{}

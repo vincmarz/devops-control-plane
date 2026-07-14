@@ -102,6 +102,12 @@ type GitOpenMergeRequestFunc func(ctx context.Context, projectID int, sourceBran
 // GitMergeRequestFunc rappresenta la porta applicativa minima per mergiare una Merge Request Git aperta.
 type GitMergeRequestFunc func(ctx context.Context, projectID int, sourceBranch string, targetBranch string, mergeCommitMessage string) (int, string, string, error)
 
+type GitSourceBindingResolverFunc func(applicationName string) (RepositoryBinding, error)
+
+type GitProviderResolver interface {
+	Resolve(target GitRepositoryTarget) (GitProvider, error)
+}
+
 type ChangeServiceOption func(*ChangeService)
 
 func WithTektonRunPipeline(fn TektonRunPipelineFunc) ChangeServiceOption {
@@ -184,6 +190,14 @@ func WithRuntimeClientSecretRefsRegistry(registry RuntimeClientSecretRefsRegistr
 	return func(s *ChangeService) { s.runtimeClientSecretRefsRegistry = registry }
 }
 
+func WithGitSourceBindingResolverFunc(fn GitSourceBindingResolverFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.gitSourceBindingResolver = fn }
+}
+
+func WithGitProviderResolver(resolver GitProviderResolver) ChangeServiceOption {
+	return func(s *ChangeService) { s.gitProviderResolver = resolver }
+}
+
 func WithGitCreateBranch(fn GitCreateBranchFunc, projectID int, defaultBranch string) ChangeServiceOption {
 	return func(s *ChangeService) {
 		s.gitCreateBranch = fn
@@ -223,6 +237,9 @@ type ChangeService struct {
 	technicalRuntimeTargetResolver          TechnicalRuntimeTargetResolverFunc
 	runtimeClientProviderSelector           RuntimeClientProviderSelectorFunc
 	runtimeClientSecretRefsRegistry         RuntimeClientSecretRefsRegistry
+
+	gitSourceBindingResolver GitSourceBindingResolverFunc
+	gitProviderResolver      GitProviderResolver
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -592,21 +609,71 @@ func mapArgoCDDeploymentRuntimeStatus(syncStatus string, healthStatus string) st
 	return "DeploymentUnknown"
 }
 
+func (s *ChangeService) resolveGitSource(applicationName string) (GitRepositoryTarget, GitProvider, bool, error) {
+	if s.gitSourceBindingResolver == nil && s.gitProviderResolver == nil {
+		return GitRepositoryTarget{}, nil, false, nil
+	}
+	if s.gitSourceBindingResolver == nil {
+		return GitRepositoryTarget{}, nil, true, errors.New("git source binding resolver is not configured")
+	}
+	if s.gitProviderResolver == nil {
+		return GitRepositoryTarget{}, nil, true, errors.New("git provider resolver is not configured")
+	}
+	binding, err := s.gitSourceBindingResolver(applicationName)
+	if err != nil {
+		return GitRepositoryTarget{}, nil, true, err
+	}
+	target, err := NewGitRepositoryTarget(binding)
+	if err != nil {
+		return GitRepositoryTarget{}, nil, true, err
+	}
+	provider, err := s.gitProviderResolver.Resolve(target)
+	if err != nil {
+		return GitRepositoryTarget{}, nil, true, err
+	}
+	return target, provider, true, nil
+}
+
+func providerAwareGitMetadata(target GitRepositoryTarget) map[string]any {
+	return map[string]any{"provider": target.Provider, "providerRef": target.ProviderRef, "projectID": target.ProjectID, "projectPath": target.ProjectPath, "repositoryURL": target.RepositoryURL, "defaultBranch": target.DefaultBranch}
+}
+
 func (s *ChangeService) CreateBranch(ctx context.Context, idOrNumber string) (map[string]any, error) {
 	idOrNumber = strings.TrimSpace(idOrNumber)
 	if idOrNumber == "" {
 		return nil, errors.New("change id or number is required")
 	}
-	if s.gitCreateBranch == nil {
-		return nil, errors.New("git create branch client is not configured")
-	}
-	if s.gitProjectID <= 0 {
-		return nil, errors.New("git project ID must be configured")
+	if s.gitSourceBindingResolver == nil && s.gitProviderResolver == nil {
+		if s.gitCreateBranch == nil {
+			return nil, errors.New("git create branch client is not configured")
+		}
+		if s.gitProjectID <= 0 {
+			return nil, errors.New("git project ID must be configured")
+		}
 	}
 
 	change, err := s.store.Get(ctx, idOrNumber)
 	if err != nil {
 		return nil, err
+	}
+
+	if target, provider, enabled, resolveErr := s.resolveGitSource(change.ApplicationName); enabled {
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolve git source for application %q: %w", change.ApplicationName, resolveErr)
+		}
+		branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
+		if err := provider.CreateBranch(ctx, target, branchName, target.DefaultBranch); err != nil {
+			return nil, fmt.Errorf("create git branch %q from ref %q: %w", branchName, target.DefaultBranch, err)
+		}
+		result, err := s.store.MarkStep(ctx, idOrNumber, "BranchCreated")
+		if err != nil {
+			return nil, err
+		}
+		metadata := providerAwareGitMetadata(target)
+		metadata["branch"] = branchName
+		metadata["ref"] = target.DefaultBranch
+		result["git"] = metadata
+		return result, nil
 	}
 
 	branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
@@ -638,16 +705,39 @@ func (s *ChangeService) UpdateFiles(ctx context.Context, idOrNumber string) (map
 	if idOrNumber == "" {
 		return nil, errors.New("change id or number is required")
 	}
-	if s.gitCreateOrUpdateFile == nil {
-		return nil, errors.New("git create or update file client is not configured")
-	}
-	if s.gitProjectID <= 0 {
-		return nil, errors.New("git project ID must be configured")
+	if s.gitSourceBindingResolver == nil && s.gitProviderResolver == nil {
+		if s.gitCreateOrUpdateFile == nil {
+			return nil, errors.New("git create or update file client is not configured")
+		}
+		if s.gitProjectID <= 0 {
+			return nil, errors.New("git project ID must be configured")
+		}
 	}
 
 	change, err := s.store.Get(ctx, idOrNumber)
 	if err != nil {
 		return nil, err
+	}
+
+	if target, provider, enabled, resolveErr := s.resolveGitSource(change.ApplicationName); enabled {
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolve git source for application %q: %w", change.ApplicationName, resolveErr)
+		}
+		branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
+		filePath := fmt.Sprintf("manifests/%s-control-plane.yaml", strings.ToLower(change.ChangeNumber))
+		commitMessage := fmt.Sprintf("Add generated manifest for %s", change.ChangeNumber)
+		if err := provider.CreateOrUpdateFile(ctx, target, branchName, filePath, commitMessage, generatedChangeConfigMap(change)); err != nil {
+			return nil, fmt.Errorf("create or update git file %q on branch %q: %w", filePath, branchName, err)
+		}
+		result, err := s.store.MarkStep(ctx, idOrNumber, "CommitCreated")
+		if err != nil {
+			return nil, err
+		}
+		metadata := providerAwareGitMetadata(target)
+		metadata["branch"] = branchName
+		metadata["filePath"] = filePath
+		result["git"] = metadata
+		return result, nil
 	}
 
 	branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
@@ -691,16 +781,42 @@ func (s *ChangeService) OpenMergeRequest(ctx context.Context, idOrNumber string)
 	if idOrNumber == "" {
 		return nil, errors.New("change id or number is required")
 	}
-	if s.gitOpenMergeRequest == nil {
-		return nil, errors.New("git open merge request client is not configured")
-	}
-	if s.gitProjectID <= 0 {
-		return nil, errors.New("git project ID must be configured")
+	if s.gitSourceBindingResolver == nil && s.gitProviderResolver == nil {
+		if s.gitOpenMergeRequest == nil {
+			return nil, errors.New("git open merge request client is not configured")
+		}
+		if s.gitProjectID <= 0 {
+			return nil, errors.New("git project ID must be configured")
+		}
 	}
 
 	change, err := s.store.Get(ctx, idOrNumber)
 	if err != nil {
 		return nil, err
+	}
+
+	if target, provider, enabled, resolveErr := s.resolveGitSource(change.ApplicationName); enabled {
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolve git source for application %q: %w", change.ApplicationName, resolveErr)
+		}
+		sourceBranch := fmt.Sprintf("change/%s", change.ChangeNumber)
+		title := fmt.Sprintf("%s - GitOps change for %s", change.ChangeNumber, change.ApplicationName)
+		description := fmt.Sprintf("Merge Request generated by DevOps Control Plane for %s.", change.ChangeNumber)
+		iid, webURL, err := provider.OpenMergeRequest(ctx, target, sourceBranch, target.DefaultBranch, title, description)
+		if err != nil {
+			return nil, fmt.Errorf("open git merge request from %q to %q: %w", sourceBranch, target.DefaultBranch, err)
+		}
+		result, err := s.store.MarkStep(ctx, idOrNumber, "MergeRequestOpened")
+		if err != nil {
+			return nil, err
+		}
+		metadata := providerAwareGitMetadata(target)
+		metadata["sourceBranch"] = sourceBranch
+		metadata["targetBranch"] = target.DefaultBranch
+		metadata["mergeRequestIID"] = iid
+		metadata["mergeRequestURL"] = webURL
+		result["git"] = metadata
+		return result, nil
 	}
 
 	sourceBranch := fmt.Sprintf("change/%s", change.ChangeNumber)
@@ -737,16 +853,42 @@ func (s *ChangeService) MergeRequest(ctx context.Context, idOrNumber string) (ma
 	if idOrNumber == "" {
 		return nil, errors.New("change id or number is required")
 	}
-	if s.gitMergeRequest == nil {
-		return nil, errors.New("git merge request client is not configured")
-	}
-	if s.gitProjectID <= 0 {
-		return nil, errors.New("git project ID must be configured")
+	if s.gitSourceBindingResolver == nil && s.gitProviderResolver == nil {
+		if s.gitMergeRequest == nil {
+			return nil, errors.New("git merge request client is not configured")
+		}
+		if s.gitProjectID <= 0 {
+			return nil, errors.New("git project ID must be configured")
+		}
 	}
 
 	change, err := s.store.Get(ctx, idOrNumber)
 	if err != nil {
 		return nil, err
+	}
+
+	if target, provider, enabled, resolveErr := s.resolveGitSource(change.ApplicationName); enabled {
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolve git source for application %q: %w", change.ApplicationName, resolveErr)
+		}
+		sourceBranch := fmt.Sprintf("change/%s", change.ChangeNumber)
+		message := fmt.Sprintf("Merge %s via DevOps Control Plane", change.ChangeNumber)
+		iid, webURL, sha, err := provider.MergeRequest(ctx, target, sourceBranch, target.DefaultBranch, message)
+		if err != nil {
+			return nil, fmt.Errorf("merge git merge request from %q to %q: %w", sourceBranch, target.DefaultBranch, err)
+		}
+		result, err := s.store.MarkStep(ctx, idOrNumber, "MergeRequestMerged")
+		if err != nil {
+			return nil, err
+		}
+		metadata := providerAwareGitMetadata(target)
+		metadata["sourceBranch"] = sourceBranch
+		metadata["targetBranch"] = target.DefaultBranch
+		metadata["mergeRequestIID"] = iid
+		metadata["mergeRequestURL"] = webURL
+		metadata["mergeCommitSHA"] = sha
+		result["git"] = metadata
+		return result, nil
 	}
 
 	sourceBranch := fmt.Sprintf("change/%s", change.ChangeNumber)
