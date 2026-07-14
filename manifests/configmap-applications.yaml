@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devops-control-plane-applications
+  namespace: devops-control-plane
+data:
+  applications.yaml: |
+    applications:
+      - name: demo-go-color-app
+        repositories:
+          - provider: gitlab
+            role: source
+            projectID: 1
+            projectPath: devops-lab/demo-go-color-app-gitops
+            defaultBranch: main
+            workflowEnabled: true
+          - provider: github
+            role: gitops
+            repositoryURL: https://github.com/vincmarz/demo-app-gitops.git
+            defaultBranch: main
+            consumedBy:
+              - argocd
+              - tekton
