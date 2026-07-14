@@ -234,7 +234,9 @@ Contenuti:
 - manifest dichiarativi;
 - pull-based reconciliation;
 - differenza tra cambio manuale e cambio GitOps;
-- relazione con audit e rollback.
+- relazione con audit e rollback;
+- distinzione tra GitLab SCM e repository GitHub consumato dal runtime;
+- sincronizzazione GitLab-GitHub non dimostrata.
 
 ### Capitolo 7 — Kustomize base e overlays
 
@@ -258,7 +260,9 @@ Contenuti:
 - target namespace;
 - overlay GitOps;
 - stato Synced e Healthy;
-- applicazioni staging e production.
+- applicazioni staging e production;
+- una applicazione logica con tre istanze ambientali;
+- `demo-app` come Argo CD Application storica standalone.
 
 ### Capitolo 9 — Tekton
 
@@ -344,7 +348,9 @@ Contenuti:
 - merge request;
 - merge;
 - stato GitLab;
-- relazione con GitOps.
+- confine tra workflow SCM GitLab e repository GitOps runtime;
+- assenza di sincronizzazione GitLab-GitHub dimostrata;
+- relazione con GitOps tramite ChangeRequest, ambiente ed evidence.
 
 ### Capitolo 16 — Workflow runtime
 
