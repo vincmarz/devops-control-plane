@@ -21,10 +21,11 @@ const (
 
 type RepositoryBinding struct {
 	Provider        string   `yaml:"provider" json:"provider"`
+	ProviderRef     string   `yaml:"providerRef" json:"providerRef"`
 	Role            string   `yaml:"role" json:"role"`
 	ProjectID       int      `yaml:"projectID,omitempty" json:"projectID,omitempty"`
-	ProjectPath     string   `yaml:"projectPath,omitempty" json:"projectPath,omitempty"`
-	RepositoryURL   string   `yaml:"repositoryURL,omitempty" json:"repositoryURL,omitempty"`
+	ProjectPath     string   `yaml:"projectPath" json:"projectPath"`
+	RepositoryURL   string   `yaml:"repositoryURL" json:"repositoryURL"`
 	DefaultBranch   string   `yaml:"defaultBranch" json:"defaultBranch"`
 	WorkflowEnabled bool     `yaml:"workflowEnabled,omitempty" json:"workflowEnabled,omitempty"`
 	ConsumedBy      []string `yaml:"consumedBy,omitempty" json:"consumedBy,omitempty"`
@@ -38,7 +39,6 @@ type ApplicationDefinition struct {
 type ApplicationCatalog struct {
 	applications map[string]ApplicationDefinition
 }
-
 type applicationCatalogFile struct {
 	Applications []ApplicationDefinition `yaml:"applications"`
 }
@@ -52,15 +52,13 @@ func DefaultApplicationCatalog() ApplicationCatalog {
 }
 
 func DefaultApplicationCatalogFallback() ApplicationCatalog {
-	catalog, err := NewApplicationCatalog([]ApplicationDefinition{
-		{
-			Name: "demo-go-color-app",
-			Repositories: []RepositoryBinding{
-				{Provider: RepositoryProviderGitLab, Role: RepositoryRoleSource, ProjectID: 1, ProjectPath: "devops-lab/demo-go-color-app-gitops", DefaultBranch: "main", WorkflowEnabled: true},
-				{Provider: RepositoryProviderGitHub, Role: RepositoryRoleGitOps, RepositoryURL: "https://github.com/vincmarz/demo-app-gitops.git", DefaultBranch: "main", ConsumedBy: []string{"argocd", "tekton"}},
-			},
+	catalog, err := NewApplicationCatalog([]ApplicationDefinition{{
+		Name: "demo-go-color-app",
+		Repositories: []RepositoryBinding{
+			{Provider: RepositoryProviderGitLab, ProviderRef: "gitlab-lab", Role: RepositoryRoleSource, ProjectID: 1, ProjectPath: "devops-lab/demo-go-color-app-gitops", RepositoryURL: "https://gitlab-devops-gitlab.apps.ocp4.mim.lan/devops-lab/demo-go-color-app-gitops.git", DefaultBranch: "main", WorkflowEnabled: true},
+			{Provider: RepositoryProviderGitHub, ProviderRef: "github-public", Role: RepositoryRoleGitOps, ProjectPath: "vincmarz/demo-app-gitops", RepositoryURL: "https://github.com/vincmarz/demo-app-gitops.git", DefaultBranch: "main", ConsumedBy: []string{"argocd", "tekton"}},
 		},
-	})
+	}})
 	if err != nil {
 		panic(fmt.Sprintf("invalid default application catalog: %v", err))
 	}
@@ -95,7 +93,7 @@ func ParseApplicationCatalogYAML(content []byte) (ApplicationCatalog, error) {
 func NewApplicationCatalog(definitions []ApplicationDefinition) (ApplicationCatalog, error) {
 	catalog := ApplicationCatalog{applications: map[string]ApplicationDefinition{}}
 	for index, definition := range definitions {
-		definition.Name = normalizeApplicationName(definition.Name)
+		definition.Name = strings.TrimSpace(definition.Name)
 		if definition.Name == "" {
 			return ApplicationCatalog{}, fmt.Errorf("application at index %d does not define name", index)
 		}
@@ -105,26 +103,18 @@ func NewApplicationCatalog(definitions []ApplicationDefinition) (ApplicationCata
 		if len(definition.Repositories) == 0 {
 			return ApplicationCatalog{}, fmt.Errorf("application %q does not define repository bindings", definition.Name)
 		}
-
-		seenBindings := map[string]bool{}
-		activeSourceBindings := 0
-		for repositoryIndex := range definition.Repositories {
-			binding := &definition.Repositories[repositoryIndex]
-			normalizeRepositoryBinding(binding)
-			if err := validateRepositoryBinding(definition.Name, *binding); err != nil {
+		seen := map[string]bool{}
+		for i := range definition.Repositories {
+			b := &definition.Repositories[i]
+			normalizeRepositoryBinding(b)
+			if err := validateRepositoryBinding(definition.Name, *b); err != nil {
 				return ApplicationCatalog{}, err
 			}
-			key := binding.Provider + ":" + binding.Role
-			if seenBindings[key] {
+			key := b.Provider + ":" + b.Role
+			if seen[key] {
 				return ApplicationCatalog{}, fmt.Errorf("application %q defines duplicate repository binding %q", definition.Name, key)
 			}
-			seenBindings[key] = true
-			if binding.Role == RepositoryRoleSource && binding.WorkflowEnabled {
-				activeSourceBindings++
-			}
-		}
-		if activeSourceBindings > 1 {
-			return ApplicationCatalog{}, fmt.Errorf("application %q defines more than one workflow-enabled source binding", definition.Name)
+			seen[key] = true
 		}
 		catalog.applications[definition.Name] = definition
 	}
@@ -132,60 +122,86 @@ func NewApplicationCatalog(definitions []ApplicationDefinition) (ApplicationCata
 }
 
 func (c ApplicationCatalog) Resolve(name string) (ApplicationDefinition, bool) {
-	definition, ok := c.applications[normalizeApplicationName(name)]
+	definition, ok := c.applications[strings.TrimSpace(name)]
 	return definition, ok
+}
+
+func (c ApplicationCatalog) ResolveSourceBinding(applicationName string) (RepositoryBinding, error) {
+	return c.resolveSingleBindingByRole(applicationName, RepositoryRoleSource, true)
+}
+func (c ApplicationCatalog) ResolveGitOpsBinding(applicationName string) (RepositoryBinding, error) {
+	return c.resolveSingleBindingByRole(applicationName, RepositoryRoleGitOps, false)
+}
+func (c ApplicationCatalog) resolveSingleBindingByRole(applicationName, role string, requireEnabled bool) (RepositoryBinding, error) {
+	definition, ok := c.Resolve(applicationName)
+	if !ok {
+		return RepositoryBinding{}, fmt.Errorf("application %q is not configured", strings.TrimSpace(applicationName))
+	}
+	matches := []RepositoryBinding{}
+	for _, b := range definition.Repositories {
+		if b.Role == role && (!requireEnabled || b.WorkflowEnabled) {
+			matches = append(matches, b)
+		}
+	}
+	if len(matches) == 0 {
+		if requireEnabled {
+			return RepositoryBinding{}, fmt.Errorf("application %q does not define a workflow-enabled %s binding", definition.Name, role)
+		}
+		return RepositoryBinding{}, fmt.Errorf("application %q does not define a %s binding", definition.Name, role)
+	}
+	if len(matches) > 1 {
+		return RepositoryBinding{}, fmt.Errorf("application %q defines more than one %s binding", definition.Name, role)
+	}
+	return matches[0], nil
 }
 
 func (c ApplicationCatalog) ResolveRepositoryBinding(applicationName, provider, role string) (RepositoryBinding, error) {
 	definition, ok := c.Resolve(applicationName)
 	if !ok {
-		return RepositoryBinding{}, fmt.Errorf("application %q is not configured", normalizeApplicationName(applicationName))
+		return RepositoryBinding{}, fmt.Errorf("application %q is not configured", strings.TrimSpace(applicationName))
 	}
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	role = strings.ToLower(strings.TrimSpace(role))
-	for _, binding := range definition.Repositories {
-		if binding.Provider == provider && binding.Role == role {
-			return binding, nil
+	provider, role = strings.ToLower(strings.TrimSpace(provider)), strings.ToLower(strings.TrimSpace(role))
+	for _, b := range definition.Repositories {
+		if b.Provider == provider && b.Role == role {
+			return b, nil
 		}
 	}
 	return RepositoryBinding{}, fmt.Errorf("application %q does not define repository binding %s:%s", definition.Name, provider, role)
 }
 
-func normalizeApplicationName(name string) string {
-	return strings.TrimSpace(name)
-}
-
-func normalizeRepositoryBinding(binding *RepositoryBinding) {
-	binding.Provider = strings.ToLower(strings.TrimSpace(binding.Provider))
-	binding.Role = strings.ToLower(strings.TrimSpace(binding.Role))
-	binding.ProjectPath = strings.TrimSpace(binding.ProjectPath)
-	binding.RepositoryURL = strings.TrimSpace(binding.RepositoryURL)
-	binding.DefaultBranch = strings.TrimSpace(binding.DefaultBranch)
-	for index := range binding.ConsumedBy {
-		binding.ConsumedBy[index] = strings.ToLower(strings.TrimSpace(binding.ConsumedBy[index]))
+func normalizeRepositoryBinding(b *RepositoryBinding) {
+	b.Provider = strings.ToLower(strings.TrimSpace(b.Provider))
+	b.ProviderRef = strings.TrimSpace(b.ProviderRef)
+	b.Role = strings.ToLower(strings.TrimSpace(b.Role))
+	b.ProjectPath = strings.TrimSpace(b.ProjectPath)
+	b.RepositoryURL = strings.TrimSpace(b.RepositoryURL)
+	b.DefaultBranch = strings.TrimSpace(b.DefaultBranch)
+	for i := range b.ConsumedBy {
+		b.ConsumedBy[i] = strings.ToLower(strings.TrimSpace(b.ConsumedBy[i]))
 	}
 }
 
-func validateRepositoryBinding(applicationName string, binding RepositoryBinding) error {
-	if binding.Provider == "" {
-		return fmt.Errorf("application %q repository binding provider is required", applicationName)
+func validateRepositoryBinding(applicationName string, b RepositoryBinding) error {
+	if b.Provider != RepositoryProviderGitLab && b.Provider != RepositoryProviderGitHub {
+		return fmt.Errorf("application %q repository binding provider %q is invalid", applicationName, b.Provider)
 	}
-	if binding.Role != RepositoryRoleSource && binding.Role != RepositoryRoleGitOps {
-		return fmt.Errorf("application %q repository binding role %q is invalid", applicationName, binding.Role)
+	if b.ProviderRef == "" {
+		return fmt.Errorf("application %q repository binding %s requires providerRef", applicationName, b.Provider)
 	}
-	if binding.DefaultBranch == "" {
-		return fmt.Errorf("application %q repository binding %s:%s does not define defaultBranch", applicationName, binding.Provider, binding.Role)
+	if b.Role != RepositoryRoleSource && b.Role != RepositoryRoleGitOps {
+		return fmt.Errorf("application %q repository binding role %q is invalid", applicationName, b.Role)
 	}
-	if binding.Provider == RepositoryProviderGitLab && binding.Role == RepositoryRoleSource {
-		if binding.ProjectID <= 0 {
-			return fmt.Errorf("application %q GitLab source binding requires projectID", applicationName)
-		}
-		if binding.ProjectPath == "" {
-			return fmt.Errorf("application %q GitLab source binding requires projectPath", applicationName)
-		}
+	if b.ProjectPath == "" {
+		return fmt.Errorf("application %q repository binding %s:%s requires projectPath", applicationName, b.Provider, b.Role)
 	}
-	if binding.Role == RepositoryRoleGitOps && binding.RepositoryURL == "" {
-		return fmt.Errorf("application %q GitOps binding requires repositoryURL", applicationName)
+	if b.RepositoryURL == "" {
+		return fmt.Errorf("application %q repository binding %s:%s requires repositoryURL", applicationName, b.Provider, b.Role)
+	}
+	if b.DefaultBranch == "" {
+		return fmt.Errorf("application %q repository binding %s:%s does not define defaultBranch", applicationName, b.Provider, b.Role)
+	}
+	if b.Provider == RepositoryProviderGitLab && b.ProjectID <= 0 {
+		return fmt.Errorf("application %q GitLab binding requires projectID", applicationName)
 	}
 	return nil
 }
