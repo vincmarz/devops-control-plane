@@ -329,6 +329,9 @@ func (s *ChangeService) Create(ctx context.Context, req domain.CreateChangeReque
 	if err := environmentCatalog.ValidateCreateTargetEnvironment(req.TargetEnvironment); err != nil {
 		return domain.ChangeRequest{}, err
 	}
+	if err := environmentCatalog.ValidateApplicationBinding(req.TargetEnvironment, req.ApplicationName); err != nil {
+		return domain.ChangeRequest{}, err
+	}
 
 	if _, err := DefaultEnvironmentClusterResolver().ResolveEnabledTarget(req.TargetEnvironment); err != nil {
 		return domain.ChangeRequest{}, err

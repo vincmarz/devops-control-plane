@@ -189,7 +189,7 @@ func TestCreateChangeAsOperator(t *testing.T) {
 	}}
 	srv := newChangesServer(t, store)
 
-	body := `{"title":"Bump image","applicationName":"payment","changeType":"image-update","targetEnvironment":"dev"}`
+	body := `{"title":"Bump image","applicationName":"demo-go-color-app","changeType":"image-update","targetEnvironment":"dev"}`
 	resp := doRequest(t, http.MethodPost, srv.URL+"/api/v1/changes", body, operatorHeaders())
 
 	if resp.StatusCode != http.StatusCreated {

@@ -6,6 +6,7 @@ data:
   environments.yaml: |
     environments:
       - name: dev
+        applicationName: demo-go-color-app
         displayName: Development
         enabled: true
         category: development
@@ -15,32 +16,37 @@ data:
         tektonNamespace: devops-ci-demo
         argocdApplicationName: demo-go-color-app
         gitTargetBranch: main
+        validationPath: apps/demo-go-color-app
         allowTechnicalActions: true
         allowPromotionSource: true
         allowPromotionTarget: false
       - name: staging
-        displayName: Staging
-        enabled: false
+        applicationName: demo-go-color-app
+        displayName: Staging namespace-isolated on dev cluster
+        enabled: true
         category: preproduction
-        description: Future controlled staging environment. Not enabled yet.
-        clusterName: ocp-staging
-        kubernetesNamespace: ""
-        tektonNamespace: ""
-        argocdApplicationName: ""
-        gitTargetBranch: ""
-        allowTechnicalActions: false
+        description: Namespace-isolated staging environment running on ocp-dev.
+        clusterName: ocp-dev
+        kubernetesNamespace: devops-ci-staging
+        tektonNamespace: devops-ci-staging
+        argocdApplicationName: demo-go-color-app-staging
+        gitTargetBranch: main
+        validationPath: apps/demo-go-color-app/overlays/staging
+        allowTechnicalActions: true
         allowPromotionSource: false
         allowPromotionTarget: true
       - name: production
-        displayName: Production
-        enabled: false
+        applicationName: demo-go-color-app
+        displayName: Production namespace-isolated on dev cluster
+        enabled: true
         category: production
-        description: Future production environment. Not enabled yet.
-        clusterName: ocp-production
-        kubernetesNamespace: ""
-        tektonNamespace: ""
-        argocdApplicationName: ""
-        gitTargetBranch: ""
-        allowTechnicalActions: false
+        description: Namespace-isolated simulated production environment running on ocp-dev. No real production credentials are used.
+        clusterName: ocp-dev
+        kubernetesNamespace: devops-ci-production
+        tektonNamespace: devops-ci-production
+        argocdApplicationName: demo-go-color-app-production
+        gitTargetBranch: main
+        validationPath: apps/demo-go-color-app/overlays/production
+        allowTechnicalActions: true
         allowPromotionSource: false
         allowPromotionTarget: true
