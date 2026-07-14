@@ -174,6 +174,38 @@ func (c EnvironmentCatalog) ValidateCreateTargetEnvironment(name string) error {
 	return nil
 }
 
+func (c EnvironmentCatalog) ValidateApplicationBinding(targetEnvironment string, applicationName string) error {
+	targetEnvironment = normalizeEnvironmentName(targetEnvironment)
+	applicationName = strings.TrimSpace(applicationName)
+
+	if targetEnvironment == "" {
+		return errors.New("targetEnvironment is required")
+	}
+	if applicationName == "" {
+		return errors.New("applicationName is required")
+	}
+
+	definition, ok := c.Resolve(targetEnvironment)
+	if !ok {
+		return fmt.Errorf("targetEnvironment %q is not configured", targetEnvironment)
+	}
+
+	expectedApplicationName := strings.TrimSpace(definition.ApplicationName)
+	if expectedApplicationName == "" {
+		return fmt.Errorf("targetEnvironment %q does not define applicationName", targetEnvironment)
+	}
+	if applicationName != expectedApplicationName {
+		return fmt.Errorf(
+			"applicationName %q is not configured for targetEnvironment %q; expected %q",
+			applicationName,
+			targetEnvironment,
+			expectedApplicationName,
+		)
+	}
+
+	return nil
+}
+
 func (c EnvironmentCatalog) IsEnabled(name string) bool {
 	definition, ok := c.Resolve(name)
 	return ok && definition.Enabled
