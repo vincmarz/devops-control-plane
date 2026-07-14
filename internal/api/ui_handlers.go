@@ -41,7 +41,9 @@ func (h *Handler) uiDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apps := h.uiApplicationsData(r)
-	logicalApplications, standaloneApplications := groupApplicationsByEnvironment(apps, appsvc.DefaultEnvironmentCatalog())
+	grouping := h.deps.Services.Applications.GroupByEnvironment(apps, appsvc.DefaultEnvironmentCatalog())
+	logicalApplications := grouping.LogicalApplications
+	standaloneApplications := grouping.StandaloneApplications
 	selected := preferredChange(changes, "")
 	events, evidence := h.uiChangeDetailsData(r, selected)
 	stats := buildUIStats(changes, apps, evidence)
@@ -60,7 +62,9 @@ func (h *Handler) uiChanges(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) uiApplications(w http.ResponseWriter, r *http.Request) {
 	apps := h.uiApplicationsData(r)
-	logicalApplications, standaloneApplications := groupApplicationsByEnvironment(apps, appsvc.DefaultEnvironmentCatalog())
+	grouping := h.deps.Services.Applications.GroupByEnvironment(apps, appsvc.DefaultEnvironmentCatalog())
+	logicalApplications := grouping.LogicalApplications
+	standaloneApplications := grouping.StandaloneApplications
 	changes, _ := h.uiChangesData(r)
 	stats := buildUIStats(changes, apps, nil)
 	addApplicationGroupingStats(stats, logicalApplications, standaloneApplications)
@@ -239,72 +243,6 @@ func (h *Handler) uiApplicationsData(r *http.Request) []map[string]any {
 		return []map[string]any{{"name": "demo-go-color-app", "targetNamespace": "devops-ci-demo", "healthStatus": "Healthy", "syncStatus": "Synced"}}
 	}
 	return toMapSlice(apps)
-}
-
-func groupApplicationsByEnvironment(apps []map[string]any, catalog appsvc.EnvironmentCatalog) ([]map[string]any, []map[string]any) {
-	observed := make(map[string]map[string]any, len(apps))
-	for _, application := range apps {
-		name := strings.TrimSpace(str(get(application, "name")))
-		if name != "" {
-			observed[name] = application
-		}
-	}
-
-	logicalByName := map[string]map[string]any{}
-	logicalOrder := []string{}
-	used := map[string]bool{}
-	for _, environmentName := range []string{"dev", "staging", "production"} {
-		definition, ok := catalog.Resolve(environmentName)
-		if !ok {
-			continue
-		}
-		logicalName := strings.TrimSpace(definition.ApplicationName)
-		argoCDName := strings.TrimSpace(definition.ArgoCDApplicationName)
-		if logicalName == "" || argoCDName == "" {
-			continue
-		}
-
-		group, ok := logicalByName[logicalName]
-		if !ok {
-			group = map[string]any{"name": logicalName, "environments": []map[string]any{}}
-			logicalByName[logicalName] = group
-			logicalOrder = append(logicalOrder, logicalName)
-		}
-
-		instance := map[string]any{
-			"environment":           definition.Name,
-			"displayName":           definition.DisplayName,
-			"clusterName":           definition.ClusterName,
-			"kubernetesNamespace":   definition.KubernetesNamespace,
-			"argocdApplicationName": argoCDName,
-			"observed":              false,
-			"syncStatus":            "Not observed",
-			"healthStatus":          "Not observed",
-		}
-		if application, found := observed[argoCDName]; found {
-			instance["observed"] = true
-			instance["syncStatus"] = get(application, "syncStatus")
-			instance["healthStatus"] = get(application, "healthStatus")
-			instance["revision"] = get(application, "currentRevision")
-			instance["repoURL"] = get(application, "repoURL")
-			instance["path"] = get(application, "path")
-			used[argoCDName] = true
-		}
-		group["environments"] = append(group["environments"].([]map[string]any), instance)
-	}
-
-	logical := make([]map[string]any, 0, len(logicalOrder))
-	for _, name := range logicalOrder {
-		logical = append(logical, logicalByName[name])
-	}
-	standalone := make([]map[string]any, 0)
-	for _, application := range apps {
-		name := strings.TrimSpace(str(get(application, "name")))
-		if name != "" && !used[name] {
-			standalone = append(standalone, application)
-		}
-	}
-	return logical, standalone
 }
 
 func addApplicationGroupingStats(stats map[string]any, logical, standalone []map[string]any) {
