@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	appsvc "github.com/vincmarz/devops-control-plane/internal/app"
+	"github.com/vincmarz/devops-control-plane/internal/domain"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -41,9 +42,9 @@ func (h *Handler) uiDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apps := h.uiApplicationsData(r)
-	grouping := h.deps.Services.Applications.GroupByEnvironment(apps, appsvc.DefaultEnvironmentCatalog())
-	logicalApplications := grouping.LogicalApplications
-	standaloneApplications := grouping.StandaloneApplications
+	grouping := h.deps.Services.Applications.GroupByEnvironment(toApplicationSlice(apps), appsvc.DefaultEnvironmentCatalog())
+	logicalApplications := toMapSlice(grouping.LogicalApplications)
+	standaloneApplications := toMapSlice(grouping.StandaloneApplications)
 	selected := preferredChange(changes, "")
 	events, evidence := h.uiChangeDetailsData(r, selected)
 	stats := buildUIStats(changes, apps, evidence)
@@ -62,9 +63,9 @@ func (h *Handler) uiChanges(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) uiApplications(w http.ResponseWriter, r *http.Request) {
 	apps := h.uiApplicationsData(r)
-	grouping := h.deps.Services.Applications.GroupByEnvironment(apps, appsvc.DefaultEnvironmentCatalog())
-	logicalApplications := grouping.LogicalApplications
-	standaloneApplications := grouping.StandaloneApplications
+	grouping := h.deps.Services.Applications.GroupByEnvironment(toApplicationSlice(apps), appsvc.DefaultEnvironmentCatalog())
+	logicalApplications := toMapSlice(grouping.LogicalApplications)
+	standaloneApplications := toMapSlice(grouping.StandaloneApplications)
 	changes, _ := h.uiChangesData(r)
 	stats := buildUIStats(changes, apps, nil)
 	addApplicationGroupingStats(stats, logicalApplications, standaloneApplications)
@@ -294,6 +295,16 @@ func (h *Handler) renderUI(w http.ResponseWriter, status int, data uiData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = tpl.Execute(w, data)
+}
+
+func toApplicationSlice(v any) []domain.Application {
+	raw, _ := json.Marshal(v)
+	var out []domain.Application
+	_ = json.Unmarshal(raw, &out)
+	if out == nil {
+		return []domain.Application{}
+	}
+	return out
 }
 
 func toMap(v any) map[string]any {
