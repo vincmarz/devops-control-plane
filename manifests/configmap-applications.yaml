@@ -9,13 +9,17 @@ data:
       - name: demo-go-color-app
         repositories:
           - provider: gitlab
+            providerRef: gitlab-lab
             role: source
             projectID: 1
             projectPath: devops-lab/demo-go-color-app-gitops
+            repositoryURL: https://gitlab-devops-gitlab.apps.ocp4.mim.lan/devops-lab/demo-go-color-app-gitops.git
             defaultBranch: main
             workflowEnabled: true
           - provider: github
+            providerRef: github-public
             role: gitops
+            projectPath: vincmarz/demo-app-gitops
             repositoryURL: https://github.com/vincmarz/demo-app-gitops.git
             defaultBranch: main
             consumedBy:
