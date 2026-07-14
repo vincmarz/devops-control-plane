@@ -80,6 +80,8 @@ Living design documents for runtime, environments and multi-cluster support.
 | Doc | Topic |
 |---|---|
 | [multi-environment-model.md](multi-environment-model.md) | Multi-environment model |
+| [git-provider-and-gitops-runtime-correlation.md](git-provider-and-gitops-runtime-correlation.md) | Git provider, GitOps repository, logical application and Argo CD runtime correlation |
+| [gitlab-ce-openshift-lab-installation.md](gitlab-ce-openshift-lab-installation.md) | Verified GitLab CE development deployment on OpenShift |
 | [environment-configuration-model.md](environment-configuration-model.md) | Environment configuration model |
 | [runtime-client-secret-config-model.md](runtime-client-secret-config-model.md) | Runtime client secret configuration model |
 | [runtime-client-secret-reference-loading.md](runtime-client-secret-reference-loading.md) | Runtime client secret reference loading |
