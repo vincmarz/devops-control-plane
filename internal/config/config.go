@@ -33,6 +33,12 @@ type Config struct {
 	GitLabInsecureTLS    bool
 	GitLabCAFile         string
 
+	GitHubAPIURL         string
+	GitHubToken          string
+	GitHubTimeoutSeconds int
+	GitHubInsecureTLS    bool
+	GitHubCAFile         string
+
 	TektonNamespace           string
 	TektonPipelineName        string
 	TektonServiceAccount      string
@@ -85,6 +91,12 @@ func Load() Config {
 		GitLabTimeoutSeconds: getIntEnv("GITLAB_TIMEOUT_SECONDS", 30),
 		GitLabInsecureTLS:    getBoolEnv("GITLAB_INSECURE_TLS", false),
 		GitLabCAFile:         getEnv("GITLAB_CA_FILE", ""),
+
+		GitHubAPIURL:         getEnv("GITHUB_API_URL", "https://api.github.com"),
+		GitHubToken:          getEnv("GITHUB_TOKEN", ""),
+		GitHubTimeoutSeconds: getIntEnv("GITHUB_TIMEOUT_SECONDS", 30),
+		GitHubInsecureTLS:    getBoolEnv("GITHUB_INSECURE_TLS", false),
+		GitHubCAFile:         getEnv("GITHUB_CA_FILE", ""),
 
 		TektonNamespace:           getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
 		TektonPipelineName:        getEnv("TEKTON_PIPELINE_NAME", "go-build-and-push"),
