@@ -5,6 +5,7 @@ resources:
   - serviceaccount.yaml
   - configmap.yaml
   - configmap-applications.yaml
+  - configmap-environments.yaml
   - role.yaml
   - rolebinding.yaml
   - postgresql-service.yaml

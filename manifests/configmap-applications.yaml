@@ -25,3 +25,21 @@ data:
             consumedBy:
               - argocd
               - tekton
+      - name: github-source-validation
+        repositories:
+          - provider: github
+            providerRef: github-public
+            role: source
+            projectPath: vincmarz/devops-control-plane-github-source-test
+            repositoryURL: https://github.com/vincmarz/devops-control-plane-github-source-test.git
+            defaultBranch: main
+            workflowEnabled: true
+          - provider: github
+            providerRef: github-public
+            role: gitops
+            projectPath: vincmarz/demo-app-gitops
+            repositoryURL: https://github.com/vincmarz/demo-app-gitops.git
+            defaultBranch: main
+            consumedBy:
+              - argocd
+              - tekton
