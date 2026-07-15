@@ -50,3 +50,18 @@ data:
         allowTechnicalActions: true
         allowPromotionSource: false
         allowPromotionTarget: true
+      - name: github-source-validation-dev
+        applicationName: github-source-validation
+        displayName: GitHub Source Validation Dev
+        enabled: true
+        category: technical
+        description: Technical environment used to validate GitHub as source repository provider with branch creation only.
+        clusterName: ocp-dev
+        kubernetesNamespace: devops-ci-demo
+        tektonNamespace: devops-ci-demo
+        argocdApplicationName: demo-go-color-app
+        gitTargetBranch: main
+        validationPath: apps/demo-go-color-app
+        allowTechnicalActions: true
+        allowPromotionSource: false
+        allowPromotionTarget: false
