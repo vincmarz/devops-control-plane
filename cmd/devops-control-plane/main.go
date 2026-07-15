@@ -220,6 +220,10 @@ func main() {
 			runtimeSecretValueLoader,
 		)
 		changeServiceOptions = append(changeServiceOptions, app.WithArgoCDCheckDeployment(func(ctx context.Context, change domain.ChangeRequest) (app.ArgoCDDeploymentResult, error) {
+			gitOpsTarget, err := gitOpsRepositoryTargetResolver.Resolve(change.ApplicationName, app.GitOpsConsumerArgoCD)
+			if err != nil {
+				return app.ArgoCDDeploymentResult{}, err
+			}
 			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)
 			if err != nil {
 				return app.ArgoCDDeploymentResult{}, err
@@ -232,7 +236,16 @@ func main() {
 			if err != nil {
 				return app.ArgoCDDeploymentResult{}, err
 			}
-			return argoCDRuntimeClient.CheckDeployment(ctx, target.ArgoCDApplicationName)
+			deployment, err := argoCDRuntimeClient.CheckDeployment(ctx, target.ArgoCDApplicationName)
+			if err != nil {
+				return app.ArgoCDDeploymentResult{}, err
+			}
+			deployment.GitOpsProvider = gitOpsTarget.Provider
+			deployment.GitOpsProviderRef = gitOpsTarget.ProviderRef
+			deployment.GitOpsProjectPath = gitOpsTarget.ProjectPath
+			deployment.DeclaredRepositoryURL = gitOpsTarget.RepositoryURL
+			deployment.DeclaredDefaultBranch = gitOpsTarget.DefaultBranch
+			return deployment, nil
 		}))
 		changeServiceOptions = append(changeServiceOptions, app.WithDeploymentEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error) {
 			argoApp, err := argoCDClient.GetApplication(ctx, change.ApplicationName)
