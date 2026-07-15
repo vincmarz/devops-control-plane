@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/vincmarz/devops-control-plane/internal/adapters/argocd"
@@ -21,16 +20,13 @@ func (c currentArgoCDRuntimeClient) CheckDeployment(ctx context.Context, applica
 	if err != nil {
 		return app.ArgoCDDeploymentResult{}, err
 	}
-	var result app.ArgoCDDeploymentResult
-	content, err := json.Marshal(argoApp)
-	if err != nil {
-		return app.ArgoCDDeploymentResult{}, err
-	}
-	if err := json.Unmarshal(content, &result); err != nil {
-		return app.ArgoCDDeploymentResult{}, err
-	}
-	if result.ApplicationName == "" {
-		result.ApplicationName = applicationName
-	}
-	return result, nil
+	return app.ArgoCDDeploymentResult{
+		ApplicationName: argoApp.Name,
+		Project:         argoApp.Project,
+		SyncStatus:      argoApp.SyncStatus,
+		HealthStatus:    argoApp.HealthStatus,
+		Revision:        argoApp.CurrentRevision,
+		RepositoryURL:   argoApp.RepoURL,
+		TargetRevision:  argoApp.TargetRevision,
+	}, nil
 }

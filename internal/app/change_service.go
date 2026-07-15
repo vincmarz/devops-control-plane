@@ -58,12 +58,19 @@ type TektonTaskRunResult struct {
 type TektonCheckValidationFunc func(ctx context.Context, change domain.ChangeRequest) (TektonValidationResult, error)
 
 type ArgoCDDeploymentResult struct {
-	ApplicationName string
-	Project         string
-	SyncStatus      string
-	HealthStatus    string
-	Revision        string
-	RuntimeStatus   string
+	ApplicationName       string
+	Project               string
+	SyncStatus            string
+	HealthStatus          string
+	Revision              string
+	RuntimeStatus         string
+	RepositoryURL         string
+	TargetRevision        string
+	GitOpsProvider        string
+	GitOpsProviderRef     string
+	GitOpsProjectPath     string
+	DeclaredRepositoryURL string
+	DeclaredDefaultBranch string
 }
 
 // ArgoCDCheckDeploymentFunc rappresenta la porta applicativa minima per leggere lo stato deployment da Argo CD.
@@ -580,12 +587,32 @@ func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
+	correlationStatus := "NotConfigured"
+	if strings.TrimSpace(deployment.DeclaredRepositoryURL) != "" {
+		correlationStatus = "NotObserved"
+		if strings.TrimSpace(deployment.RepositoryURL) != "" {
+			correlationStatus = "Mismatch"
+			if NormalizeGitRepositoryURL(deployment.DeclaredRepositoryURL) == NormalizeGitRepositoryURL(deployment.RepositoryURL) {
+				correlationStatus = "Matched"
+			}
+		}
+	}
 	result["argocd"] = map[string]any{
 		"applicationName": deployment.ApplicationName,
 		"project":         deployment.Project,
 		"syncStatus":      deployment.SyncStatus,
 		"healthStatus":    deployment.HealthStatus,
 		"revision":        deployment.Revision,
+		"gitops": map[string]any{
+			"provider":               deployment.GitOpsProvider,
+			"providerRef":            deployment.GitOpsProviderRef,
+			"projectPath":            deployment.GitOpsProjectPath,
+			"declaredRepositoryURL":  deployment.DeclaredRepositoryURL,
+			"observedRepositoryURL":  deployment.RepositoryURL,
+			"declaredDefaultBranch":  deployment.DeclaredDefaultBranch,
+			"observedTargetRevision": deployment.TargetRevision,
+			"correlationStatus":      correlationStatus,
+		},
 	}
 	return result, nil
 }
