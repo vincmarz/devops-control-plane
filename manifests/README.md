@@ -25,6 +25,7 @@ The following values must be provided through `devops-control-plane-secrets` and
 
 - `DATABASE_URL`
 - `GITLAB_TOKEN`
+- `GITHUB_TOKEN`
 - `ARGOCD_AUTH_TOKEN`
 - `KUBERNETES_TOKEN`
 - `POSTGRESQL_PASSWORD` in `postgresql-secret`
