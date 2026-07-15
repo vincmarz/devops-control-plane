@@ -12,6 +12,7 @@ import (
 	"time"
 
 	argocdadapter "github.com/vincmarz/devops-control-plane/internal/adapters/argocd"
+	githubadapter "github.com/vincmarz/devops-control-plane/internal/adapters/github"
 	gitlabadapter "github.com/vincmarz/devops-control-plane/internal/adapters/gitlab"
 	kubernetesadapter "github.com/vincmarz/devops-control-plane/internal/adapters/kubernetes"
 	tektonadapter "github.com/vincmarz/devops-control-plane/internal/adapters/tekton"
@@ -45,6 +46,8 @@ func main() {
 	applicationCatalog := app.DefaultApplicationCatalog()
 	gitOpsRepositoryTargetResolver := app.NewGitOpsRepositoryTargetResolver(applicationCatalog.ResolveGitOpsBinding)
 	changeServiceOptions = append(changeServiceOptions, app.WithGitSourceBindingResolverFunc(applicationCatalog.ResolveSourceBinding))
+	gitProviders := make([]app.GitProvider, 0, 2)
+
 	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" {
 		gitLabClient, err := gitlabadapter.New(gitlabadapter.Config{BaseURL: cfg.GitLabBaseURL, Token: cfg.GitLabToken, TimeoutSeconds: cfg.GitLabTimeoutSeconds, InsecureTLS: cfg.GitLabInsecureTLS, CAFile: cfg.GitLabCAFile})
 		if err != nil {
@@ -56,13 +59,32 @@ func main() {
 			logger.Error("gitlab provider initialization failed", "error", err)
 			os.Exit(1)
 		}
-		gitProviderRegistry, err := app.NewGitProviderRegistry([]app.GitProvider{gitLabProvider})
+		gitProviders = append(gitProviders, gitLabProvider)
+		logger.Info("gitlab provider enabled", "baseURL", cfg.GitLabBaseURL, "providerRef", gitLabProvider.ProviderRef(), "insecureTLS", cfg.GitLabInsecureTLS)
+	}
+
+	if cfg.GitHubToken != "" {
+		gitHubClient, err := githubadapter.New(githubadapter.Config{APIURL: cfg.GitHubAPIURL, Token: cfg.GitHubToken, TimeoutSeconds: cfg.GitHubTimeoutSeconds, InsecureTLS: cfg.GitHubInsecureTLS, CAFile: cfg.GitHubCAFile})
+		if err != nil {
+			logger.Error("github client initialization failed", "error", err)
+			os.Exit(1)
+		}
+		gitHubProvider, err := githubadapter.NewProvider("github-public", gitHubClient)
+		if err != nil {
+			logger.Error("github provider initialization failed", "error", err)
+			os.Exit(1)
+		}
+		gitProviders = append(gitProviders, gitHubProvider)
+		logger.Info("github provider enabled", "apiURL", cfg.GitHubAPIURL, "providerRef", gitHubProvider.ProviderRef(), "insecureTLS", cfg.GitHubInsecureTLS)
+	}
+
+	if len(gitProviders) > 0 {
+		gitProviderRegistry, err := app.NewGitProviderRegistry(gitProviders)
 		if err != nil {
 			logger.Error("git provider registry initialization failed", "error", err)
 			os.Exit(1)
 		}
 		changeServiceOptions = append(changeServiceOptions, app.WithGitProviderResolver(gitProviderRegistry))
-		logger.Info("gitlab provider enabled", "baseURL", cfg.GitLabBaseURL, "providerRef", gitLabProvider.ProviderRef(), "insecureTLS", cfg.GitLabInsecureTLS)
 	} else {
 		logger.Info("git provider integration disabled; Git workflow endpoints require a registered provider")
 	}
