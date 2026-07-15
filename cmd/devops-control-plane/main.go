@@ -43,6 +43,7 @@ func main() {
 	changeServiceOptions := []app.ChangeServiceOption{
 		app.WithTechnicalRuntimeTargetResolver(app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName)), app.WithRuntimeClientProviderRegistry(app.DefaultRuntimeClientProviderRegistry()), app.WithRuntimeClientSecretRefsRegistry(app.DefaultRuntimeClientSecretRefsRegistry()), app.WithEvidenceStore(repositories.Evidences)}
 	applicationCatalog := app.DefaultApplicationCatalog()
+	gitOpsRepositoryTargetResolver := app.NewGitOpsRepositoryTargetResolver(applicationCatalog.ResolveGitOpsBinding)
 	changeServiceOptions = append(changeServiceOptions, app.WithGitSourceBindingResolverFunc(applicationCatalog.ResolveSourceBinding))
 	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" {
 		gitLabClient, err := gitlabadapter.New(gitlabadapter.Config{BaseURL: cfg.GitLabBaseURL, Token: cfg.GitLabToken, TimeoutSeconds: cfg.GitLabTimeoutSeconds, InsecureTLS: cfg.GitLabInsecureTLS, CAFile: cfg.GitLabCAFile})
@@ -121,7 +122,11 @@ func main() {
 			runtimeSecretValueLoader,
 		)
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonRunPipeline(func(ctx context.Context, change domain.ChangeRequest) (string, string, string, error) {
-			revision := cfg.TektonGitRevision
+			gitOpsTarget, err := gitOpsRepositoryTargetResolver.Resolve(change.ApplicationName, app.GitOpsConsumerTekton)
+			if err != nil {
+				return "", "", "", err
+			}
+			revision := gitOpsTarget.DefaultBranch
 			if cfg.TektonGitRevisionTemplate != "" {
 				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
 			}
@@ -148,7 +153,7 @@ func main() {
 				ServiceAccountName: cfg.TektonServiceAccount,
 				GenerateName:       "devops-cp-validate-" + strings.ToLower(change.ChangeNumber) + "-",
 				ChangeNumber:       change.ChangeNumber,
-				GitURL:             cfg.TektonGitURL,
+				GitURL:             gitOpsTarget.RepositoryURL,
 				GitRevision:        revision,
 				ValidationPath:     validationPath,
 				Image:              cfg.TektonImage,
@@ -159,6 +164,10 @@ func main() {
 		}))
 
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonCheckValidation(func(ctx context.Context, change domain.ChangeRequest) (app.TektonValidationResult, error) {
+			gitOpsTarget, err := gitOpsRepositoryTargetResolver.Resolve(change.ApplicationName, app.GitOpsConsumerTekton)
+			if err != nil {
+				return app.TektonValidationResult{}, err
+			}
 			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)
 			if err != nil {
 				return app.TektonValidationResult{}, err
@@ -172,7 +181,7 @@ func main() {
 				return app.TektonValidationResult{}, err
 			}
 			status, err := tektonRuntimeClient.FindLatestPipelineRunByChange(ctx, target.TektonNamespace, change.ChangeNumber)
-			revision := cfg.TektonGitRevision
+			revision := gitOpsTarget.DefaultBranch
 			if cfg.TektonGitRevisionTemplate != "" {
 				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
 			}
@@ -180,7 +189,7 @@ func main() {
 			if validationPath == "" {
 				validationPath = cfg.TektonValidationPath
 			}
-			result := app.TektonValidationResult{PipelineRunName: status.PipelineRunName, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: target.TektonPipelineName, GitURL: cfg.TektonGitURL, GitRevision: revision, ValidationPath: validationPath}
+			result := app.TektonValidationResult{PipelineRunName: status.PipelineRunName, Namespace: status.Namespace, UID: status.UID, Status: status.Status, Reason: status.Reason, Message: status.Message, PipelineName: target.TektonPipelineName, GitURL: gitOpsTarget.RepositoryURL, GitRevision: revision, ValidationPath: validationPath}
 			if err != nil {
 				return result, err
 			}
