@@ -116,6 +116,7 @@ type GitProviderResolver interface {
 }
 
 type ChangeRuntimeStateStore interface {
+	Get(ctx context.Context, idOrNumber string) (domain.ChangeRuntimeState, error)
 	UpsertSource(ctx context.Context, idOrNumber string, state domain.SourceRuntimeState) error
 }
 
@@ -686,15 +687,40 @@ func sourceRuntimeState(target GitRepositoryTarget, branch string) domain.Source
 	}
 }
 
-func (s *ChangeService) persistSourceRuntimeState(ctx context.Context, change domain.ChangeRequest, target GitRepositoryTarget, branch string) error {
-	if s.changeRuntimeStateStore == nil {
-		return nil
-	}
+func runtimeStateChangeID(change domain.ChangeRequest) string {
 	idOrNumber := change.ID
 	if strings.TrimSpace(idOrNumber) == "" {
 		idOrNumber = change.ChangeNumber
 	}
-	return s.changeRuntimeStateStore.UpsertSource(ctx, idOrNumber, sourceRuntimeState(target, branch))
+	return idOrNumber
+}
+
+func (s *ChangeService) persistSourceRuntimeState(ctx context.Context, change domain.ChangeRequest, target GitRepositoryTarget, branch string) error {
+	if s.changeRuntimeStateStore == nil {
+		return nil
+	}
+	return s.changeRuntimeStateStore.UpsertSource(ctx, runtimeStateChangeID(change), sourceRuntimeState(target, branch))
+}
+
+func (s *ChangeService) updateSourceRuntimeState(ctx context.Context, change domain.ChangeRequest, target GitRepositoryTarget, branch string, update func(*domain.SourceRuntimeState)) error {
+	if s.changeRuntimeStateStore == nil {
+		return nil
+	}
+	idOrNumber := runtimeStateChangeID(change)
+	current, err := s.changeRuntimeStateStore.Get(ctx, idOrNumber)
+	if err != nil {
+		return err
+	}
+	source := current.Source
+	source.Provider = target.Provider
+	source.ProviderRef = target.ProviderRef
+	source.ProjectID = target.ProjectID
+	source.ProjectPath = target.ProjectPath
+	source.RepositoryURL = target.RepositoryURL
+	source.DefaultBranch = target.DefaultBranch
+	source.Branch = branch
+	update(&source)
+	return s.changeRuntimeStateStore.UpsertSource(ctx, idOrNumber, source)
 }
 
 func (s *ChangeService) CreateBranch(ctx context.Context, idOrNumber string) (map[string]any, error) {
@@ -871,6 +897,14 @@ func (s *ChangeService) OpenMergeRequest(ctx context.Context, idOrNumber string)
 		if err != nil {
 			return nil, fmt.Errorf("open git merge request from %q to %q: %w", sourceBranch, target.DefaultBranch, err)
 		}
+		if err := s.updateSourceRuntimeState(ctx, change, target, sourceBranch, func(state *domain.SourceRuntimeState) {
+			state.TargetBranch = target.DefaultBranch
+			state.ProposalNumber = iid
+			state.ProposalURL = webURL
+			state.ProposalState = "open"
+		}); err != nil {
+			return nil, fmt.Errorf("persist source runtime state after opening merge request from %q: %w", sourceBranch, err)
+		}
 		result, err := s.store.MarkStep(ctx, idOrNumber, "MergeRequestOpened")
 		if err != nil {
 			return nil, err
@@ -941,6 +975,15 @@ func (s *ChangeService) MergeRequest(ctx context.Context, idOrNumber string) (ma
 		iid, webURL, sha, err := provider.MergeRequest(ctx, target, sourceBranch, target.DefaultBranch, message)
 		if err != nil {
 			return nil, fmt.Errorf("merge git merge request from %q to %q: %w", sourceBranch, target.DefaultBranch, err)
+		}
+		if err := s.updateSourceRuntimeState(ctx, change, target, sourceBranch, func(state *domain.SourceRuntimeState) {
+			state.TargetBranch = target.DefaultBranch
+			state.ProposalNumber = iid
+			state.ProposalURL = webURL
+			state.ProposalState = "merged"
+			state.MergeCommitSHA = sha
+		}); err != nil {
+			return nil, fmt.Errorf("persist source runtime state after merging merge request from %q: %w", sourceBranch, err)
 		}
 		result, err := s.store.MarkStep(ctx, idOrNumber, "MergeRequestMerged")
 		if err != nil {
