@@ -115,6 +115,10 @@ type GitProviderResolver interface {
 	Resolve(target GitRepositoryTarget) (GitProvider, error)
 }
 
+type ChangeRuntimeStateStore interface {
+	UpsertSource(ctx context.Context, idOrNumber string, state domain.SourceRuntimeState) error
+}
+
 type ChangeServiceOption func(*ChangeService)
 
 func WithTektonRunPipeline(fn TektonRunPipelineFunc) ChangeServiceOption {
@@ -131,6 +135,10 @@ func WithArgoCDCheckDeployment(fn ArgoCDCheckDeploymentFunc) ChangeServiceOption
 
 func WithEvidenceStore(store EvidenceStore) ChangeServiceOption {
 	return func(s *ChangeService) { s.evidenceStore = store }
+}
+
+func WithChangeRuntimeStateStore(store ChangeRuntimeStateStore) ChangeServiceOption {
+	return func(s *ChangeService) { s.changeRuntimeStateStore = store }
 }
 
 func WithDeploymentEvidenceCollector(fn DeploymentEvidenceCollectorFunc) ChangeServiceOption {
@@ -238,6 +246,7 @@ type ChangeService struct {
 	tektonCheckValidation                   TektonCheckValidationFunc
 	argocdCheckDeployment                   ArgoCDCheckDeploymentFunc
 	evidenceStore                           EvidenceStore
+	changeRuntimeStateStore                 ChangeRuntimeStateStore
 	deploymentEvidenceCollector             DeploymentEvidenceCollectorFunc
 	kubernetesRuntimeEvidenceCollector      KubernetesRuntimeEvidenceCollectorFunc
 	kubernetesRuntimeClientProviderRegistry KubernetesRuntimeClientProviderResolver
@@ -665,6 +674,29 @@ func providerAwareGitMetadata(target GitRepositoryTarget) map[string]any {
 	return map[string]any{"provider": target.Provider, "providerRef": target.ProviderRef, "projectID": target.ProjectID, "projectPath": target.ProjectPath, "repositoryURL": target.RepositoryURL, "defaultBranch": target.DefaultBranch}
 }
 
+func sourceRuntimeState(target GitRepositoryTarget, branch string) domain.SourceRuntimeState {
+	return domain.SourceRuntimeState{
+		Provider:      target.Provider,
+		ProviderRef:   target.ProviderRef,
+		ProjectID:     target.ProjectID,
+		ProjectPath:   target.ProjectPath,
+		RepositoryURL: target.RepositoryURL,
+		DefaultBranch: target.DefaultBranch,
+		Branch:        branch,
+	}
+}
+
+func (s *ChangeService) persistSourceRuntimeState(ctx context.Context, change domain.ChangeRequest, target GitRepositoryTarget, branch string) error {
+	if s.changeRuntimeStateStore == nil {
+		return nil
+	}
+	idOrNumber := change.ID
+	if strings.TrimSpace(idOrNumber) == "" {
+		idOrNumber = change.ChangeNumber
+	}
+	return s.changeRuntimeStateStore.UpsertSource(ctx, idOrNumber, sourceRuntimeState(target, branch))
+}
+
 func (s *ChangeService) CreateBranch(ctx context.Context, idOrNumber string) (map[string]any, error) {
 	idOrNumber = strings.TrimSpace(idOrNumber)
 	if idOrNumber == "" {
@@ -691,6 +723,9 @@ func (s *ChangeService) CreateBranch(ctx context.Context, idOrNumber string) (ma
 		branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
 		if err := provider.CreateBranch(ctx, target, branchName, target.DefaultBranch); err != nil {
 			return nil, fmt.Errorf("create git branch %q from ref %q: %w", branchName, target.DefaultBranch, err)
+		}
+		if err := s.persistSourceRuntimeState(ctx, change, target, branchName); err != nil {
+			return nil, fmt.Errorf("persist source runtime state after creating branch %q: %w", branchName, err)
 		}
 		result, err := s.store.MarkStep(ctx, idOrNumber, "BranchCreated")
 		if err != nil {
@@ -755,6 +790,9 @@ func (s *ChangeService) UpdateFiles(ctx context.Context, idOrNumber string) (map
 		commitMessage := fmt.Sprintf("Add generated manifest for %s", change.ChangeNumber)
 		if err := provider.CreateOrUpdateFile(ctx, target, branchName, filePath, commitMessage, generatedChangeConfigMap(change)); err != nil {
 			return nil, fmt.Errorf("create or update git file %q on branch %q: %w", filePath, branchName, err)
+		}
+		if err := s.persistSourceRuntimeState(ctx, change, target, branchName); err != nil {
+			return nil, fmt.Errorf("persist source runtime state after updating files on branch %q: %w", branchName, err)
 		}
 		result, err := s.store.MarkStep(ctx, idOrNumber, "CommitCreated")
 		if err != nil {
