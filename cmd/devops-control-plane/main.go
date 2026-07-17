@@ -43,6 +43,7 @@ func main() {
 
 	changeServiceOptions := []app.ChangeServiceOption{
 		app.WithTechnicalRuntimeTargetResolver(app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName)), app.WithRuntimeClientProviderRegistry(app.DefaultRuntimeClientProviderRegistry()), app.WithRuntimeClientSecretRefsRegistry(app.DefaultRuntimeClientSecretRefsRegistry()), app.WithEvidenceStore(repositories.Evidences)}
+	changeServiceOptions = append(changeServiceOptions, app.WithChangeRuntimeStateStore(repositories.RuntimeStates))
 	applicationCatalog := app.DefaultApplicationCatalog()
 	gitOpsRepositoryTargetResolver := app.NewGitOpsRepositoryTargetResolver(applicationCatalog.ResolveGitOpsBinding)
 	changeServiceOptions = append(changeServiceOptions, app.WithGitSourceBindingResolverFunc(applicationCatalog.ResolveSourceBinding))
