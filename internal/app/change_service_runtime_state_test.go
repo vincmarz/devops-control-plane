@@ -11,9 +11,21 @@ import (
 
 type sourceRuntimeStateStoreFake struct {
 	called     bool
+	getCalled  bool
 	idOrNumber string
 	state      domain.SourceRuntimeState
+	current    domain.ChangeRuntimeState
+	getErr     error
 	err        error
+}
+
+func (f *sourceRuntimeStateStoreFake) Get(_ context.Context, idOrNumber string) (domain.ChangeRuntimeState, error) {
+	f.getCalled = true
+	f.idOrNumber = idOrNumber
+	if f.getErr != nil {
+		return domain.ChangeRuntimeState{}, f.getErr
+	}
+	return f.current, nil
 }
 
 func (f *sourceRuntimeStateStoreFake) UpsertSource(_ context.Context, idOrNumber string, state domain.SourceRuntimeState) error {

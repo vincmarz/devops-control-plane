@@ -14,14 +14,19 @@ type ChangeRuntimeState struct {
 }
 
 type SourceRuntimeState struct {
-	Provider      string `json:"provider,omitempty"`
-	ProviderRef   string `json:"providerRef,omitempty"`
-	ProjectID     int    `json:"projectID,omitempty"`
-	ProjectPath   string `json:"projectPath,omitempty"`
-	RepositoryURL string `json:"repositoryURL,omitempty"`
-	DefaultBranch string `json:"defaultBranch,omitempty"`
-	Branch        string `json:"branch,omitempty"`
-	CommitSHA     string `json:"commitSHA,omitempty"`
+	Provider       string `json:"provider,omitempty"`
+	ProviderRef    string `json:"providerRef,omitempty"`
+	ProjectID      int    `json:"projectID,omitempty"`
+	ProjectPath    string `json:"projectPath,omitempty"`
+	RepositoryURL  string `json:"repositoryURL,omitempty"`
+	DefaultBranch  string `json:"defaultBranch,omitempty"`
+	Branch         string `json:"branch,omitempty"`
+	CommitSHA      string `json:"commitSHA,omitempty"`
+	TargetBranch   string `json:"targetBranch,omitempty"`
+	ProposalNumber int    `json:"proposalNumber,omitempty"`
+	ProposalURL    string `json:"proposalURL,omitempty"`
+	ProposalState  string `json:"proposalState,omitempty"`
+	MergeCommitSHA string `json:"mergeCommitSHA,omitempty"`
 }
 
 type GitOpsRuntimeState struct {
