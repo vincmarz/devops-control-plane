@@ -3,16 +3,18 @@ package database
 import "context"
 
 type RepositorySet struct {
-	DB        *DB
-	Changes   *ChangeRepository
-	Evidences *EvidenceRepository
+	DB            *DB
+	Changes       *ChangeRepository
+	Evidences     *EvidenceRepository
+	RuntimeStates *ChangeRuntimeStateRepository
 }
 
 func NewRepositorySet(db *DB) *RepositorySet {
 	return &RepositorySet{
-		DB:        db,
-		Changes:   NewChangeRepository(db),
-		Evidences: NewEvidenceRepository(db),
+		DB:            db,
+		Changes:       NewChangeRepository(db),
+		Evidences:     NewEvidenceRepository(db),
+		RuntimeStates: NewChangeRuntimeStateRepository(db),
 	}
 }
 
