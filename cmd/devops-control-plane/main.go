@@ -148,9 +148,9 @@ func main() {
 			if err != nil {
 				return "", "", "", err
 			}
-			revision := gitOpsTarget.DefaultBranch
-			if cfg.TektonGitRevisionTemplate != "" {
-				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
+			revision, err := app.ResolveTektonGitRevision(gitOpsTarget)
+			if err != nil {
+				return "", "", "", err
 			}
 
 			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonPipelineName).Resolve(change.TargetEnvironment)
@@ -203,9 +203,9 @@ func main() {
 				return app.TektonValidationResult{}, err
 			}
 			status, err := tektonRuntimeClient.FindLatestPipelineRunByChange(ctx, target.TektonNamespace, change.ChangeNumber)
-			revision := gitOpsTarget.DefaultBranch
-			if cfg.TektonGitRevisionTemplate != "" {
-				revision = strings.ReplaceAll(cfg.TektonGitRevisionTemplate, "{changeNumber}", change.ChangeNumber)
+			revision, err := app.ResolveTektonGitRevision(gitOpsTarget)
+			if err != nil {
+				return app.TektonValidationResult{}, err
 			}
 			validationPath := target.ValidationPath
 			if validationPath == "" {

@@ -102,3 +102,24 @@ func TestGitOpsRepositoryURLCorrelation(t *testing.T) {
 		t.Fatal("different provider URL must not match")
 	}
 }
+
+func TestResolveTektonGitRevisionUsesGitOpsDefaultBranch(t *testing.T) {
+	target := GitOpsRepositoryTarget{DefaultBranch: " main "}
+	revision, err := ResolveTektonGitRevision(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revision != "main" {
+		t.Fatalf("revision = %q, want main", revision)
+	}
+}
+
+func TestResolveTektonGitRevisionFailsClosedWithoutDefaultBranch(t *testing.T) {
+	_, err := ResolveTektonGitRevision(GitOpsRepositoryTarget{})
+	if err == nil {
+		t.Fatal("expected missing Tekton Git revision error")
+	}
+	if err.Error() != "Tekton Git revision is not configured" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
