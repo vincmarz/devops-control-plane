@@ -35,15 +35,21 @@ func setupTestDB(t *testing.T) *database.DB {
 		t.Fatalf("reset public schema: %v", err)
 	}
 
-	migration, err := filepath.Abs(filepath.Join("..", "..", "migrations", "000001_init.up.sql"))
-	if err != nil {
-		t.Fatalf("resolve migration path: %v", err)
+	migrationNames := []string{
+		"000001_init.up.sql",
+		"000002_change_runtime_states.up.sql",
 	}
-	if _, err := os.Stat(migration); err != nil {
-		t.Fatalf("migration file not found at %s: %v", migration, err)
-	}
-	if err := db.ExecSQLFile(ctx, migration); err != nil {
-		t.Fatalf("apply migration %s: %v", migration, err)
+	for _, migrationName := range migrationNames {
+		migration, err := filepath.Abs(filepath.Join("..", "..", "migrations", migrationName))
+		if err != nil {
+			t.Fatalf("resolve migration path: %v", err)
+		}
+		if _, err := os.Stat(migration); err != nil {
+			t.Fatalf("migration file not found at %s: %v", migration, err)
+		}
+		if err := db.ExecSQLFile(ctx, migration); err != nil {
+			t.Fatalf("apply migration %s: %v", migration, err)
+		}
 	}
 
 	return db
