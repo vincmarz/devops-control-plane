@@ -96,6 +96,14 @@ func (t GitOpsRepositoryTarget) SupportsConsumer(consumer string) bool {
 	return false
 }
 
+func ResolveTektonGitRevision(target GitOpsRepositoryTarget) (string, error) {
+	revision := strings.TrimSpace(target.DefaultBranch)
+	if revision == "" {
+		return "", errors.New("Tekton Git revision is not configured")
+	}
+	return revision, nil
+}
+
 func normalizeGitOpsConsumers(consumers []string) []string {
 	normalized := make([]string, 0, len(consumers))
 	seen := map[string]bool{}

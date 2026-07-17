@@ -15,7 +15,7 @@ func TestMainWiresApplicationGitOpsBindingIntoTekton(t *testing.T) {
 	required := []string{
 		"app.NewGitOpsRepositoryTargetResolver(applicationCatalog.ResolveGitOpsBinding)",
 		"gitOpsRepositoryTargetResolver.Resolve(change.ApplicationName, app.GitOpsConsumerTekton)",
-		"revision := gitOpsTarget.DefaultBranch",
+		"app.ResolveTektonGitRevision(gitOpsTarget)",
 		"GitURL:             gitOpsTarget.RepositoryURL",
 		"GitURL: gitOpsTarget.RepositoryURL, GitRevision: revision",
 	}
@@ -36,6 +36,8 @@ func TestMainDoesNotUseGlobalTektonGitRepositoryAtRuntime(t *testing.T) {
 		"GitURL:             cfg.TektonGitURL",
 		"GitURL: cfg.TektonGitURL",
 		"revision := cfg.TektonGitRevision",
+		"cfg.TektonGitRevisionTemplate",
+		"strings.ReplaceAll(cfg.TektonGitRevisionTemplate",
 	}
 	for _, value := range forbidden {
 		if strings.Contains(text, value) {

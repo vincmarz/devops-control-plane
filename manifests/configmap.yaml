@@ -36,7 +36,6 @@ data:
   TEKTON_POLL_INTERVAL_SECONDS: "5"
   TEKTON_GIT_URL: "https://github.com/vincmarz/demo-app-gitops.git"
   TEKTON_GIT_REVISION: "main"
-  TEKTON_GIT_REVISION_TEMPLATE: "change/{changeNumber}"
   TEKTON_VALIDATION_PATH: "apps/demo-go-color-app"
   TEKTON_IMAGE: "unused"
   TEKTON_WORKSPACE_PVC: "pipeline-workspace"
