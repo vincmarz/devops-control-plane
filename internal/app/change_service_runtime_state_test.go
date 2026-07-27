@@ -10,13 +10,19 @@ import (
 )
 
 type sourceRuntimeStateStoreFake struct {
-	called     bool
-	getCalled  bool
-	idOrNumber string
-	state      domain.SourceRuntimeState
-	current    domain.ChangeRuntimeState
-	getErr     error
-	err        error
+	called       bool
+	getCalled    bool
+	idOrNumber   string
+	state        domain.SourceRuntimeState
+	current      domain.ChangeRuntimeState
+	getErr       error
+	err          error
+	gitOpsCalled bool
+	gitOps       domain.GitOpsRuntimeState
+	gitOpsErr    error
+	tektonCalled bool
+	tekton       domain.TektonRuntimeState
+	tektonErr    error
 }
 
 func (f *sourceRuntimeStateStoreFake) Get(_ context.Context, idOrNumber string) (domain.ChangeRuntimeState, error) {
@@ -33,6 +39,20 @@ func (f *sourceRuntimeStateStoreFake) UpsertSource(_ context.Context, idOrNumber
 	f.idOrNumber = idOrNumber
 	f.state = state
 	return f.err
+}
+
+func (f *sourceRuntimeStateStoreFake) UpsertGitOps(_ context.Context, idOrNumber string, state domain.GitOpsRuntimeState) error {
+	f.gitOpsCalled = true
+	f.idOrNumber = idOrNumber
+	f.gitOps = state
+	return f.gitOpsErr
+}
+
+func (f *sourceRuntimeStateStoreFake) UpsertTekton(_ context.Context, idOrNumber string, state domain.TektonRuntimeState) error {
+	f.tektonCalled = true
+	f.idOrNumber = idOrNumber
+	f.tekton = state
+	return f.tektonErr
 }
 
 func providerAwareServiceForRuntimeStateTest(t *testing.T, store ChangeStore, runtimeStore ChangeRuntimeStateStore, binding RepositoryBinding) *ChangeService {
