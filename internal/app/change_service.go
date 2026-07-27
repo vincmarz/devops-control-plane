@@ -25,8 +25,18 @@ type ChangeStore interface {
 // e passa una funzione che incapsula l'adapter reale.
 type GitCreateBranchFunc func(ctx context.Context, projectID int, branch string, ref string) error
 
+type TektonPipelineRunResult struct {
+	PipelineRunName string
+	Namespace       string
+	UID             string
+	PipelineName    string
+	GitOpsTarget    GitOpsRepositoryTarget
+	GitRevision     string
+	ValidationPath  string
+}
+
 // TektonRunPipelineFunc rappresenta la porta applicativa minima per avviare una PipelineRun Tekton.
-type TektonRunPipelineFunc func(ctx context.Context, change domain.ChangeRequest) (string, string, string, error)
+type TektonRunPipelineFunc func(ctx context.Context, change domain.ChangeRequest) (TektonPipelineRunResult, error)
 
 type TektonValidationResult struct {
 	PipelineRunName string
@@ -118,6 +128,8 @@ type GitProviderResolver interface {
 type ChangeRuntimeStateStore interface {
 	Get(ctx context.Context, idOrNumber string) (domain.ChangeRuntimeState, error)
 	UpsertSource(ctx context.Context, idOrNumber string, state domain.SourceRuntimeState) error
+	UpsertGitOps(ctx context.Context, idOrNumber string, state domain.GitOpsRuntimeState) error
+	UpsertTekton(ctx context.Context, idOrNumber string, state domain.TektonRuntimeState) error
 }
 
 type ChangeServiceOption func(*ChangeService)
@@ -434,16 +446,98 @@ func (s *ChangeService) Validate(ctx context.Context, idOrNumber string) (map[st
 		return nil, err
 	}
 
-	pipelineRunName, namespace, uid, err := s.tektonRunPipeline(ctx, change)
+	pipelineRun, err := s.tektonRunPipeline(ctx, change)
 	if err != nil {
 		return nil, fmt.Errorf("run tekton validation pipeline for %q: %w", change.ChangeNumber, err)
+	}
+	if err := s.persistGitOpsTektonValidationStart(ctx, change, pipelineRun); err != nil {
+		return nil, err
 	}
 	result, err := s.store.MarkStep(ctx, idOrNumber, "ValidationRunning")
 	if err != nil {
 		return nil, err
 	}
-	result["tekton"] = map[string]any{"pipelineRunName": pipelineRunName, "namespace": namespace, "uid": uid}
+	result["tekton"] = map[string]any{"pipelineRunName": pipelineRun.PipelineRunName, "namespace": pipelineRun.Namespace, "uid": pipelineRun.UID}
 	return result, nil
+}
+
+func (s *ChangeService) persistGitOpsTektonValidationStart(ctx context.Context, change domain.ChangeRequest, pipelineRun TektonPipelineRunResult) error {
+	if s.changeRuntimeStateStore == nil {
+		return nil
+	}
+	idOrNumber := runtimeStateChangeID(change)
+	gitOps := domain.GitOpsRuntimeState{
+		Provider:      pipelineRun.GitOpsTarget.Provider,
+		ProviderRef:   pipelineRun.GitOpsTarget.ProviderRef,
+		ProjectID:     pipelineRun.GitOpsTarget.ProjectID,
+		ProjectPath:   pipelineRun.GitOpsTarget.ProjectPath,
+		RepositoryURL: pipelineRun.GitOpsTarget.RepositoryURL,
+		DefaultBranch: pipelineRun.GitOpsTarget.DefaultBranch,
+		Revision:      pipelineRun.GitRevision,
+	}
+	if err := s.changeRuntimeStateStore.UpsertGitOps(ctx, idOrNumber, gitOps); err != nil {
+		return fmt.Errorf("persist GitOps runtime state after starting Tekton validation: %w", err)
+	}
+	tekton := domain.TektonRuntimeState{
+		Namespace:       pipelineRun.Namespace,
+		PipelineName:    pipelineRun.PipelineName,
+		PipelineRunName: pipelineRun.PipelineRunName,
+		UID:             pipelineRun.UID,
+		GitURL:          pipelineRun.GitOpsTarget.RepositoryURL,
+		GitRevision:     pipelineRun.GitRevision,
+		ValidationPath:  pipelineRun.ValidationPath,
+		Status:          "Unknown",
+		Reason:          "Running",
+		Message:         "PipelineRun created",
+	}
+	if err := s.changeRuntimeStateStore.UpsertTekton(ctx, idOrNumber, tekton); err != nil {
+		return fmt.Errorf("persist Tekton runtime state after starting validation: %w", err)
+	}
+	return nil
+}
+
+func updateTektonRuntimeState(current domain.TektonRuntimeState, validation TektonValidationResult) domain.TektonRuntimeState {
+	if validation.Namespace != "" {
+		current.Namespace = validation.Namespace
+	}
+	if validation.PipelineName != "" {
+		current.PipelineName = validation.PipelineName
+	}
+	if validation.PipelineRunName != "" {
+		current.PipelineRunName = validation.PipelineRunName
+	}
+	if validation.UID != "" {
+		current.UID = validation.UID
+	}
+	if validation.GitURL != "" {
+		current.GitURL = validation.GitURL
+	}
+	if validation.GitRevision != "" {
+		current.GitRevision = validation.GitRevision
+	}
+	if validation.ValidationPath != "" {
+		current.ValidationPath = validation.ValidationPath
+	}
+	current.Status = validation.Status
+	current.Reason = validation.Reason
+	current.Message = validation.Message
+	return current
+}
+
+func (s *ChangeService) persistTektonValidationResult(ctx context.Context, change domain.ChangeRequest, validation TektonValidationResult) error {
+	if s.changeRuntimeStateStore == nil {
+		return nil
+	}
+	idOrNumber := runtimeStateChangeID(change)
+	current, err := s.changeRuntimeStateStore.Get(ctx, idOrNumber)
+	if err != nil {
+		return fmt.Errorf("read runtime state before checking validation: %w", err)
+	}
+	tekton := updateTektonRuntimeState(current.Tekton, validation)
+	if err := s.changeRuntimeStateStore.UpsertTekton(ctx, idOrNumber, tekton); err != nil {
+		return fmt.Errorf("persist Tekton runtime state after checking validation: %w", err)
+	}
+	return nil
 }
 
 // CheckValidation legge lo stato reale della PipelineRun Tekton piu recente e aggiorna il runtime_status.
@@ -472,6 +566,9 @@ func (s *ChangeService) CheckValidation(ctx context.Context, idOrNumber string) 
 		runtimeStatus = "ValidationSucceeded"
 	} else if validation.Status == "False" {
 		runtimeStatus = "ValidationFailed"
+	}
+	if err := s.persistTektonValidationResult(ctx, change, validation); err != nil {
+		return nil, err
 	}
 	result, err := s.store.MarkStep(ctx, idOrNumber, runtimeStatus)
 	if err != nil {

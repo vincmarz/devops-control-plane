@@ -39,9 +39,9 @@ func (f *validateFakeStore) MarkStep(ctx context.Context, id, status string) (ma
 func TestChangeServiceValidate(t *testing.T) {
 	store := &validateFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0005", ApplicationName: "demo-go-color-app"}}
 	var got string
-	svc := NewChangeService(store, WithTektonRunPipeline(func(ctx context.Context, ch domain.ChangeRequest) (string, string, string, error) {
+	svc := NewChangeService(store, WithTektonRunPipeline(func(ctx context.Context, ch domain.ChangeRequest) (TektonPipelineRunResult, error) {
 		got = ch.ChangeNumber
-		return "devops-cp-validate-chg-2026-0005-abcde", "devops-ci-demo", "uid-123", nil
+		return TektonPipelineRunResult{PipelineRunName: "devops-cp-validate-chg-2026-0005-abcde", Namespace: "devops-ci-demo", UID: "uid-123"}, nil
 	}))
 	r, err := svc.Validate(context.Background(), "CHG-2026-0005")
 	if err != nil {
@@ -59,8 +59,8 @@ func TestChangeServiceValidate(t *testing.T) {
 }
 func TestChangeServiceValidatePropagatesTektonError(t *testing.T) {
 	store := &validateFakeStore{change: domain.ChangeRequest{ChangeNumber: "CHG-2026-0005"}}
-	svc := NewChangeService(store, WithTektonRunPipeline(func(ctx context.Context, ch domain.ChangeRequest) (string, string, string, error) {
-		return "", "", "", errors.New("tekton failed")
+	svc := NewChangeService(store, WithTektonRunPipeline(func(ctx context.Context, ch domain.ChangeRequest) (TektonPipelineRunResult, error) {
+		return TektonPipelineRunResult{}, errors.New("tekton failed")
 	}))
 	_, err := svc.Validate(context.Background(), "CHG-2026-0005")
 	if err == nil {
