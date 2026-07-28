@@ -403,6 +403,17 @@ func (s *ChangeService) persistKubernetesRuntimeObservation(ctx context.Context,
 	return nil
 }
 
+func (s *ChangeService) GetRuntimeState(ctx context.Context, idOrNumber string) (domain.ChangeRuntimeState, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return domain.ChangeRuntimeState{}, errors.New("change id or number is required")
+	}
+	if s.changeRuntimeStateStore == nil {
+		return domain.ChangeRuntimeState{}, errors.New("change runtime state store is not configured")
+	}
+	return s.changeRuntimeStateStore.Get(ctx, idOrNumber)
+}
+
 func (s *ChangeService) List(ctx context.Context) ([]domain.ChangeRequest, error) {
 	return s.store.List(ctx)
 }
