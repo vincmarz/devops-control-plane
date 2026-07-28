@@ -281,8 +281,8 @@ func main() {
 			deployment.DeclaredDefaultBranch = gitOpsTarget.DefaultBranch
 			return deployment, nil
 		}))
-		changeServiceOptions = append(changeServiceOptions, app.WithDeploymentEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error) {
-			argoApp, err := argoCDClient.GetApplication(ctx, change.ApplicationName)
+		changeServiceOptions = append(changeServiceOptions, app.WithDeploymentEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest, target app.TechnicalRuntimeTarget) (domain.Evidence, error) {
+			argoApp, err := argoCDClient.GetApplication(ctx, target.ArgoCDApplicationName)
 			if err != nil {
 				return domain.Evidence{}, err
 			}

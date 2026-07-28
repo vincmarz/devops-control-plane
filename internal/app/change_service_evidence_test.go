@@ -14,8 +14,14 @@ func TestCollectEvidence(t *testing.T) {
 	service := NewChangeService(
 		changeStore,
 		WithEvidenceStore(evidenceStore),
-		WithDeploymentEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error) {
-			return domain.Evidence{EvidenceType: "deployment", Name: "deployment-evidence", Summary: "summary", Sanitized: true, Payload: map[string]any{"applicationName": change.ApplicationName}}, nil
+		WithTechnicalRuntimeTargetResolverFunc(func(context.Context, domain.ChangeRequest) (TechnicalRuntimeTarget, error) {
+			return TechnicalRuntimeTarget{TargetEnvironment: "staging", ArgoCDApplicationName: "demo-go-color-app-staging"}, nil
+		}),
+		WithDeploymentEvidenceCollector(func(ctx context.Context, change domain.ChangeRequest, target TechnicalRuntimeTarget) (domain.Evidence, error) {
+			if target.ArgoCDApplicationName != "demo-go-color-app-staging" {
+				t.Fatalf("ArgoCDApplicationName = %q", target.ArgoCDApplicationName)
+			}
+			return domain.Evidence{EvidenceType: "deployment", Name: "deployment-evidence", Summary: "summary", Sanitized: true, Payload: map[string]any{"applicationName": target.ArgoCDApplicationName}}, nil
 		}),
 	)
 

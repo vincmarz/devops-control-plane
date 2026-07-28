@@ -23,6 +23,9 @@ type sourceRuntimeStateStoreFake struct {
 	tektonCalled bool
 	tekton       domain.TektonRuntimeState
 	tektonErr    error
+	argoCDCalled bool
+	argoCD       domain.ArgoCDRuntimeState
+	argoCDErr    error
 }
 
 func (f *sourceRuntimeStateStoreFake) Get(_ context.Context, idOrNumber string) (domain.ChangeRuntimeState, error) {
@@ -53,6 +56,13 @@ func (f *sourceRuntimeStateStoreFake) UpsertTekton(_ context.Context, idOrNumber
 	f.idOrNumber = idOrNumber
 	f.tekton = state
 	return f.tektonErr
+}
+
+func (f *sourceRuntimeStateStoreFake) UpsertArgoCD(_ context.Context, idOrNumber string, state domain.ArgoCDRuntimeState) error {
+	f.argoCDCalled = true
+	f.idOrNumber = idOrNumber
+	f.argoCD = state
+	return f.argoCDErr
 }
 
 func providerAwareServiceForRuntimeStateTest(t *testing.T, store ChangeStore, runtimeStore ChangeRuntimeStateStore, binding RepositoryBinding) *ChangeService {
