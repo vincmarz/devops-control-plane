@@ -10,22 +10,22 @@ import (
 )
 
 type sourceRuntimeStateStoreFake struct {
-	called       bool
-	getCalled    bool
-	idOrNumber   string
-	state        domain.SourceRuntimeState
-	current      domain.ChangeRuntimeState
-	getErr       error
-	err          error
-	gitOpsCalled bool
-	gitOps       domain.GitOpsRuntimeState
-	gitOpsErr    error
-	tektonCalled bool
-	tekton       domain.TektonRuntimeState
-	tektonErr    error
-	argoCDCalled bool
-	argoCD       domain.ArgoCDRuntimeState
-	argoCDErr    error
+	called        bool
+	getCalled     bool
+	idOrNumber    string
+	state         domain.SourceRuntimeState
+	current       domain.ChangeRuntimeState
+	getErr        error
+	err           error
+	gitOpsCalled  bool
+	gitOps        domain.GitOpsRuntimeState
+	gitOpsErr     error
+	tektonCalled  bool
+	tekton        domain.TektonRuntimeState
+	tektonErr     error
+	argoCDCalled  bool
+	argoCD        domain.ArgoCDRuntimeState
+	argoCDErr     error
 	runtimeCalled bool
 	runtime       domain.RuntimeObservationState
 	runtimeErr    error

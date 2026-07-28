@@ -70,7 +70,7 @@ func (s *collectEvidenceFakeChangeStore) MarkStep(ctx context.Context, idOrNumbe
 }
 
 type collectEvidenceFakeEvidenceStore struct {
-	changeID    string
+	changeID     string
 	createCalled bool
 }
 

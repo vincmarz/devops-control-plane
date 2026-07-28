@@ -13,14 +13,14 @@ func readyKubernetesRuntimeEvidence() map[string]any {
 	return map[string]any{
 		"namespace": "devops-ci-staging",
 		"deployment": map[string]any{
-			"name": "demo-go-color-app",
-			"namespace": "devops-ci-staging",
-			"generation": 4,
+			"name":               "demo-go-color-app",
+			"namespace":          "devops-ci-staging",
+			"generation":         4,
 			"observedGeneration": 4,
-			"desiredReplicas": 1,
-			"readyReplicas": 1,
-			"availableReplicas": 1,
-			"updatedReplicas": 1,
+			"desiredReplicas":    1,
+			"readyReplicas":      1,
+			"availableReplicas":  1,
+			"updatedReplicas":    1,
 		},
 		"pods": []map[string]any{
 			{"name": "demo-go-color-app-abc", "phase": "Running", "ready": true, "restartCount": 0},
@@ -36,9 +36,9 @@ func runtimeStateEvidenceService(t *testing.T, changeStore ChangeStore, evidence
 		WithChangeRuntimeStateStore(runtimeStore),
 		WithTechnicalRuntimeTargetResolverFunc(func(context.Context, domain.ChangeRequest) (TechnicalRuntimeTarget, error) {
 			return TechnicalRuntimeTarget{
-				TargetEnvironment: "staging",
-				ClusterName: "ocp-dev",
-				KubernetesNamespace: "devops-ci-staging",
+				TargetEnvironment:     "staging",
+				ClusterName:           "ocp-dev",
+				KubernetesNamespace:   "devops-ci-staging",
 				ArgoCDApplicationName: "demo-go-color-app-staging",
 			}, nil
 		}),
