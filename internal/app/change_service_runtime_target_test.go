@@ -13,7 +13,8 @@ func TestChangeServiceTechnicalWorkflowsResolveRuntimeTarget(t *testing.T) {
 	}
 	text := string(content)
 
-	for _, method := range []string{"Validate", "CheckValidation", "CheckDeployment", "CollectEvidence"} {
+	resolverByMethod := map[string]string{"Validate": "resolveRuntimeClientProviderSelection(ctx, change)", "CheckValidation": "resolveRuntimeClientProviderSelection(ctx, change)", "CheckDeployment": "resolveRuntimeClientProviderSelection(ctx, change)", "CollectEvidence": "resolveRuntimeTargetAndProviderSelection(ctx, change)"}
+	for method, resolver := range resolverByMethod {
 		marker := "func (s *ChangeService) " + method
 		start := strings.Index(text, marker)
 		if start == -1 {
@@ -24,7 +25,7 @@ func TestChangeServiceTechnicalWorkflowsResolveRuntimeTarget(t *testing.T) {
 		if end != -1 {
 			block = text[start : start+1+end]
 		}
-		if !strings.Contains(block, "resolveRuntimeClientProviderSelection(ctx, change)") {
+		if !strings.Contains(block, resolver) {
 			t.Fatalf("method %s should resolve RuntimeClientProviderSelection before technical execution", method)
 		}
 	}

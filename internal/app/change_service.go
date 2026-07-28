@@ -91,7 +91,7 @@ type EvidenceStore interface {
 }
 
 // DeploymentEvidenceCollectorFunc rappresenta la porta applicativa minima per raccogliere evidenze post-deployment.
-type DeploymentEvidenceCollectorFunc func(ctx context.Context, change domain.ChangeRequest) (domain.Evidence, error)
+type DeploymentEvidenceCollectorFunc func(ctx context.Context, change domain.ChangeRequest, target TechnicalRuntimeTarget) (domain.Evidence, error)
 
 // KubernetesRuntimeEvidenceCollectorFunc rappresenta la porta applicativa minima per raccogliere evidenze runtime Kubernetes/OpenShift.
 type KubernetesRuntimeEvidenceCollectorFunc func(ctx context.Context, change domain.ChangeRequest) (map[string]any, error)
@@ -130,6 +130,7 @@ type ChangeRuntimeStateStore interface {
 	UpsertSource(ctx context.Context, idOrNumber string, state domain.SourceRuntimeState) error
 	UpsertGitOps(ctx context.Context, idOrNumber string, state domain.GitOpsRuntimeState) error
 	UpsertTekton(ctx context.Context, idOrNumber string, state domain.TektonRuntimeState) error
+	UpsertArgoCD(ctx context.Context, idOrNumber string, state domain.ArgoCDRuntimeState) error
 }
 
 type ChangeServiceOption func(*ChangeService)
@@ -299,10 +300,10 @@ func (s *ChangeService) resolveTechnicalRuntimeTarget(ctx context.Context, chang
 	return s.technicalRuntimeTargetResolver(ctx, change)
 }
 
-func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Context, change domain.ChangeRequest) (RuntimeClientProviderSelection, error) {
+func (s *ChangeService) resolveRuntimeTargetAndProviderSelection(ctx context.Context, change domain.ChangeRequest) (TechnicalRuntimeTarget, RuntimeClientProviderSelection, error) {
 	target, err := s.resolveTechnicalRuntimeTarget(ctx, change)
 	if err != nil {
-		return RuntimeClientProviderSelection{}, err
+		return TechnicalRuntimeTarget{}, RuntimeClientProviderSelection{}, err
 	}
 
 	var selection RuntimeClientProviderSelection
@@ -311,7 +312,7 @@ func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Contex
 	} else {
 		selection, err = s.runtimeClientProviderSelector(ctx, target)
 		if err != nil {
-			return RuntimeClientProviderSelection{}, err
+			return TechnicalRuntimeTarget{}, RuntimeClientProviderSelection{}, err
 		}
 	}
 
@@ -321,7 +322,12 @@ func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Contex
 		selection.SecretRefs = refs
 	}
 
-	return selection, nil
+	return target, selection, nil
+}
+
+func (s *ChangeService) resolveRuntimeClientProviderSelection(ctx context.Context, change domain.ChangeRequest) (RuntimeClientProviderSelection, error) {
+	_, selection, err := s.resolveRuntimeTargetAndProviderSelection(ctx, change)
+	return selection, err
 }
 
 func (s *ChangeService) collectKubernetesRuntimeEvidence(ctx context.Context, change domain.ChangeRequest, selection RuntimeClientProviderSelection) (map[string]any, error) {
@@ -690,10 +696,6 @@ func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) 
 	runtimeStatus := mapArgoCDDeploymentRuntimeStatus(deployment.SyncStatus, deployment.HealthStatus)
 	deployment.RuntimeStatus = runtimeStatus
 
-	result, err := s.store.MarkStep(ctx, idOrNumber, runtimeStatus)
-	if err != nil {
-		return nil, err
-	}
 	correlationStatus := "NotConfigured"
 	if strings.TrimSpace(deployment.DeclaredRepositoryURL) != "" {
 		correlationStatus = "NotObserved"
@@ -703,6 +705,29 @@ func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) 
 				correlationStatus = "Matched"
 			}
 		}
+	}
+	if s.changeRuntimeStateStore != nil {
+		state := domain.ArgoCDRuntimeState{
+			ApplicationName:        deployment.ApplicationName,
+			Provider:               deployment.GitOpsProvider,
+			ProviderRef:            deployment.GitOpsProviderRef,
+			ProjectPath:            deployment.GitOpsProjectPath,
+			DeclaredRepositoryURL:  deployment.DeclaredRepositoryURL,
+			ObservedRepositoryURL:  deployment.RepositoryURL,
+			DeclaredDefaultBranch:  deployment.DeclaredDefaultBranch,
+			ObservedTargetRevision: deployment.TargetRevision,
+			ObservedRevision:       deployment.Revision,
+			SyncStatus:             deployment.SyncStatus,
+			HealthStatus:           deployment.HealthStatus,
+			CorrelationStatus:      correlationStatus,
+		}
+		if err := s.changeRuntimeStateStore.UpsertArgoCD(ctx, runtimeStateChangeID(change), state); err != nil {
+			return nil, fmt.Errorf("persist Argo CD runtime state after checking deployment: %w", err)
+		}
+	}
+	result, err := s.store.MarkStep(ctx, idOrNumber, runtimeStatus)
+	if err != nil {
+		return nil, err
 	}
 	result["argocd"] = map[string]any{
 		"applicationName": deployment.ApplicationName,
@@ -1140,12 +1165,12 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 	if err != nil {
 		return nil, err
 	}
-	providerSelection, err := s.resolveRuntimeClientProviderSelection(ctx, change)
+	target, providerSelection, err := s.resolveRuntimeTargetAndProviderSelection(ctx, change)
 	if err != nil {
 		return nil, err
 	}
 
-	evidence, err := s.deploymentEvidenceCollector(ctx, change)
+	evidence, err := s.deploymentEvidenceCollector(ctx, change, target)
 	if err != nil {
 		return nil, fmt.Errorf("collect deployment evidence for %q: %w", change.ChangeNumber, err)
 	}
