@@ -86,6 +86,8 @@ func (h *Handler) changeSubrouter(w http.ResponseWriter, r *http.Request) {
 		h.getChange(w, r, id)
 	case len(parts) == 2 && parts[1] == "events" && r.Method == http.MethodGet:
 		h.getChangeEvents(w, r, id)
+	case len(parts) == 2 && parts[1] == "runtime-state" && r.Method == http.MethodGet:
+		h.getChangeRuntimeState(w, r, id)
 	case len(parts) == 2 && parts[1] == "evidence" && r.Method == http.MethodGet:
 		h.getChangeEvidence(w, r, id, "")
 	case len(parts) == 2 && parts[1] == "submit" && r.Method == http.MethodPost:

@@ -51,6 +51,15 @@ func (h *Handler) getChange(w http.ResponseWriter, r *http.Request, id string) {
 	writeJSON(w, http.StatusOK, change, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
+func (h *Handler) getChangeRuntimeState(w http.ResponseWriter, r *http.Request, id string) {
+	state, err := h.deps.Services.Changes.GetRuntimeState(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, APIError{Code: "CHANGE_RUNTIME_STATE_NOT_FOUND", Message: "Unable to load ChangeRequest runtime state", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, state, map[string]any{"requestId": requestIDFromContext(r.Context())})
+}
+
 func (h *Handler) getChangeEvents(w http.ResponseWriter, r *http.Request, id string) {
 	events, err := h.deps.Services.Changes.Events(r.Context(), id)
 	if err != nil {
