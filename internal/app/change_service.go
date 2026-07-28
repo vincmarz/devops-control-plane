@@ -131,6 +131,7 @@ type ChangeRuntimeStateStore interface {
 	UpsertGitOps(ctx context.Context, idOrNumber string, state domain.GitOpsRuntimeState) error
 	UpsertTekton(ctx context.Context, idOrNumber string, state domain.TektonRuntimeState) error
 	UpsertArgoCD(ctx context.Context, idOrNumber string, state domain.ArgoCDRuntimeState) error
+	UpsertRuntime(ctx context.Context, idOrNumber string, state domain.RuntimeObservationState) error
 }
 
 type ChangeServiceOption func(*ChangeService)
@@ -347,6 +348,59 @@ func (s *ChangeService) collectKubernetesRuntimeEvidence(ctx context.Context, ch
 		return nil, nil
 	}
 	return s.kubernetesRuntimeEvidenceCollector(ctx, change)
+}
+
+func kubernetesRuntimeObservation(target TechnicalRuntimeTarget, runtimeEvidence map[string]any) domain.RuntimeObservationState {
+	state := domain.RuntimeObservationState{
+		ClusterName:  strings.TrimSpace(target.ClusterName),
+		Namespace:    strings.TrimSpace(target.KubernetesNamespace),
+		ResourceKind: "Deployment",
+		Status:       "Unknown",
+		Reason:       "InsufficientEvidence",
+		Message:      "Kubernetes deployment evidence is incomplete",
+	}
+	if namespace := strings.TrimSpace(stringFromMap(runtimeEvidence, "namespace")); namespace != "" {
+		state.Namespace = namespace
+	}
+	deployment, ok := runtimeEvidence["deployment"].(map[string]any)
+	if !ok {
+		return state
+	}
+	state.ResourceName = strings.TrimSpace(stringFromMap(deployment, "name"))
+	if namespace := strings.TrimSpace(stringFromMap(deployment, "namespace")); namespace != "" {
+		state.Namespace = namespace
+	}
+	desired := intFromMap(deployment, "desiredReplicas")
+	ready := intFromMap(deployment, "readyReplicas")
+	available := intFromMap(deployment, "availableReplicas")
+	updated := intFromMap(deployment, "updatedReplicas")
+	generation := intFromMap(deployment, "generation")
+	observedGeneration := intFromMap(deployment, "observedGeneration")
+	if state.ResourceName == "" || desired <= 0 {
+		return state
+	}
+	generationObserved := generation == 0 || observedGeneration >= generation
+	if ready >= desired && available >= desired && updated >= desired && generationObserved {
+		state.Status = "Ready"
+		state.Reason = "ReplicasAvailable"
+		state.Message = fmt.Sprintf("Deployment %s has %d/%d ready replicas and observed generation %d", state.ResourceName, ready, desired, observedGeneration)
+		return state
+	}
+	state.Status = "Progressing"
+	state.Reason = "ReplicasPending"
+	state.Message = fmt.Sprintf("Deployment %s has %d/%d ready replicas, %d available and %d updated", state.ResourceName, ready, desired, available, updated)
+	return state
+}
+
+func (s *ChangeService) persistKubernetesRuntimeObservation(ctx context.Context, change domain.ChangeRequest, target TechnicalRuntimeTarget, runtimeEvidence map[string]any) error {
+	if s.changeRuntimeStateStore == nil || runtimeEvidence == nil {
+		return nil
+	}
+	state := kubernetesRuntimeObservation(target, runtimeEvidence)
+	if err := s.changeRuntimeStateStore.UpsertRuntime(ctx, runtimeStateChangeID(change), state); err != nil {
+		return fmt.Errorf("persist Kubernetes runtime state after collecting evidence: %w", err)
+	}
+	return nil
 }
 
 func (s *ChangeService) List(ctx context.Context) ([]domain.ChangeRequest, error) {
@@ -1185,10 +1239,13 @@ func (s *ChangeService) CollectEvidence(ctx context.Context, idOrNumber string) 
 	}
 	evidence.Sanitized = true
 
-	if s.kubernetesRuntimeEvidenceCollector != nil {
+	if s.kubernetesRuntimeClientProviderRegistry != nil || s.kubernetesRuntimeEvidenceCollector != nil {
 		runtimeEvidence, err := s.collectKubernetesRuntimeEvidence(ctx, change, providerSelection)
 		if err != nil {
 			return nil, fmt.Errorf("collect kubernetes runtime evidence for %q: %w", change.ChangeNumber, err)
+		}
+		if err := s.persistKubernetesRuntimeObservation(ctx, change, target, runtimeEvidence); err != nil {
+			return nil, err
 		}
 		if evidence.Payload == nil {
 			evidence.Payload = map[string]any{}

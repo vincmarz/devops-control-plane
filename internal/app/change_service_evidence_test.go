@@ -70,10 +70,12 @@ func (s *collectEvidenceFakeChangeStore) MarkStep(ctx context.Context, idOrNumbe
 }
 
 type collectEvidenceFakeEvidenceStore struct {
-	changeID string
+	changeID    string
+	createCalled bool
 }
 
 func (s *collectEvidenceFakeEvidenceStore) Create(ctx context.Context, changeID string, evidence domain.Evidence) (domain.Evidence, error) {
+	s.createCalled = true
 	s.changeID = changeID
 	evidence.ID = "evidence-id-1"
 	evidence.ChangeNumber = "CHG-2026-0005"
