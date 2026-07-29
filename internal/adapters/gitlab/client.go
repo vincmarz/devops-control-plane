@@ -154,19 +154,39 @@ func (c *Client) CreateOrUpdateFile(ctx context.Context, projectID int, branch s
 
 	path := fmt.Sprintf("/api/v4/projects/%d/repository/files/%s", projectID, url.PathEscape(filePath))
 
-	var created RepositoryFile
-	if err := c.doForm(ctx, http.MethodPost, path, form, &created); err != nil {
+	var result RepositoryFile
+	if err := c.doForm(ctx, http.MethodPost, path, form, &result); err != nil {
 		if !isFileAlreadyExistsError(err) {
 			return RepositoryFile{}, err
 		}
-		var updated RepositoryFile
-		if updateErr := c.doForm(ctx, http.MethodPut, path, form, &updated); updateErr != nil {
+		if updateErr := c.doForm(ctx, http.MethodPut, path, form, &result); updateErr != nil {
 			return RepositoryFile{}, updateErr
 		}
-		return updated, nil
 	}
 
-	return created, nil
+	return c.resolveRepositoryFileCommit(ctx, projectID, branch, filePath, result)
+}
+
+func (c *Client) resolveRepositoryFileCommit(ctx context.Context, projectID int, branch string, filePath string, result RepositoryFile) (RepositoryFile, error) {
+	if strings.TrimSpace(result.CommitID) != "" || strings.TrimSpace(result.LastCommitID) != "" {
+		return result, nil
+	}
+
+	path := fmt.Sprintf("/api/v4/projects/%d/repository/files/%s?ref=%s", projectID, url.PathEscape(filePath), url.QueryEscape(branch))
+	var observed RepositoryFile
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &observed); err != nil {
+		return RepositoryFile{}, fmt.Errorf("read gitlab repository file after update: %w", err)
+	}
+	if strings.TrimSpace(observed.CommitID) == "" && strings.TrimSpace(observed.LastCommitID) == "" {
+		return RepositoryFile{}, fmt.Errorf("gitlab repository file %q on branch %q returned no commit ID", filePath, branch)
+	}
+	if strings.TrimSpace(observed.FilePath) == "" {
+		observed.FilePath = filePath
+	}
+	if strings.TrimSpace(observed.Branch) == "" {
+		observed.Branch = branch
+	}
+	return observed, nil
 }
 
 // OpenMergeRequest apre una Merge Request GitLab tra due branch.

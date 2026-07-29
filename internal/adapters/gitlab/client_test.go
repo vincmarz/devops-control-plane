@@ -131,28 +131,38 @@ func TestCreateBranchReturnsAPIError(t *testing.T) {
 	}
 }
 
-func TestCreateOrUpdateFileCreatesFile(t *testing.T) {
+func TestCreateOrUpdateFileCreatesFileAndReadsCommit(t *testing.T) {
+	var methods []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Fatalf("method = %s, want POST", r.Method)
-		}
+		methods = append(methods, r.Method)
 		if r.URL.EscapedPath() != "/api/v4/projects/1/repository/files/manifests%2Fchg-2026-0003-control-plane.yaml" {
 			t.Fatalf("escaped path = %s path = %s", r.URL.EscapedPath(), r.URL.Path)
 		}
-		if err := r.ParseForm(); err != nil {
-			t.Fatalf("ParseForm returned error: %v", err)
+		switch r.Method {
+		case http.MethodPost:
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("ParseForm returned error: %v", err)
+			}
+			if got := r.Form.Get("branch"); got != "change/CHG-2026-0003" {
+				t.Fatalf("branch = %q", got)
+			}
+			if got := r.Form.Get("commit_message"); got != "Add generated manifest for CHG-2026-0003" {
+				t.Fatalf("commit message = %q", got)
+			}
+			if got := r.Form.Get("content"); !strings.Contains(got, "changeNumber: CHG-2026-0003") {
+				t.Fatalf("content does not contain change number: %q", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"file_path": "manifests/chg-2026-0003-control-plane.yaml", "branch": "change/CHG-2026-0003"})
+		case http.MethodGet:
+			if got := r.URL.Query().Get("ref"); got != "change/CHG-2026-0003" {
+				t.Fatalf("ref = %q", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"file_path": "manifests/chg-2026-0003-control-plane.yaml", "ref": "change/CHG-2026-0003", "commit_id": "commitsha"})
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
 		}
-		if got := r.Form.Get("branch"); got != "change/CHG-2026-0003" {
-			t.Fatalf("branch = %q", got)
-		}
-		if got := r.Form.Get("commit_message"); got != "Add generated manifest for CHG-2026-0003" {
-			t.Fatalf("commit message = %q", got)
-		}
-		if got := r.Form.Get("content"); !strings.Contains(got, "changeNumber: CHG-2026-0003") {
-			t.Fatalf("content does not contain change number: %q", got)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"file_path": "manifests/chg-2026-0003-control-plane.yaml", "branch": "change/CHG-2026-0003"})
 	}))
 	defer server.Close()
 
@@ -165,12 +175,15 @@ func TestCreateOrUpdateFileCreatesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateOrUpdateFile returned error: %v", err)
 	}
-	if file.FilePath != "manifests/chg-2026-0003-control-plane.yaml" {
-		t.Fatalf("file path = %q", file.FilePath)
+	if file.FilePath != "manifests/chg-2026-0003-control-plane.yaml" || file.CommitID != "commitsha" {
+		t.Fatalf("file = %#v", file)
+	}
+	if len(methods) != 2 || methods[0] != http.MethodPost || methods[1] != http.MethodGet {
+		t.Fatalf("methods = %#v, want POST then GET", methods)
 	}
 }
 
-func TestCreateOrUpdateFileFallsBackToUpdate(t *testing.T) {
+func TestCreateOrUpdateFileFallsBackToUpdateAndReadsLastCommit(t *testing.T) {
 	var methods []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method)
@@ -181,6 +194,12 @@ func TestCreateOrUpdateFileFallsBackToUpdate(t *testing.T) {
 		case http.MethodPut:
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"file_path": "manifests/chg-2026-0003-control-plane.yaml", "branch": "change/CHG-2026-0003"})
+		case http.MethodGet:
+			if got := r.URL.Query().Get("ref"); got != "change/CHG-2026-0003" {
+				t.Fatalf("ref = %q", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"file_path": "manifests/chg-2026-0003-control-plane.yaml", "ref": "change/CHG-2026-0003", "last_commit_id": "lastcommitsha"})
 		default:
 			t.Fatalf("unexpected method %s", r.Method)
 		}
@@ -192,12 +211,57 @@ func TestCreateOrUpdateFileFallsBackToUpdate(t *testing.T) {
 		t.Fatalf("New returned error: %v", err)
 	}
 
-	_, err = client.CreateOrUpdateFile(context.Background(), 1, "change/CHG-2026-0003", "manifests/chg-2026-0003-control-plane.yaml", "Update manifest", "content")
+	file, err := client.CreateOrUpdateFile(context.Background(), 1, "change/CHG-2026-0003", "manifests/chg-2026-0003-control-plane.yaml", "Update manifest", "content")
 	if err != nil {
 		t.Fatalf("CreateOrUpdateFile returned error: %v", err)
 	}
-	if len(methods) != 2 || methods[0] != http.MethodPost || methods[1] != http.MethodPut {
-		t.Fatalf("methods = %#v, want POST then PUT", methods)
+	if file.LastCommitID != "lastcommitsha" {
+		t.Fatalf("file = %#v", file)
+	}
+	if len(methods) != 3 || methods[0] != http.MethodPost || methods[1] != http.MethodPut || methods[2] != http.MethodGet {
+		t.Fatalf("methods = %#v, want POST then PUT then GET", methods)
+	}
+}
+
+func TestCreateOrUpdateFileUsesCommitFromWriteResponse(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"file_path": "manifests/change.yaml", "branch": "change/test", "commit_id": "directcommitsha"})
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL, Token: "test-token"}, WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	file, err := client.CreateOrUpdateFile(context.Background(), 1, "change/test", "manifests/change.yaml", "update", "content")
+	if err != nil {
+		t.Fatalf("CreateOrUpdateFile returned error: %v", err)
+	}
+	if file.CommitID != "directcommitsha" || requestCount != 1 {
+		t.Fatalf("file = %#v requestCount = %d", file, requestCount)
+	}
+}
+
+func TestCreateOrUpdateFileFailsWhenCommitCannotBeResolved(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"file_path": "manifests/change.yaml", "branch": "change/test", "ref": "change/test"})
+	}))
+	defer server.Close()
+
+	client, err := New(Config{BaseURL: server.URL, Token: "test-token"}, WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	_, err = client.CreateOrUpdateFile(context.Background(), 1, "change/test", "manifests/change.yaml", "update", "content")
+	if err == nil || !strings.Contains(err.Error(), "returned no commit ID") {
+		t.Fatalf("error = %v", err)
 	}
 }
 
