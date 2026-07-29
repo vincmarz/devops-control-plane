@@ -55,7 +55,7 @@ data:
         displayName: GitHub Source Validation Dev
         enabled: true
         category: technical
-        description: Technical environment used to validate GitHub as source repository provider with branch creation only.
+        description: Technical environment used to validate the complete GitHub source repository workflow, including branch creation, generated file updates, pull request opening and pull request merge.
         clusterName: ocp-dev
         kubernetesNamespace: devops-ci-demo
         tektonNamespace: devops-ci-demo

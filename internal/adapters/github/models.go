@@ -18,7 +18,8 @@ type Reference struct {
 }
 
 type RepositoryContent struct {
-	SHA string `json:"sha"`
+	SHA       string `json:"sha"`
+	CommitSHA string `json:"-"`
 }
 
 type PullRequest struct {

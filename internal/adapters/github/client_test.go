@@ -74,10 +74,10 @@ func TestCreateOrUpdateFileCreatesWhenMissing(t *testing.T) {
 		if payload["sha"] != "" || payload["branch"] != "change/CHG-1" || payload["content"] == "" {
 			t.Fatalf("payload=%#v", payload)
 		}
-		_, _ = w.Write([]byte(`{"content":{"sha":"newsha"}}`))
+		_, _ = w.Write([]byte(`{"content":{"sha":"newsha"},"commit":{"sha":"commitsha"}}`))
 	})
 	result, err := client.CreateOrUpdateFile(context.Background(), "org/repo", "change/CHG-1", "manifests/change.yaml", "update", "content")
-	if err != nil || result.SHA != "newsha" {
+	if err != nil || result.SHA != "newsha" || result.CommitSHA != "commitsha" {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
 }

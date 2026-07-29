@@ -16,8 +16,8 @@ func (f fakeGitProvider) ProviderRef() string { return f.providerRef }
 func (f fakeGitProvider) CreateBranch(context.Context, GitRepositoryTarget, string, string) error {
 	return nil
 }
-func (f fakeGitProvider) CreateOrUpdateFile(context.Context, GitRepositoryTarget, string, string, string, string) error {
-	return nil
+func (f fakeGitProvider) CreateOrUpdateFile(context.Context, GitRepositoryTarget, string, string, string, string) (GitFileUpdateResult, error) {
+	return GitFileUpdateResult{}, nil
 }
 func (f fakeGitProvider) OpenMergeRequest(context.Context, GitRepositoryTarget, string, string, string, string) (int, string, error) {
 	return 1, "https://example.test/proposal/1", nil

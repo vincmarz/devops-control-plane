@@ -10,15 +10,16 @@ import (
 )
 
 type fakeProviderClient struct {
-	projectID    int
-	branch       string
-	ref          string
-	filePath     string
-	sourceBranch string
-	targetBranch string
-	mergeIID     int
-	mergeSHA     string
-	err          error
+	projectID      int
+	branch         string
+	ref            string
+	filePath       string
+	sourceBranch   string
+	targetBranch   string
+	mergeIID       int
+	mergeSHA       string
+	repositoryFile RepositoryFile
+	err            error
 }
 
 func (f *fakeProviderClient) CreateBranch(_ context.Context, projectID int, branch, ref string) (Branch, error) {
@@ -27,7 +28,17 @@ func (f *fakeProviderClient) CreateBranch(_ context.Context, projectID int, bran
 }
 func (f *fakeProviderClient) CreateOrUpdateFile(_ context.Context, projectID int, branch, filePath, commitMessage, content string) (RepositoryFile, error) {
 	f.projectID, f.branch, f.filePath = projectID, branch, filePath
-	return RepositoryFile{FilePath: filePath, Branch: branch}, f.err
+	result := f.repositoryFile
+	if result.FilePath == "" {
+		result.FilePath = filePath
+	}
+	if result.Branch == "" {
+		result.Branch = branch
+	}
+	if result.CommitID == "" && result.LastCommitID == "" {
+		result.CommitID = "commitsha"
+	}
+	return result, f.err
 }
 func (f *fakeProviderClient) OpenMergeRequest(_ context.Context, projectID int, sourceBranch, targetBranch, title, description string) (MergeRequest, error) {
 	f.projectID, f.sourceBranch, f.targetBranch = projectID, sourceBranch, targetBranch
@@ -63,11 +74,27 @@ func TestProviderCreateBranchUsesTargetProject(t *testing.T) {
 func TestProviderCreateOrUpdateFileUsesTargetProject(t *testing.T) {
 	client := &fakeProviderClient{}
 	provider, _ := NewProvider("gitlab-lab", client)
-	if err := provider.CreateOrUpdateFile(context.Background(), gitLabTarget(), "change/CHG-1", "manifests/change.yaml", "update", "content"); err != nil {
+	result, err := provider.CreateOrUpdateFile(context.Background(), gitLabTarget(), "change/CHG-1", "manifests/change.yaml", "update", "content")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if result.CommitSHA != "commitsha" || result.FilePath != "manifests/change.yaml" {
+		t.Fatalf("result=%#v", result)
 	}
 	if client.projectID != 42 || client.filePath != "manifests/change.yaml" {
 		t.Fatalf("unexpected call: %#v", client)
+	}
+}
+
+func TestProviderCreateOrUpdateFileFallsBackToLastCommitID(t *testing.T) {
+	client := &fakeProviderClient{repositoryFile: RepositoryFile{LastCommitID: "lastcommitsha"}}
+	provider, _ := NewProvider("gitlab-lab", client)
+	result, err := provider.CreateOrUpdateFile(context.Background(), gitLabTarget(), "change/CHG-1", "manifests/change.yaml", "update", "content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.CommitSHA != "lastcommitsha" {
+		t.Fatalf("result=%#v", result)
 	}
 }
 

@@ -21,10 +21,10 @@ func (p *providerAwareFake) CreateBranch(context.Context, GitRepositoryTarget, s
 	p.operation = "create"
 	return nil
 }
-func (p *providerAwareFake) CreateOrUpdateFile(_ context.Context, target GitRepositoryTarget, branch, filePath, message, content string) error {
+func (p *providerAwareFake) CreateOrUpdateFile(_ context.Context, target GitRepositoryTarget, branch, filePath, message, content string) (GitFileUpdateResult, error) {
 	p.target = target
 	p.operation = "update"
-	return nil
+	return GitFileUpdateResult{FilePath: filePath, Branch: branch, CommitSHA: "commit-sha"}, nil
 }
 func (p *providerAwareFake) OpenMergeRequest(context.Context, GitRepositoryTarget, string, string, string, string) (int, string, error) {
 	return 7, "https://example.test/mr/7", nil
