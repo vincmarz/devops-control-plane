@@ -28,7 +28,7 @@ func (f *fakeProviderClient) CreateBranch(_ context.Context, projectPath, branch
 
 func (f *fakeProviderClient) CreateOrUpdateFile(_ context.Context, projectPath, branch, filePath, commitMessage, content string) (RepositoryContent, error) {
 	f.projectPath, f.branch, f.filePath = projectPath, branch, filePath
-	return RepositoryContent{SHA: "filesha"}, f.err
+	return RepositoryContent{SHA: "filesha", CommitSHA: "commitsha"}, f.err
 }
 
 func (f *fakeProviderClient) OpenPullRequest(_ context.Context, projectPath, sourceBranch, targetBranch, title, description string) (PullRequest, error) {
@@ -67,8 +67,12 @@ func TestProviderCreateBranchUsesTargetProjectPath(t *testing.T) {
 func TestProviderCreateOrUpdateFileUsesTargetProjectPath(t *testing.T) {
 	client := &fakeProviderClient{}
 	provider, _ := NewProvider("github-public", client)
-	if err := provider.CreateOrUpdateFile(context.Background(), gitHubTarget(), "change/CHG-1", "manifests/change.yaml", "update", "content"); err != nil {
+	result, err := provider.CreateOrUpdateFile(context.Background(), gitHubTarget(), "change/CHG-1", "manifests/change.yaml", "update", "content")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if result.CommitSHA != "commitsha" || result.BlobSHA != "filesha" {
+		t.Fatalf("result=%#v", result)
 	}
 	if client.projectPath != "org/repo" || client.filePath != "manifests/change.yaml" {
 		t.Fatalf("unexpected call: %#v", client)

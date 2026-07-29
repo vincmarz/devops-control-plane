@@ -118,7 +118,7 @@ func (h *Handler) cancelChange(w http.ResponseWriter, r *http.Request, id string
 func (h *Handler) createBranch(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := h.deps.Services.Changes.CreateBranch(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GITLAB_CREATE_BRANCH_FAILED", Message: "Unable to create GitLab branch for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GIT_CREATE_BRANCH_FAILED", Message: "Unable to create Git branch for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
@@ -127,7 +127,7 @@ func (h *Handler) createBranch(w http.ResponseWriter, r *http.Request, id string
 func (h *Handler) updateFiles(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := h.deps.Services.Changes.UpdateFiles(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GITLAB_UPDATE_FILES_FAILED", Message: "Unable to update GitLab files for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GIT_UPDATE_FILES_FAILED", Message: "Unable to update Git files for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
@@ -163,7 +163,7 @@ func (h *Handler) checkDeployment(w http.ResponseWriter, r *http.Request, id str
 func (h *Handler) openMergeRequest(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := h.deps.Services.Changes.OpenMergeRequest(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GITLAB_OPEN_MERGE_REQUEST_FAILED", Message: "Unable to open GitLab merge request for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GIT_OPEN_REVIEW_REQUEST_FAILED", Message: "Unable to open Git review request for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
@@ -172,7 +172,7 @@ func (h *Handler) openMergeRequest(w http.ResponseWriter, r *http.Request, id st
 func (h *Handler) mergeRequest(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := h.deps.Services.Changes.MergeRequest(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GITLAB_MERGE_REQUEST_FAILED", Message: "Unable to merge GitLab merge request for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GIT_MERGE_REVIEW_REQUEST_FAILED", Message: "Unable to merge Git review request for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})

@@ -1001,10 +1001,13 @@ func (s *ChangeService) UpdateFiles(ctx context.Context, idOrNumber string) (map
 		branchName := fmt.Sprintf("change/%s", change.ChangeNumber)
 		filePath := fmt.Sprintf("manifests/%s-control-plane.yaml", strings.ToLower(change.ChangeNumber))
 		commitMessage := fmt.Sprintf("Add generated manifest for %s", change.ChangeNumber)
-		if err := provider.CreateOrUpdateFile(ctx, target, branchName, filePath, commitMessage, generatedChangeConfigMap(change)); err != nil {
+		updateResult, err := provider.CreateOrUpdateFile(ctx, target, branchName, filePath, commitMessage, generatedChangeConfigMap(change))
+		if err != nil {
 			return nil, fmt.Errorf("create or update git file %q on branch %q: %w", filePath, branchName, err)
 		}
-		if err := s.persistSourceRuntimeState(ctx, change, target, branchName); err != nil {
+		if err := s.updateSourceRuntimeState(ctx, change, target, branchName, func(state *domain.SourceRuntimeState) {
+			state.CommitSHA = strings.TrimSpace(updateResult.CommitSHA)
+		}); err != nil {
 			return nil, fmt.Errorf("persist source runtime state after updating files on branch %q: %w", branchName, err)
 		}
 		result, err := s.store.MarkStep(ctx, idOrNumber, "CommitCreated")
@@ -1014,6 +1017,10 @@ func (s *ChangeService) UpdateFiles(ctx context.Context, idOrNumber string) (map
 		metadata := providerAwareGitMetadata(target)
 		metadata["branch"] = branchName
 		metadata["filePath"] = filePath
+		metadata["commitSHA"] = strings.TrimSpace(updateResult.CommitSHA)
+		if strings.TrimSpace(updateResult.BlobSHA) != "" {
+			metadata["blobSHA"] = strings.TrimSpace(updateResult.BlobSHA)
+		}
 		result["git"] = metadata
 		return result, nil
 	}
@@ -1052,8 +1059,8 @@ data:
 `, strings.ToLower(change.ChangeNumber), change.ChangeNumber, change.ApplicationName, change.TargetEnvironment)
 }
 
-// OpenMergeRequest esegue lo step tecnico GitLab open-merge-request e poi marca
-// la ChangeRequest con runtime_status MergeRequestOpened.
+// OpenMergeRequest opens a provider-specific review proposal and retains the
+// historical MergeRequestOpened runtime status for backward compatibility.
 func (s *ChangeService) OpenMergeRequest(ctx context.Context, idOrNumber string) (map[string]any, error) {
 	idOrNumber = strings.TrimSpace(idOrNumber)
 	if idOrNumber == "" {
@@ -1099,6 +1106,9 @@ func (s *ChangeService) OpenMergeRequest(ctx context.Context, idOrNumber string)
 		metadata := providerAwareGitMetadata(target)
 		metadata["sourceBranch"] = sourceBranch
 		metadata["targetBranch"] = target.DefaultBranch
+		metadata["proposalNumber"] = iid
+		metadata["proposalURL"] = webURL
+		metadata["proposalState"] = "open"
 		metadata["mergeRequestIID"] = iid
 		metadata["mergeRequestURL"] = webURL
 		result["git"] = metadata
@@ -1126,14 +1136,17 @@ func (s *ChangeService) OpenMergeRequest(ctx context.Context, idOrNumber string)
 		"projectID":       s.gitProjectID,
 		"sourceBranch":    sourceBranch,
 		"targetBranch":    targetBranch,
+		"proposalNumber":  mrIID,
+		"proposalURL":     mrWebURL,
+		"proposalState":   "open",
 		"mergeRequestIID": mrIID,
 		"mergeRequestURL": mrWebURL,
 	}
 	return result, nil
 }
 
-// MergeRequest esegue lo step tecnico GitLab merge-request e poi marca
-// la ChangeRequest con runtime_status MergeRequestMerged.
+// MergeRequest merges a provider-specific review proposal and retains the
+// historical MergeRequestMerged runtime status for backward compatibility.
 func (s *ChangeService) MergeRequest(ctx context.Context, idOrNumber string) (map[string]any, error) {
 	idOrNumber = strings.TrimSpace(idOrNumber)
 	if idOrNumber == "" {
@@ -1179,6 +1192,9 @@ func (s *ChangeService) MergeRequest(ctx context.Context, idOrNumber string) (ma
 		metadata := providerAwareGitMetadata(target)
 		metadata["sourceBranch"] = sourceBranch
 		metadata["targetBranch"] = target.DefaultBranch
+		metadata["proposalNumber"] = iid
+		metadata["proposalURL"] = webURL
+		metadata["proposalState"] = "merged"
 		metadata["mergeRequestIID"] = iid
 		metadata["mergeRequestURL"] = webURL
 		metadata["mergeCommitSHA"] = sha
@@ -1206,6 +1222,9 @@ func (s *ChangeService) MergeRequest(ctx context.Context, idOrNumber string) (ma
 		"projectID":       s.gitProjectID,
 		"sourceBranch":    sourceBranch,
 		"targetBranch":    targetBranch,
+		"proposalNumber":  mrIID,
+		"proposalURL":     mrWebURL,
+		"proposalState":   "merged",
 		"mergeRequestIID": mrIID,
 		"mergeRequestURL": mrWebURL,
 		"mergeCommitSHA":  mergeCommitSHA,

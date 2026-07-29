@@ -46,6 +46,16 @@ func NewGitRepositoryTarget(binding RepositoryBinding) (GitRepositoryTarget, err
 	return target, nil
 }
 
+// GitFileUpdateResult is the provider-neutral result of creating or updating
+// repository content. BlobSHA and CommitSHA are optional because providers do
+// not necessarily return both identifiers.
+type GitFileUpdateResult struct {
+	FilePath  string
+	Branch    string
+	BlobSHA   string
+	CommitSHA string
+}
+
 // GitProvider is the provider-neutral Git workflow contract. A GitLab adapter
 // maps merge request operations directly; a GitHub adapter maps them to pull
 // request operations while preserving the Control Plane contract.
@@ -53,7 +63,7 @@ type GitProvider interface {
 	Provider() string
 	ProviderRef() string
 	CreateBranch(ctx context.Context, target GitRepositoryTarget, branch, ref string) error
-	CreateOrUpdateFile(ctx context.Context, target GitRepositoryTarget, branch, filePath, commitMessage, content string) error
+	CreateOrUpdateFile(ctx context.Context, target GitRepositoryTarget, branch, filePath, commitMessage, content string) (GitFileUpdateResult, error)
 	OpenMergeRequest(ctx context.Context, target GitRepositoryTarget, sourceBranch, targetBranch, title, description string) (int, string, error)
 	MergeRequest(ctx context.Context, target GitRepositoryTarget, sourceBranch, targetBranch, mergeCommitMessage string) (int, string, string, error)
 }

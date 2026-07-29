@@ -124,6 +124,32 @@ func TestCreateBranchPersistsProviderAwareGitHubSourceState(t *testing.T) {
 	}
 }
 
+func TestUpdateFilesPersistsProviderAwareGitHubCommitSHA(t *testing.T) {
+	changeStore := &createBranchFakeStore{change: domain.ChangeRequest{ID: "change-id", ChangeNumber: "CHG-2-GH", ApplicationName: "github-app"}}
+	runtimeStore := &sourceRuntimeStateStoreFake{}
+	binding := RepositoryBinding{
+		Provider: "github", ProviderRef: "github-public", Role: RepositoryRoleSource,
+		ProjectPath: "org/app", RepositoryURL: "https://github.com/org/app.git",
+		DefaultBranch: "main", WorkflowEnabled: true,
+	}
+	service := providerAwareServiceForRuntimeStateTest(t, changeStore, runtimeStore, binding)
+
+	result, err := service.UpdateFiles(context.Background(), changeStore.change.ChangeNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtimeStore.state.CommitSHA != "commit-sha" {
+		t.Fatalf("commit SHA = %q", runtimeStore.state.CommitSHA)
+	}
+	gitInfo, ok := result["git"].(map[string]any)
+	if !ok || gitInfo["commitSHA"] != "commit-sha" {
+		t.Fatalf("git metadata = %#v", result["git"])
+	}
+	if !changeStore.markStepCalled || changeStore.markedStatus != "CommitCreated" {
+		t.Fatalf("MarkStep state = called:%v status:%q", changeStore.markStepCalled, changeStore.markedStatus)
+	}
+}
+
 func TestUpdateFilesPersistsProviderAwareGitLabSourceState(t *testing.T) {
 	changeStore := &createBranchFakeStore{change: domain.ChangeRequest{ID: "change-id", ChangeNumber: "CHG-2", ApplicationName: "gitlab-app"}}
 	runtimeStore := &sourceRuntimeStateStoreFake{}
@@ -141,7 +167,7 @@ func TestUpdateFilesPersistsProviderAwareGitLabSourceState(t *testing.T) {
 	if got.Provider != "gitlab" || got.ProviderRef != "gitlab-lab" || got.ProjectID != 42 {
 		t.Fatalf("provider metadata = %#v", got)
 	}
-	if got.DefaultBranch != "trunk" || got.Branch != "change/CHG-2" {
+	if got.DefaultBranch != "trunk" || got.Branch != "change/CHG-2" || got.CommitSHA != "commit-sha" {
 		t.Fatalf("branch metadata = %#v", got)
 	}
 	if !changeStore.markStepCalled || changeStore.markedStatus != "CommitCreated" {

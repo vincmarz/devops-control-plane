@@ -26,8 +26,19 @@ func TestOpenMergeRequestPersistsIncrementalGitHubProposalState(t *testing.T) {
 	}
 	service := providerAwareServiceForRuntimeStateTest(t, changeStore, runtimeStore, binding)
 
-	if _, err := service.OpenMergeRequest(context.Background(), changeStore.change.ChangeNumber); err != nil {
+	result, err := service.OpenMergeRequest(context.Background(), changeStore.change.ChangeNumber)
+	if err != nil {
 		t.Fatal(err)
+	}
+	gitInfo, ok := result["git"].(map[string]any)
+	if !ok {
+		t.Fatalf("result git info missing or invalid: %#v", result["git"])
+	}
+	if gitInfo["proposalNumber"] != 7 || gitInfo["proposalURL"] != "https://example.test/mr/7" || gitInfo["proposalState"] != "open" {
+		t.Fatalf("neutral proposal metadata = %#v", gitInfo)
+	}
+	if gitInfo["mergeRequestIID"] != 7 || gitInfo["mergeRequestURL"] != "https://example.test/mr/7" {
+		t.Fatalf("compatibility proposal metadata = %#v", gitInfo)
 	}
 	got := runtimeStore.state
 	if got.CommitSHA != "existing-source-sha" {
@@ -62,8 +73,19 @@ func TestMergeRequestPersistsIncrementalGitLabProposalState(t *testing.T) {
 	}
 	service := providerAwareServiceForRuntimeStateTest(t, changeStore, runtimeStore, binding)
 
-	if _, err := service.MergeRequest(context.Background(), changeStore.change.ChangeNumber); err != nil {
+	result, err := service.MergeRequest(context.Background(), changeStore.change.ChangeNumber)
+	if err != nil {
 		t.Fatal(err)
+	}
+	gitInfo, ok := result["git"].(map[string]any)
+	if !ok {
+		t.Fatalf("result git info missing or invalid: %#v", result["git"])
+	}
+	if gitInfo["proposalNumber"] != 7 || gitInfo["proposalURL"] != "https://example.test/mr/7" || gitInfo["proposalState"] != "merged" {
+		t.Fatalf("neutral proposal metadata = %#v", gitInfo)
+	}
+	if gitInfo["mergeRequestIID"] != 7 || gitInfo["mergeRequestURL"] != "https://example.test/mr/7" || gitInfo["mergeCommitSHA"] != "abc123" {
+		t.Fatalf("compatibility proposal metadata = %#v", gitInfo)
 	}
 	got := runtimeStore.state
 	if got.CommitSHA != "existing-source-sha" {

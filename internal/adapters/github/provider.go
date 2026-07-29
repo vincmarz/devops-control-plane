@@ -47,12 +47,15 @@ func (p *Provider) CreateBranch(ctx context.Context, target app.GitRepositoryTar
 	return err
 }
 
-func (p *Provider) CreateOrUpdateFile(ctx context.Context, target app.GitRepositoryTarget, branch, filePath, commitMessage, content string) error {
+func (p *Provider) CreateOrUpdateFile(ctx context.Context, target app.GitRepositoryTarget, branch, filePath, commitMessage, content string) (app.GitFileUpdateResult, error) {
 	if err := p.validateTarget(target); err != nil {
-		return err
+		return app.GitFileUpdateResult{}, err
 	}
-	_, err := p.client.CreateOrUpdateFile(ctx, target.ProjectPath, branch, filePath, commitMessage, content)
-	return err
+	updated, err := p.client.CreateOrUpdateFile(ctx, target.ProjectPath, branch, filePath, commitMessage, content)
+	if err != nil {
+		return app.GitFileUpdateResult{}, err
+	}
+	return app.GitFileUpdateResult{FilePath: filePath, Branch: branch, BlobSHA: updated.SHA, CommitSHA: updated.CommitSHA}, nil
 }
 
 func (p *Provider) OpenMergeRequest(ctx context.Context, target app.GitRepositoryTarget, sourceBranch, targetBranch, title, description string) (int, string, error) {

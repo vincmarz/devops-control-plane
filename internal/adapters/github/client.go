@@ -127,10 +127,14 @@ func (c *Client) CreateOrUpdateFile(ctx context.Context, projectPath, branch, fi
 	}
 	var response struct {
 		Content RepositoryContent `json:"content"`
+		Commit  struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
 	}
 	if err := c.doJSON(ctx, http.MethodPut, endpoint, payload, &response); err != nil {
 		return RepositoryContent{}, err
 	}
+	response.Content.CommitSHA = strings.TrimSpace(response.Commit.SHA)
 	return response.Content, nil
 }
 
