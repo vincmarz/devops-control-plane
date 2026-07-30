@@ -128,6 +128,7 @@ type GitProviderResolver interface {
 type ChangeRuntimeStateStore interface {
 	Get(ctx context.Context, idOrNumber string) (domain.ChangeRuntimeState, error)
 	UpsertSource(ctx context.Context, idOrNumber string, state domain.SourceRuntimeState) error
+	UpsertArtifact(ctx context.Context, idOrNumber string, state domain.ArtifactRuntimeState) error
 	UpsertGitOps(ctx context.Context, idOrNumber string, state domain.GitOpsRuntimeState) error
 	UpsertTekton(ctx context.Context, idOrNumber string, state domain.TektonRuntimeState) error
 	UpsertArgoCD(ctx context.Context, idOrNumber string, state domain.ArgoCDRuntimeState) error

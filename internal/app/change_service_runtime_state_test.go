@@ -10,25 +10,28 @@ import (
 )
 
 type sourceRuntimeStateStoreFake struct {
-	called        bool
-	getCalled     bool
-	idOrNumber    string
-	state         domain.SourceRuntimeState
-	current       domain.ChangeRuntimeState
-	getErr        error
-	err           error
-	gitOpsCalled  bool
-	gitOps        domain.GitOpsRuntimeState
-	gitOpsErr     error
-	tektonCalled  bool
-	tekton        domain.TektonRuntimeState
-	tektonErr     error
-	argoCDCalled  bool
-	argoCD        domain.ArgoCDRuntimeState
-	argoCDErr     error
-	runtimeCalled bool
-	runtime       domain.RuntimeObservationState
-	runtimeErr    error
+	called         bool
+	getCalled      bool
+	idOrNumber     string
+	state          domain.SourceRuntimeState
+	current        domain.ChangeRuntimeState
+	getErr         error
+	err            error
+	artifactCalled bool
+	artifact       domain.ArtifactRuntimeState
+	artifactErr    error
+	gitOpsCalled   bool
+	gitOps         domain.GitOpsRuntimeState
+	gitOpsErr      error
+	tektonCalled   bool
+	tekton         domain.TektonRuntimeState
+	tektonErr      error
+	argoCDCalled   bool
+	argoCD         domain.ArgoCDRuntimeState
+	argoCDErr      error
+	runtimeCalled  bool
+	runtime        domain.RuntimeObservationState
+	runtimeErr     error
 }
 
 func (f *sourceRuntimeStateStoreFake) Get(_ context.Context, idOrNumber string) (domain.ChangeRuntimeState, error) {
@@ -45,6 +48,13 @@ func (f *sourceRuntimeStateStoreFake) UpsertSource(_ context.Context, idOrNumber
 	f.idOrNumber = idOrNumber
 	f.state = state
 	return f.err
+}
+
+func (f *sourceRuntimeStateStoreFake) UpsertArtifact(_ context.Context, idOrNumber string, state domain.ArtifactRuntimeState) error {
+	f.artifactCalled = true
+	f.idOrNumber = idOrNumber
+	f.artifact = state
+	return f.artifactErr
 }
 
 func (f *sourceRuntimeStateStoreFake) UpsertGitOps(_ context.Context, idOrNumber string, state domain.GitOpsRuntimeState) error {

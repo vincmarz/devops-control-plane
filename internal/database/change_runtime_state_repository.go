@@ -27,7 +27,7 @@ func (r *ChangeRuntimeStateRepository) Get(ctx context.Context, idOrNumber strin
 
 	var state domain.ChangeRuntimeState
 	var exists bool
-	var rawSource, rawGitOps, rawTekton, rawArgoCD, rawRuntime []byte
+	var rawSource, rawArtifact, rawGitOps, rawTekton, rawArgoCD, rawRuntime []byte
 	var createdAt, updatedAt any
 
 	err := r.db.Pool.QueryRow(ctx, `
@@ -35,6 +35,7 @@ func (r *ChangeRuntimeStateRepository) Get(ctx context.Context, idOrNumber strin
             cr.id::text,
             crs.change_request_id IS NOT NULL,
             COALESCE(crs.source_state, '{}'::jsonb),
+            COALESCE(crs.artifact_state, '{}'::jsonb),
             COALESCE(crs.gitops_state, '{}'::jsonb),
             COALESCE(crs.tekton_state, '{}'::jsonb),
             COALESCE(crs.argocd_state, '{}'::jsonb),
@@ -48,6 +49,7 @@ func (r *ChangeRuntimeStateRepository) Get(ctx context.Context, idOrNumber strin
 		&state.ChangeRequestID,
 		&exists,
 		&rawSource,
+		&rawArtifact,
 		&rawGitOps,
 		&rawTekton,
 		&rawArgoCD,
@@ -64,6 +66,9 @@ func (r *ChangeRuntimeStateRepository) Get(ctx context.Context, idOrNumber strin
 
 	if err := decodeRuntimeStateSection(rawSource, &state.Source); err != nil {
 		return domain.ChangeRuntimeState{}, fmt.Errorf("decode source runtime state: %w", err)
+	}
+	if err := decodeRuntimeStateSection(rawArtifact, &state.Artifact); err != nil {
+		return domain.ChangeRuntimeState{}, fmt.Errorf("decode artifact runtime state: %w", err)
 	}
 	if err := decodeRuntimeStateSection(rawGitOps, &state.GitOps); err != nil {
 		return domain.ChangeRuntimeState{}, fmt.Errorf("decode GitOps runtime state: %w", err)
@@ -94,6 +99,10 @@ func (r *ChangeRuntimeStateRepository) UpsertSource(ctx context.Context, idOrNum
 	return r.upsertSection(ctx, idOrNumber, "source_state", state)
 }
 
+func (r *ChangeRuntimeStateRepository) UpsertArtifact(ctx context.Context, idOrNumber string, state domain.ArtifactRuntimeState) error {
+	return r.upsertSection(ctx, idOrNumber, "artifact_state", state)
+}
+
 func (r *ChangeRuntimeStateRepository) UpsertGitOps(ctx context.Context, idOrNumber string, state domain.GitOpsRuntimeState) error {
 	return r.upsertSection(ctx, idOrNumber, "gitops_state", state)
 }
@@ -116,11 +125,12 @@ func (r *ChangeRuntimeStateRepository) upsertSection(ctx context.Context, idOrNu
 		return errors.New("change id or number is required")
 	}
 	allowed := map[string]bool{
-		"source_state":  true,
-		"gitops_state":  true,
-		"tekton_state":  true,
-		"argocd_state":  true,
-		"runtime_state": true,
+		"source_state":   true,
+		"artifact_state": true,
+		"gitops_state":   true,
+		"tekton_state":   true,
+		"argocd_state":   true,
+		"runtime_state":  true,
 	}
 	if !allowed[column] {
 		return fmt.Errorf("unsupported runtime state section %q", column)
