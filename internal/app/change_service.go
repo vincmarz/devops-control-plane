@@ -772,6 +772,18 @@ func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) 
 		}
 	}
 	if s.changeRuntimeStateStore != nil {
+		runtimeStateID := runtimeStateChangeID(change)
+		if correlationStatus == "Matched" && strings.TrimSpace(deployment.Revision) != "" {
+			current, getErr := s.changeRuntimeStateStore.Get(ctx, runtimeStateID)
+			if getErr != nil {
+				return nil, fmt.Errorf("load runtime state before persisting observed GitOps commit: %w", getErr)
+			}
+			gitOps := current.GitOps
+			gitOps.CommitSHA = strings.TrimSpace(deployment.Revision)
+			if upsertErr := s.changeRuntimeStateStore.UpsertGitOps(ctx, runtimeStateID, gitOps); upsertErr != nil {
+				return nil, fmt.Errorf("persist observed GitOps commit after checking deployment: %w", upsertErr)
+			}
+		}
 		state := domain.ArgoCDRuntimeState{
 			ApplicationName:        deployment.ApplicationName,
 			Provider:               deployment.GitOpsProvider,
@@ -786,7 +798,7 @@ func (s *ChangeService) CheckDeployment(ctx context.Context, idOrNumber string) 
 			HealthStatus:           deployment.HealthStatus,
 			CorrelationStatus:      correlationStatus,
 		}
-		if err := s.changeRuntimeStateStore.UpsertArgoCD(ctx, runtimeStateChangeID(change), state); err != nil {
+		if err := s.changeRuntimeStateStore.UpsertArgoCD(ctx, runtimeStateID, state); err != nil {
 			return nil, fmt.Errorf("persist Argo CD runtime state after checking deployment: %w", err)
 		}
 	}
