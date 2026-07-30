@@ -11,7 +11,16 @@ import (
 
 func TestCheckDeploymentPersistsArgoCDStateBeforeMarkStep(t *testing.T) {
 	changeStore := &argocdFakeStore{change: domain.ChangeRequest{ID: "change-id", ChangeNumber: "CHG-30", ApplicationName: "demo-go-color-app", TargetEnvironment: "staging"}}
-	runtimeStore := &sourceRuntimeStateStoreFake{}
+	runtimeStore := &sourceRuntimeStateStoreFake{current: domain.ChangeRuntimeState{
+		GitOps: domain.GitOpsRuntimeState{
+			Provider:      "github",
+			ProviderRef:   "github-public",
+			ProjectPath:   "vincmarz/demo-app-gitops",
+			RepositoryURL: "https://github.com/vincmarz/demo-app-gitops.git",
+			DefaultBranch: "main",
+			Revision:      "main",
+		},
+	}}
 	service := NewChangeService(
 		changeStore,
 		WithChangeRuntimeStateStore(runtimeStore),
@@ -35,6 +44,15 @@ func TestCheckDeploymentPersistsArgoCDStateBeforeMarkStep(t *testing.T) {
 
 	if _, err := service.CheckDeployment(context.Background(), changeStore.change.ChangeNumber); err != nil {
 		t.Fatal(err)
+	}
+	if !runtimeStore.gitOpsCalled {
+		t.Fatal("GitOps runtime state was not updated with the observed commit")
+	}
+	if runtimeStore.gitOps.CommitSHA != "observed-sha" || runtimeStore.gitOps.Revision != "main" {
+		t.Fatalf("GitOps observed commit state = %#v", runtimeStore.gitOps)
+	}
+	if runtimeStore.gitOps.Provider != "github" || runtimeStore.gitOps.ProviderRef != "github-public" || runtimeStore.gitOps.ProjectPath != "vincmarz/demo-app-gitops" {
+		t.Fatalf("GitOps identity state = %#v", runtimeStore.gitOps)
 	}
 	if !runtimeStore.argoCDCalled {
 		t.Fatal("Argo CD runtime state was not persisted")
@@ -68,6 +86,39 @@ func TestCheckDeploymentDoesNotMarkStepWhenArgoCDPersistenceFails(t *testing.T) 
 	_, err := service.CheckDeployment(context.Background(), changeStore.change.ChangeNumber)
 	if err == nil || !strings.Contains(err.Error(), "persist Argo CD runtime state after checking deployment") {
 		t.Fatalf("error = %v", err)
+	}
+	if changeStore.markedStatus != "" {
+		t.Fatalf("MarkStep was called with %q", changeStore.markedStatus)
+	}
+}
+
+func TestCheckDeploymentDoesNotMarkStepWhenGitOpsCommitPersistenceFails(t *testing.T) {
+	changeStore := &argocdFakeStore{change: domain.ChangeRequest{ID: "change-id", ChangeNumber: "CHG-32", ApplicationName: "demo-go-color-app"}}
+	runtimeStore := &sourceRuntimeStateStoreFake{
+		current:   domain.ChangeRuntimeState{GitOps: domain.GitOpsRuntimeState{Revision: "main"}},
+		gitOpsErr: errors.New("database unavailable"),
+	}
+	service := NewChangeService(
+		changeStore,
+		WithChangeRuntimeStateStore(runtimeStore),
+		WithArgoCDCheckDeployment(func(context.Context, domain.ChangeRequest) (ArgoCDDeploymentResult, error) {
+			return ArgoCDDeploymentResult{
+				ApplicationName:       "demo-go-color-app",
+				SyncStatus:            "Synced",
+				HealthStatus:          "Healthy",
+				Revision:              "observed-sha",
+				RepositoryURL:         "https://github.com/vincmarz/demo-app-gitops.git",
+				DeclaredRepositoryURL: "https://github.com/vincmarz/demo-app-gitops.git",
+			}, nil
+		}),
+	)
+
+	_, err := service.CheckDeployment(context.Background(), changeStore.change.ChangeNumber)
+	if err == nil || !strings.Contains(err.Error(), "persist observed GitOps commit after checking deployment") {
+		t.Fatalf("error = %v", err)
+	}
+	if runtimeStore.argoCDCalled {
+		t.Fatal("Argo CD runtime state was persisted after GitOps commit persistence failed")
 	}
 	if changeStore.markedStatus != "" {
 		t.Fatalf("MarkStep was called with %q", changeStore.markedStatus)
