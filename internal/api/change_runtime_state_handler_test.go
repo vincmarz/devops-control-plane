@@ -28,6 +28,9 @@ func (f *runtimeStateStoreFake) Get(_ context.Context, id string) (domain.Change
 func (f *runtimeStateStoreFake) UpsertSource(context.Context, string, domain.SourceRuntimeState) error {
 	return nil
 }
+func (f *runtimeStateStoreFake) UpsertArtifact(context.Context, string, domain.ArtifactRuntimeState) error {
+	return nil
+}
 func (f *runtimeStateStoreFake) UpsertGitOps(context.Context, string, domain.GitOpsRuntimeState) error {
 	return nil
 }
@@ -57,6 +60,7 @@ func TestGetChangeRuntimeStateReturnsAllSections(t *testing.T) {
 	store := &runtimeStateStoreFake{state: domain.ChangeRuntimeState{
 		ChangeRequestID: "change-id",
 		Source:          domain.SourceRuntimeState{Provider: "github"},
+		Artifact:        domain.ArtifactRuntimeState{Provider: "tekton", ImageDigest: "sha256:artifact"},
 		GitOps:          domain.GitOpsRuntimeState{Revision: "main"},
 		Tekton:          domain.TektonRuntimeState{PipelineRunName: "validation-run"},
 		ArgoCD:          domain.ArgoCDRuntimeState{ApplicationName: "demo-go-color-app"},
@@ -78,7 +82,7 @@ func TestGetChangeRuntimeStateReturnsAllSections(t *testing.T) {
 	if store.id != "CHG-50" || envelope.Data.ChangeRequestID != "change-id" {
 		t.Fatalf("runtime state response = id:%q data:%#v", store.id, envelope.Data)
 	}
-	if envelope.Data.Source.Provider != "github" || envelope.Data.Runtime.Status != "Ready" {
+	if envelope.Data.Source.Provider != "github" || envelope.Data.Artifact.ImageDigest != "sha256:artifact" || envelope.Data.Runtime.Status != "Ready" {
 		t.Fatalf("runtime sections = %#v", envelope.Data)
 	}
 }
@@ -98,7 +102,7 @@ func TestGetChangeRuntimeStateReturnsEmptySections(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
 		t.Fatal(err)
 	}
-	for _, section := range []string{"source", "gitops", "tekton", "argocd", "runtime"} {
+	for _, section := range []string{"source", "artifact", "gitops", "tekton", "argocd", "runtime"} {
 		if _, ok := envelope.Data[section]; !ok {
 			t.Fatalf("missing section %q in %#v", section, envelope.Data)
 		}

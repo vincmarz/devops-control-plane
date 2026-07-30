@@ -5,6 +5,7 @@ import "time"
 type ChangeRuntimeState struct {
 	ChangeRequestID string                  `json:"changeRequestID"`
 	Source          SourceRuntimeState      `json:"source"`
+	Artifact        ArtifactRuntimeState    `json:"artifact"`
 	GitOps          GitOpsRuntimeState      `json:"gitops"`
 	Tekton          TektonRuntimeState      `json:"tekton"`
 	ArgoCD          ArgoCDRuntimeState      `json:"argocd"`
@@ -27,6 +28,25 @@ type SourceRuntimeState struct {
 	ProposalURL    string `json:"proposalURL,omitempty"`
 	ProposalState  string `json:"proposalState,omitempty"`
 	MergeCommitSHA string `json:"mergeCommitSHA,omitempty"`
+}
+
+type ArtifactRuntimeState struct {
+	Provider            string `json:"provider,omitempty"`
+	Namespace           string `json:"namespace,omitempty"`
+	PipelineName        string `json:"pipelineName,omitempty"`
+	PipelineRunName     string `json:"pipelineRunName,omitempty"`
+	PipelineRunUID      string `json:"pipelineRunUID,omitempty"`
+	SourceProvider      string `json:"sourceProvider,omitempty"`
+	SourceProviderRef   string `json:"sourceProviderRef,omitempty"`
+	SourceRepositoryURL string `json:"sourceRepositoryURL,omitempty"`
+	SourceRevision      string `json:"sourceRevision,omitempty"`
+	SourceCommitSHA     string `json:"sourceCommitSHA,omitempty"`
+	ImageRepository     string `json:"imageRepository,omitempty"`
+	ImageTag            string `json:"imageTag,omitempty"`
+	ImageDigest         string `json:"imageDigest,omitempty"`
+	Status              string `json:"status,omitempty"`
+	Reason              string `json:"reason,omitempty"`
+	Message             string `json:"message,omitempty"`
 }
 
 type GitOpsRuntimeState struct {

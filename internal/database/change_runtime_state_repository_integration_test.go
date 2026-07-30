@@ -37,7 +37,7 @@ func TestChangeRuntimeStateRepository_Integration(t *testing.T) {
 	if empty.ChangeRequestID != change.ID {
 		t.Fatalf("empty state change ID = %q, want %q", empty.ChangeRequestID, change.ID)
 	}
-	if empty.Source.Provider != "" || empty.GitOps.Revision != "" || empty.Tekton.Status != "" || empty.ArgoCD.SyncStatus != "" {
+	if empty.Source.Provider != "" || empty.Artifact.ImageDigest != "" || empty.GitOps.Revision != "" || empty.Tekton.Status != "" || empty.ArgoCD.SyncStatus != "" {
 		t.Fatalf("expected empty runtime state, got %#v", empty)
 	}
 
@@ -61,6 +61,18 @@ func TestChangeRuntimeStateRepository_Integration(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Millisecond)
+	artifact := domain.ArtifactRuntimeState{
+		Provider: "tekton", Namespace: "devops-ci-demo", PipelineName: "go-build-and-push",
+		PipelineRunName: "devops-cp-build-chg-1", PipelineRunUID: "build-uid",
+		SourceProvider: "github", SourceProviderRef: "github-public",
+		SourceRepositoryURL: source.RepositoryURL, SourceRevision: "main", SourceCommitSHA: "source-sha",
+		ImageRepository: "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app",
+		ImageTag:        "chg-1", ImageDigest: "sha256:artifact", Status: "True", Reason: "Succeeded",
+	}
+	if err := runtimeRepo.UpsertArtifact(ctx, change.ID, artifact); err != nil {
+		t.Fatalf("upsert artifact: %v", err)
+	}
+
 	gitops := domain.GitOpsRuntimeState{
 		Provider: "github", ProviderRef: "github-public",
 		ProjectPath: "vincmarz/demo-app-gitops", RepositoryURL: "https://github.com/vincmarz/demo-app-gitops.git",
@@ -104,6 +116,9 @@ func TestChangeRuntimeStateRepository_Integration(t *testing.T) {
 	if got.Source.Branch != source.Branch {
 		t.Fatalf("source state was overwritten: %#v", got.Source)
 	}
+	if got.Artifact.ImageDigest != artifact.ImageDigest || got.Artifact.SourceCommitSHA != source.CommitSHA {
+		t.Fatalf("artifact state = %#v", got.Artifact)
+	}
 	if got.GitOps.Revision != "main" || got.GitOps.CommitSHA != "gitops-sha" {
 		t.Fatalf("GitOps state = %#v", got.GitOps)
 	}
@@ -126,6 +141,9 @@ func TestChangeRuntimeStateRepository_Integration(t *testing.T) {
 	}
 	if err := runtimeRepo.UpsertSource(ctx, missingID, source); err == nil || !strings.Contains(err.Error(), "change not found") {
 		t.Fatalf("upsert missing change error = %v", err)
+	}
+	if err := runtimeRepo.UpsertArtifact(ctx, missingID, artifact); err == nil || !strings.Contains(err.Error(), "change not found") {
+		t.Fatalf("upsert missing artifact error = %v", err)
 	}
 
 	if _, err := db.Pool.Exec(ctx, `DELETE FROM change_requests WHERE id = $1::uuid`, change.ID); err != nil {

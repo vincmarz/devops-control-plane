@@ -38,6 +38,7 @@ func setupTestDB(t *testing.T) *database.DB {
 	migrationNames := []string{
 		"000001_init.up.sql",
 		"000002_change_runtime_states.up.sql",
+		"000003_artifact_runtime_state.up.sql",
 	}
 	for _, migrationName := range migrationNames {
 		migration, err := filepath.Abs(filepath.Join("..", "..", "migrations", migrationName))

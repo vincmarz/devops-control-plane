@@ -12,6 +12,7 @@ func TestGetRuntimeStateReturnsPersistedSections(t *testing.T) {
 	runtimeStore := &sourceRuntimeStateStoreFake{current: domain.ChangeRuntimeState{
 		ChangeRequestID: "change-id",
 		Source:          domain.SourceRuntimeState{Provider: "github", Branch: "change/CHG-50"},
+		Artifact:        domain.ArtifactRuntimeState{Provider: "tekton", ImageDigest: "sha256:artifact"},
 		GitOps:          domain.GitOpsRuntimeState{Provider: "github", Revision: "main"},
 		Tekton:          domain.TektonRuntimeState{PipelineRunName: "validation-run", Status: "True"},
 		ArgoCD:          domain.ArgoCDRuntimeState{ApplicationName: "demo-go-color-app", SyncStatus: "Synced"},
@@ -26,7 +27,7 @@ func TestGetRuntimeStateReturnsPersistedSections(t *testing.T) {
 	if !runtimeStore.getCalled || runtimeStore.idOrNumber != "CHG-50" {
 		t.Fatalf("runtime store call = called:%v id:%q", runtimeStore.getCalled, runtimeStore.idOrNumber)
 	}
-	if state.Source.Provider != "github" || state.GitOps.Revision != "main" || state.Tekton.PipelineRunName != "validation-run" {
+	if state.Source.Provider != "github" || state.Artifact.ImageDigest != "sha256:artifact" || state.GitOps.Revision != "main" || state.Tekton.PipelineRunName != "validation-run" {
 		t.Fatalf("repository and validation state = %#v", state)
 	}
 	if state.ArgoCD.ApplicationName != "demo-go-color-app" || state.Runtime.Status != "Ready" {
