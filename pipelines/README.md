@@ -4,11 +4,15 @@ This directory contains Tekton resources used by the DevOps Control Plane lab.
 
 ## Source of truth
 
-The source-of-truth GitOps validation pipeline is:
+The source-of-truth pipeline definitions are:
 
 ```text
 pipelines/validate-gitops.yaml
+pipelines/go-build-and-push.yaml
 ```
+
+`validate-gitops` validates the GitOps repository. `go-build-and-push` builds
+an application source commit and publishes an image with immutable digest results.
 
 Runtime namespace:
 
@@ -27,6 +31,7 @@ The DevOps Control Plane OpenShift deployment must be configured with:
 ```text
 TEKTON_NAMESPACE=devops-ci-demo
 TEKTON_PIPELINE_NAME=validate-gitops
+TEKTON_BUILD_PIPELINE_NAME=go-build-and-push
 TEKTON_GIT_URL=https://github.com/vincmarz/demo-app-gitops.git
 TEKTON_GIT_REVISION_TEMPLATE=change/{changeNumber}
 TEKTON_VALIDATION_PATH=apps/demo-go-color-app
@@ -74,3 +79,20 @@ These references are expected to point to secrets managed outside the GitOps rep
 ### Future hardening
 
 Future phases may replace or complement the shell-based checks with a policy engine such as OPA/Conftest or cluster-side policy admission through Kyverno/OpenShift policy mechanisms.
+
+## Application build pipeline
+
+The build pipeline accepts `GIT_URL`, `GIT_REVISION`, and `IMAGE`. The Control
+Plane must pass an immutable commit as `GIT_REVISION` and a deterministic image
+tag instead of relying on `latest`.
+
+The pipeline exposes these results:
+
+```text
+SOURCE_COMMIT
+IMAGE_URL
+IMAGE_DIGEST
+```
+
+`git-clone` and `buildah` are namespaced Tasks supplied and managed by OpenShift
+Pipelines. Their full Task definitions are intentionally not duplicated here.

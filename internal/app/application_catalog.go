@@ -55,7 +55,7 @@ func DefaultApplicationCatalogFallback() ApplicationCatalog {
 	catalog, err := NewApplicationCatalog([]ApplicationDefinition{{
 		Name: "demo-go-color-app",
 		Repositories: []RepositoryBinding{
-			{Provider: RepositoryProviderGitLab, ProviderRef: "gitlab-lab", Role: RepositoryRoleSource, ProjectID: 1, ProjectPath: "devops-lab/demo-go-color-app-gitops", RepositoryURL: "https://gitlab-devops-gitlab.apps.ocp4.mim.lan/devops-lab/demo-go-color-app-gitops.git", DefaultBranch: "main", WorkflowEnabled: true},
+			{Provider: RepositoryProviderGitHub, ProviderRef: "github-public", Role: RepositoryRoleSource, ProjectPath: "vincmarz/demo-go-color-app", RepositoryURL: "https://github.com/vincmarz/demo-go-color-app.git", DefaultBranch: "main", WorkflowEnabled: true},
 			{Provider: RepositoryProviderGitHub, ProviderRef: "github-public", Role: RepositoryRoleGitOps, ProjectPath: "vincmarz/demo-app-gitops", RepositoryURL: "https://github.com/vincmarz/demo-app-gitops.git", DefaultBranch: "main", ConsumedBy: []string{"argocd", "tekton"}},
 		},
 	}})

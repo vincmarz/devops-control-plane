@@ -1,0 +1,85 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: go-build-and-push
+  namespace: devops-ci-demo
+  labels:
+    app: demo-go-color-app
+    lab: openshift-devops-go
+    devops-control-plane/workflow-type: build
+spec:
+  description: |
+    Provider-neutral application build pipeline for the DevOps Control Plane.
+    It clones an immutable source revision, builds the application container
+    with Buildah, pushes the image, and exposes source and image results.
+  params:
+    - name: GIT_URL
+      type: string
+      description: Application source repository URL.
+      default: https://github.com/vincmarz/demo-go-color-app.git
+    - name: GIT_REVISION
+      type: string
+      description: Immutable source commit to build.
+      default: main
+    - name: IMAGE
+      type: string
+      description: Fully qualified image reference to build and publish.
+      default: image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest
+  results:
+    - name: SOURCE_COMMIT
+      description: Concrete source commit cloned by the build.
+      value: $(tasks.clone-repository.results.COMMIT)
+    - name: IMAGE_URL
+      description: Image reference published by Buildah.
+      value: $(tasks.build-and-push.results.IMAGE_URL)
+    - name: IMAGE_DIGEST
+      description: Immutable image digest produced by Buildah.
+      value: $(tasks.build-and-push.results.IMAGE_DIGEST)
+  workspaces:
+    - name: shared-workspace
+      description: Workspace shared between git-clone and Buildah.
+    - name: dockerconfig
+      description: Registry authentication in config.json or .dockerconfigjson format.
+  tasks:
+    - name: clone-repository
+      taskRef:
+        kind: Task
+        name: git-clone
+      params:
+        - name: URL
+          value: $(params.GIT_URL)
+        - name: REVISION
+          value: $(params.GIT_REVISION)
+        - name: DELETE_EXISTING
+          value: "true"
+        - name: VERBOSE
+          value: "true"
+        - name: DEPTH
+          value: "1"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+    - name: build-and-push
+      runAfter:
+        - clone-repository
+      taskRef:
+        kind: Task
+        name: buildah
+      params:
+        - name: IMAGE
+          value: $(params.IMAGE)
+        - name: DOCKERFILE
+          value: ./Containerfile
+        - name: CONTEXT
+          value: .
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: TLS_VERIFY
+          value: "false"
+        - name: VERBOSE
+          value: "true"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: dockerconfig
+          workspace: dockerconfig

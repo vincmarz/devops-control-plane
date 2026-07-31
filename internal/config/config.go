@@ -41,6 +41,7 @@ type Config struct {
 
 	TektonNamespace           string
 	TektonPipelineName        string
+	TektonBuildPipelineName   string
 	TektonServiceAccount      string
 	TektonTimeoutSeconds      int
 	TektonPollIntervalSecs    int
@@ -99,7 +100,8 @@ func Load() Config {
 		GitHubCAFile:         getEnv("GITHUB_CA_FILE", ""),
 
 		TektonNamespace:           getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
-		TektonPipelineName:        getEnv("TEKTON_PIPELINE_NAME", "go-build-and-push"),
+		TektonPipelineName:        getEnv("TEKTON_PIPELINE_NAME", "validate-gitops"),
+		TektonBuildPipelineName:   getEnv("TEKTON_BUILD_PIPELINE_NAME", "go-build-and-push"),
 		TektonServiceAccount:      getEnv("TEKTON_SERVICE_ACCOUNT", "pipeline"),
 		TektonTimeoutSeconds:      getIntEnv("TEKTON_TIMEOUT_SECONDS", 900),
 		TektonPollIntervalSecs:    getIntEnv("TEKTON_POLL_INTERVAL_SECONDS", 5),
