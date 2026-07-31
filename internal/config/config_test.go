@@ -178,3 +178,31 @@ func TestLoadFallsBackToDisabledForInvalidRuntimeEnablementFlags(t *testing.T) {
 		t.Fatal("RuntimeClientFactoryArgoCDEnabled invalid value fallback = true, want false")
 	}
 }
+
+func TestLoadDefaultsValidationAndBuildPipelinesIndependently(t *testing.T) {
+	t.Setenv("TEKTON_PIPELINE_NAME", "")
+	t.Setenv("TEKTON_BUILD_PIPELINE_NAME", "")
+
+	cfg := Load()
+
+	if cfg.TektonPipelineName != "validate-gitops" {
+		t.Fatalf("TektonPipelineName = %q, want validate-gitops", cfg.TektonPipelineName)
+	}
+	if cfg.TektonBuildPipelineName != "go-build-and-push" {
+		t.Fatalf("TektonBuildPipelineName = %q, want go-build-and-push", cfg.TektonBuildPipelineName)
+	}
+}
+
+func TestLoadOverridesValidationAndBuildPipelinesIndependently(t *testing.T) {
+	t.Setenv("TEKTON_PIPELINE_NAME", "custom-validation")
+	t.Setenv("TEKTON_BUILD_PIPELINE_NAME", "custom-build")
+
+	cfg := Load()
+
+	if cfg.TektonPipelineName != "custom-validation" {
+		t.Fatalf("TektonPipelineName = %q", cfg.TektonPipelineName)
+	}
+	if cfg.TektonBuildPipelineName != "custom-build" {
+		t.Fatalf("TektonBuildPipelineName = %q", cfg.TektonBuildPipelineName)
+	}
+}

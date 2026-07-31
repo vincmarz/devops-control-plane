@@ -123,3 +123,29 @@ func TestApplicationCatalogRejectsCredentialFields(t *testing.T) {
 		t.Fatalf("error=%v", err)
 	}
 }
+
+func TestDefaultApplicationCatalogFallbackUsesBuildableGitHubSource(t *testing.T) {
+	catalog := DefaultApplicationCatalogFallback()
+
+	source, err := catalog.ResolveSourceBinding("demo-go-color-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.Provider != RepositoryProviderGitHub || source.ProviderRef != "github-public" {
+		t.Fatalf("source provider = %s/%s", source.Provider, source.ProviderRef)
+	}
+	if source.ProjectPath != "vincmarz/demo-go-color-app" || source.RepositoryURL != "https://github.com/vincmarz/demo-go-color-app.git" {
+		t.Fatalf("source binding = %#v", source)
+	}
+	if !source.WorkflowEnabled {
+		t.Fatal("source workflow is disabled")
+	}
+
+	gitops, err := catalog.ResolveGitOpsBinding("demo-go-color-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gitops.Provider != RepositoryProviderGitHub || gitops.RepositoryURL != "https://github.com/vincmarz/demo-app-gitops.git" {
+		t.Fatalf("GitOps binding = %#v", gitops)
+	}
+}
