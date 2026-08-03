@@ -142,6 +142,15 @@ func (h *Handler) validateChange(w http.ResponseWriter, r *http.Request, id stri
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
+func (h *Handler) startBuild(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := h.deps.Services.Changes.StartBuild(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "TEKTON_START_BUILD_FAILED", Message: "Unable to start Tekton application build for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
+}
+
 func (h *Handler) checkValidation(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := h.deps.Services.Changes.CheckValidation(r.Context(), id)
 	if err != nil {

@@ -190,6 +190,8 @@ func (h *Handler) uiChangeAction(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case "validate":
 		_, err = h.deps.Services.Changes.Validate(r.Context(), id)
+	case "start-build":
+		_, err = h.deps.Services.Changes.StartBuild(r.Context(), id)
 	case "check-validation":
 		_, err = h.deps.Services.Changes.CheckValidation(r.Context(), id)
 	case "create-branch":
@@ -542,6 +544,7 @@ func uiAction(name string, label string, description string, primary bool) map[s
 func allUIActions() []map[string]any {
 	return []map[string]any{
 		uiAction("validate", "Validate", "Start a Tekton validation PipelineRun.", true),
+		uiAction("start-build", "Start Build", "Build the immutable application source revision and publish a change-scoped image tag.", false),
 		uiAction("check-validation", "Check Validation", "Poll latest Tekton PipelineRun result.", false),
 		uiAction("check-deployment", "Check Deployment", "Check Argo CD sync and health state.", false),
 		uiAction("collect-evidence", "Collect Evidence", "Collect post-deployment Kubernetes/OpenShift evidence.", false),
@@ -625,7 +628,9 @@ func recommendedActions(change map[string]any) []map[string]any {
 	case "mergerequestopened":
 		return []map[string]any{uiAction("merge-request", "Merge Review Request", "Merge the review request when governance allows it.", true)}
 	case "mergerequestmerged":
-		return []map[string]any{uiAction("check-deployment", "Check Deployment", "Verify Argo CD sync and application health.", true)}
+		return []map[string]any{uiAction("start-build", "Start Build", "Build the merged immutable application source revision.", true)}
+	case "buildrunning":
+		return []map[string]any{}
 	case "deploymentprogressing", "deploymentoutofsync", "deploymentdegraded", "deploymentunknown":
 		return []map[string]any{uiAction("check-deployment", "Check Deployment", "Re-check Argo CD deployment status.", true)}
 	case "deploymentsyncedhealthy":
