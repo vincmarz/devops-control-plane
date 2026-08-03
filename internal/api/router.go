@@ -110,6 +110,8 @@ func (h *Handler) changeSubrouter(w http.ResponseWriter, r *http.Request) {
 		h.getChangeEvidence(w, r, id, parts[2])
 	case len(parts) == 2 && parts[1] == "validate" && r.Method == http.MethodPost:
 		h.validateChange(w, r, id)
+	case len(parts) == 2 && parts[1] == "start-build" && r.Method == http.MethodPost:
+		h.startBuild(w, r, id)
 	case len(parts) == 2 && parts[1] == "check-validation" && r.Method == http.MethodPost:
 		h.checkValidation(w, r, id)
 	case len(parts) == 2 && parts[1] == "check-deployment" && r.Method == http.MethodPost:
