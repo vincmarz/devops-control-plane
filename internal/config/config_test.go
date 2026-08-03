@@ -206,3 +206,28 @@ func TestLoadOverridesValidationAndBuildPipelinesIndependently(t *testing.T) {
 		t.Fatalf("TektonBuildPipelineName = %q", cfg.TektonBuildPipelineName)
 	}
 }
+
+func TestLoadDefaultsTektonBuildImageIndependently(t *testing.T) {
+	t.Setenv("TEKTON_IMAGE", "")
+	t.Setenv("TEKTON_BUILD_IMAGE", "")
+
+	cfg := Load()
+
+	if cfg.TektonBuildImage != "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app" {
+		t.Fatalf("TektonBuildImage = %q", cfg.TektonBuildImage)
+	}
+}
+
+func TestLoadOverridesTektonBuildImageIndependently(t *testing.T) {
+	t.Setenv("TEKTON_IMAGE", "unused")
+	t.Setenv("TEKTON_BUILD_IMAGE", "registry.example.local/team/application")
+
+	cfg := Load()
+
+	if cfg.TektonImage != "unused" {
+		t.Fatalf("TektonImage = %q", cfg.TektonImage)
+	}
+	if cfg.TektonBuildImage != "registry.example.local/team/application" {
+		t.Fatalf("TektonBuildImage = %q", cfg.TektonBuildImage)
+	}
+}

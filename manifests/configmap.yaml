@@ -39,6 +39,7 @@ data:
   TEKTON_GIT_REVISION: "main"
   TEKTON_VALIDATION_PATH: "apps/demo-go-color-app"
   TEKTON_IMAGE: "unused"
+  TEKTON_BUILD_IMAGE: "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app"
   TEKTON_WORKSPACE_PVC: "pipeline-workspace"
   TEKTON_DOCKERCONFIG_SECRET: "pipeline-registry-dockerconfig"
 
