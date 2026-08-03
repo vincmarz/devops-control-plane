@@ -197,6 +197,43 @@ func main() {
 			}, nil
 		}))
 
+		changeServiceOptions = append(changeServiceOptions, app.WithTektonStartBuild(func(ctx context.Context, change domain.ChangeRequest, request app.TektonStartBuildRequest) (app.TektonBuildRunResult, error) {
+			target, err := app.DefaultTechnicalRuntimeTargetResolver(cfg.TektonBuildPipelineName).Resolve(change.TargetEnvironment)
+			if err != nil {
+				return app.TektonBuildRunResult{}, err
+			}
+			selection, err := app.DefaultRuntimeClientProviderRegistry().Select(target)
+			if err != nil {
+				return app.TektonBuildRunResult{}, err
+			}
+			tektonRuntimeClient, err := tektonRuntimeClientProviderRegistry.Resolve(ctx, selection)
+			if err != nil {
+				return app.TektonBuildRunResult{}, err
+			}
+			ref, err := tektonRuntimeClient.CreatePipelineRun(ctx, app.TektonRuntimePipelineRunRequest{
+				Namespace:          target.TektonNamespace,
+				PipelineName:       target.TektonPipelineName,
+				ServiceAccountName: cfg.TektonServiceAccount,
+				GenerateName:       "devops-cp-build-" + strings.ToLower(change.ChangeNumber) + "-",
+				ChangeNumber:       request.ChangeNumber,
+				ApplicationName:    change.ApplicationName,
+				GitURL:             request.GitURL,
+				GitRevision:        request.GitRevision,
+				Image:              request.Image,
+				WorkspacePVC:       cfg.TektonWorkspacePVC,
+				DockerConfigSecret: cfg.TektonDockerConfigSecret,
+			})
+			if err != nil {
+				return app.TektonBuildRunResult{}, err
+			}
+			return app.TektonBuildRunResult{
+				Namespace:       ref.Namespace,
+				PipelineName:    target.TektonPipelineName,
+				PipelineRunName: ref.Name,
+				PipelineRunUID:  ref.UID,
+			}, nil
+		}, cfg.TektonBuildImage))
+
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonCheckValidation(func(ctx context.Context, change domain.ChangeRequest) (app.TektonValidationResult, error) {
 			gitOpsTarget, err := gitOpsRepositoryTargetResolver.Resolve(change.ApplicationName, app.GitOpsConsumerTekton)
 			if err != nil {

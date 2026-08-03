@@ -38,6 +38,22 @@ type TektonPipelineRunResult struct {
 // TektonRunPipelineFunc rappresenta la porta applicativa minima per avviare una PipelineRun Tekton.
 type TektonRunPipelineFunc func(ctx context.Context, change domain.ChangeRequest) (TektonPipelineRunResult, error)
 
+type TektonStartBuildRequest struct {
+	ChangeNumber string
+	GitURL       string
+	GitRevision  string
+	Image        string
+}
+
+type TektonBuildRunResult struct {
+	Namespace       string
+	PipelineName    string
+	PipelineRunName string
+	PipelineRunUID  string
+}
+
+type TektonStartBuildFunc func(ctx context.Context, change domain.ChangeRequest, request TektonStartBuildRequest) (TektonBuildRunResult, error)
+
 type TektonValidationResult struct {
 	PipelineRunName string
 	Namespace       string
@@ -139,6 +155,13 @@ type ChangeServiceOption func(*ChangeService)
 
 func WithTektonRunPipeline(fn TektonRunPipelineFunc) ChangeServiceOption {
 	return func(s *ChangeService) { s.tektonRunPipeline = fn }
+}
+
+func WithTektonStartBuild(fn TektonStartBuildFunc, image string) ChangeServiceOption {
+	return func(s *ChangeService) {
+		s.tektonStartBuild = fn
+		s.tektonBuildImage = strings.TrimSpace(image)
+	}
 }
 
 func WithTektonCheckValidation(fn TektonCheckValidationFunc) ChangeServiceOption {
@@ -259,6 +282,8 @@ type ChangeService struct {
 	store ChangeStore
 
 	tektonRunPipeline                       TektonRunPipelineFunc
+	tektonStartBuild                        TektonStartBuildFunc
+	tektonBuildImage                        string
 	tektonCheckValidation                   TektonCheckValidationFunc
 	argocdCheckDeployment                   ArgoCDCheckDeploymentFunc
 	evidenceStore                           EvidenceStore
@@ -498,6 +523,172 @@ func (s *ChangeService) TransitionLifecycle(ctx context.Context, idOrNumber stri
 	}
 
 	return s.store.TransitionLifecycle(ctx, idOrNumber, action, actor, message)
+}
+
+func selectBuildSourceCommit(source domain.SourceRuntimeState) (string, error) {
+	if strings.EqualFold(strings.TrimSpace(source.ProposalState), "merged") {
+		if commit := strings.TrimSpace(source.MergeCommitSHA); commit != "" {
+			return commit, nil
+		}
+	}
+	if commit := strings.TrimSpace(source.CommitSHA); commit != "" {
+		return commit, nil
+	}
+	return "", errors.New("source runtime state does not contain an immutable commit SHA")
+}
+
+func splitImageRepository(image string) (string, error) {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return "", errors.New("tekton build image is required")
+	}
+	lastSlash := strings.LastIndex(image, "/")
+	lastColon := strings.LastIndex(image, ":")
+	if lastColon > lastSlash {
+		image = image[:lastColon]
+	}
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return "", errors.New("tekton build image repository is required")
+	}
+	return image, nil
+}
+
+func deterministicBuildImageTag(changeNumber, commit string) (string, error) {
+	changeNumber = strings.ToLower(strings.TrimSpace(changeNumber))
+	commit = strings.ToLower(strings.TrimSpace(commit))
+	if changeNumber == "" {
+		return "", errors.New("change number is required")
+	}
+	if len(commit) < 7 {
+		return "", errors.New("source commit SHA must contain at least 7 characters")
+	}
+	var normalized strings.Builder
+	for _, value := range changeNumber {
+		if value >= 'a' && value <= 'z' || value >= '0' && value <= '9' || value == '-' || value == '_' || value == '.' {
+			normalized.WriteRune(value)
+		} else {
+			normalized.WriteByte('-')
+		}
+	}
+	tag := strings.Trim(normalized.String(), "-._")
+	if tag == "" {
+		return "", errors.New("change number does not contain valid image tag characters")
+	}
+	return tag + "-" + commit[:7], nil
+}
+
+func correlateBuildSource(binding RepositoryBinding, source domain.SourceRuntimeState) error {
+	checks := []struct {
+		name     string
+		expected string
+		actual   string
+	}{
+		{name: "provider", expected: binding.Provider, actual: source.Provider},
+		{name: "providerRef", expected: binding.ProviderRef, actual: source.ProviderRef},
+		{name: "repositoryURL", expected: binding.RepositoryURL, actual: source.RepositoryURL},
+	}
+	for _, check := range checks {
+		if strings.TrimSpace(check.actual) == "" {
+			return fmt.Errorf("source runtime state %s is required", check.name)
+		}
+		if strings.TrimSpace(check.actual) != strings.TrimSpace(check.expected) {
+			return fmt.Errorf("source runtime state %s does not match application catalog", check.name)
+		}
+	}
+	return nil
+}
+
+func (s *ChangeService) StartBuild(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.tektonStartBuild == nil {
+		return nil, errors.New("tekton start build client is not configured")
+	}
+	if s.changeRuntimeStateStore == nil {
+		return nil, errors.New("change runtime state store is not configured")
+	}
+	if s.gitSourceBindingResolver == nil {
+		return nil, errors.New("git source binding resolver is not configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+	binding, err := s.gitSourceBindingResolver(change.ApplicationName)
+	if err != nil {
+		return nil, fmt.Errorf("resolve source binding for %q: %w", change.ApplicationName, err)
+	}
+	current, err := s.changeRuntimeStateStore.Get(ctx, runtimeStateChangeID(change))
+	if err != nil {
+		return nil, fmt.Errorf("read runtime state before starting build: %w", err)
+	}
+	if err := correlateBuildSource(binding, current.Source); err != nil {
+		return nil, err
+	}
+	commit, err := selectBuildSourceCommit(current.Source)
+	if err != nil {
+		return nil, err
+	}
+	imageRepository, err := splitImageRepository(s.tektonBuildImage)
+	if err != nil {
+		return nil, err
+	}
+	imageTag, err := deterministicBuildImageTag(change.ChangeNumber, commit)
+	if err != nil {
+		return nil, err
+	}
+	image := imageRepository + ":" + imageTag
+
+	build, err := s.tektonStartBuild(ctx, change, TektonStartBuildRequest{
+		ChangeNumber: change.ChangeNumber,
+		GitURL:       binding.RepositoryURL,
+		GitRevision:  commit,
+		Image:        image,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("start tekton application build for %q: %w", change.ChangeNumber, err)
+	}
+	artifact := domain.ArtifactRuntimeState{
+		Provider:            "tekton",
+		Namespace:           build.Namespace,
+		PipelineName:        build.PipelineName,
+		PipelineRunName:     build.PipelineRunName,
+		PipelineRunUID:      build.PipelineRunUID,
+		SourceProvider:      binding.Provider,
+		SourceProviderRef:   binding.ProviderRef,
+		SourceRepositoryURL: binding.RepositoryURL,
+		SourceRevision:      commit,
+		SourceCommitSHA:     commit,
+		ImageRepository:     imageRepository,
+		ImageTag:            imageTag,
+		Status:              "Unknown",
+		Reason:              "Running",
+		Message:             "Application build PipelineRun started",
+	}
+	if err := s.changeRuntimeStateStore.UpsertArtifact(ctx, runtimeStateChangeID(change), artifact); err != nil {
+		return nil, fmt.Errorf("persist artifact runtime state after creating PipelineRun name=%q uid=%q: %w", build.PipelineRunName, build.PipelineRunUID, err)
+	}
+	result, err := s.store.MarkStep(ctx, idOrNumber, "BuildRunning")
+	if err != nil {
+		return nil, err
+	}
+	result["artifact"] = map[string]any{
+		"provider":        artifact.Provider,
+		"namespace":       artifact.Namespace,
+		"pipelineName":    artifact.PipelineName,
+		"pipelineRunName": artifact.PipelineRunName,
+		"pipelineRunUID":  artifact.PipelineRunUID,
+		"sourceCommitSHA": artifact.SourceCommitSHA,
+		"imageRepository": artifact.ImageRepository,
+		"imageTag":        artifact.ImageTag,
+		"status":          artifact.Status,
+		"reason":          artifact.Reason,
+	}
+	return result, nil
 }
 
 // Validate esegue lo step tecnico Tekton validate e poi marca

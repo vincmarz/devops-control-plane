@@ -50,6 +50,7 @@ type Config struct {
 	TektonGitRevisionTemplate string
 	TektonValidationPath      string
 	TektonImage               string
+	TektonBuildImage          string
 	TektonWorkspacePVC        string
 	TektonDockerConfigSecret  string
 
@@ -110,6 +111,7 @@ func Load() Config {
 		TektonGitRevisionTemplate: getEnv("TEKTON_GIT_REVISION_TEMPLATE", ""),
 		TektonValidationPath:      getEnv("TEKTON_VALIDATION_PATH", ""),
 		TektonImage:               getEnv("TEKTON_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest"),
+		TektonBuildImage:          getEnv("TEKTON_BUILD_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app"),
 		TektonWorkspacePVC:        getEnv("TEKTON_WORKSPACE_PVC", "pipeline-workspace"),
 		TektonDockerConfigSecret:  getEnv("TEKTON_DOCKERCONFIG_SECRET", "pipeline-registry-dockerconfig"),
 
