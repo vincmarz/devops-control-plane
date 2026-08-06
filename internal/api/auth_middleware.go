@@ -290,7 +290,7 @@ func requiredRolesForRequest(r *http.Request) ([]string, bool) {
 
 func requiredRolesForAction(action string) ([]string, bool) {
 	switch action {
-	case "validate", "start-build", "check-validation", "check-deployment", "collect-evidence", "create-branch", "update-files", "open-merge-request", "sync":
+	case "validate", "start-build", "check-build", "check-validation", "check-deployment", "collect-evidence", "create-branch", "update-files", "open-merge-request", "sync":
 		return []string{"operator", "admin"}, true
 	case "submit", "approve", "reject", "start-execution", "complete-execution", "fail-execution", "close", "cancel", "merge-request":
 		return []string{"approver", "admin"}, true
