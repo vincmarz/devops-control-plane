@@ -142,6 +142,15 @@ func (h *Handler) validateChange(w http.ResponseWriter, r *http.Request, id stri
 	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
 }
 
+func (h *Handler) updateGitOps(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := h.deps.Services.Changes.UpdateGitOps(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, APIError{Code: "GITOPS_UPDATE_FAILED", Message: "Unable to update GitOps repository for ChangeRequest", TechnicalMessage: err.Error(), Recoverable: true}, nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result, map[string]any{"requestId": requestIDFromContext(r.Context())})
+}
+
 func (h *Handler) checkBuild(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := h.deps.Services.Changes.CheckBuild(r.Context(), id)
 	if err != nil {
