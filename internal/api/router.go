@@ -114,6 +114,8 @@ func (h *Handler) changeSubrouter(w http.ResponseWriter, r *http.Request) {
 		h.startBuild(w, r, id)
 	case len(parts) == 2 && parts[1] == "check-build" && r.Method == http.MethodPost:
 		h.checkBuild(w, r, id)
+	case len(parts) == 2 && parts[1] == "update-gitops" && r.Method == http.MethodPost:
+		h.updateGitOps(w, r, id)
 	case len(parts) == 2 && parts[1] == "check-validation" && r.Method == http.MethodPost:
 		h.checkValidation(w, r, id)
 	case len(parts) == 2 && parts[1] == "check-deployment" && r.Method == http.MethodPost:
