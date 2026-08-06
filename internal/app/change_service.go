@@ -54,6 +54,20 @@ type TektonBuildRunResult struct {
 
 type TektonStartBuildFunc func(ctx context.Context, change domain.ChangeRequest, request TektonStartBuildRequest) (TektonBuildRunResult, error)
 
+type TektonBuildStatusResult struct {
+	Name         string
+	Namespace    string
+	UID          string
+	Status       string
+	Reason       string
+	Message      string
+	SourceCommit string
+	ImageURL     string
+	ImageDigest  string
+}
+
+type TektonCheckBuildFunc func(ctx context.Context, change domain.ChangeRequest, namespace string, pipelineRunName string) (TektonBuildStatusResult, error)
+
 type TektonValidationResult struct {
 	PipelineRunName string
 	Namespace       string
@@ -162,6 +176,10 @@ func WithTektonStartBuild(fn TektonStartBuildFunc, image string) ChangeServiceOp
 		s.tektonStartBuild = fn
 		s.tektonBuildImage = strings.TrimSpace(image)
 	}
+}
+
+func WithTektonCheckBuild(fn TektonCheckBuildFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.tektonCheckBuild = fn }
 }
 
 func WithTektonCheckValidation(fn TektonCheckValidationFunc) ChangeServiceOption {
@@ -284,6 +302,7 @@ type ChangeService struct {
 	tektonRunPipeline                       TektonRunPipelineFunc
 	tektonStartBuild                        TektonStartBuildFunc
 	tektonBuildImage                        string
+	tektonCheckBuild                        TektonCheckBuildFunc
 	tektonCheckValidation                   TektonCheckValidationFunc
 	argocdCheckDeployment                   ArgoCDCheckDeploymentFunc
 	evidenceStore                           EvidenceStore
@@ -687,6 +706,115 @@ func (s *ChangeService) StartBuild(ctx context.Context, idOrNumber string) (map[
 		"imageTag":        artifact.ImageTag,
 		"status":          artifact.Status,
 		"reason":          artifact.Reason,
+	}
+	return result, nil
+}
+
+func isValidImageDigest(value string) bool {
+	value = strings.TrimSpace(value)
+	const prefix = "sha256:"
+	if !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	hex := value[len(prefix):]
+	if len(hex) != 64 {
+		return false
+	}
+	for _, r := range hex {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *ChangeService) CheckBuild(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.tektonCheckBuild == nil {
+		return nil, errors.New("tekton check build client is not configured")
+	}
+	if s.changeRuntimeStateStore == nil {
+		return nil, errors.New("change runtime state store is not configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+	current, err := s.changeRuntimeStateStore.Get(ctx, runtimeStateChangeID(change))
+	if err != nil {
+		return nil, fmt.Errorf("read runtime state before checking build: %w", err)
+	}
+	artifact := current.Artifact
+	pipelineRunName := strings.TrimSpace(artifact.PipelineRunName)
+	if pipelineRunName == "" {
+		return nil, errors.New("artifact runtime state does not contain a PipelineRun name")
+	}
+	namespace := strings.TrimSpace(artifact.Namespace)
+	if namespace == "" {
+		return nil, errors.New("artifact runtime state does not contain a namespace")
+	}
+
+	status, err := s.tektonCheckBuild(ctx, change, namespace, pipelineRunName)
+	if err != nil {
+		return nil, fmt.Errorf("check tekton application build for %q: %w", change.ChangeNumber, err)
+	}
+	if strings.TrimSpace(artifact.PipelineRunUID) != "" && strings.TrimSpace(status.UID) != "" && strings.TrimSpace(status.UID) != strings.TrimSpace(artifact.PipelineRunUID) {
+		return nil, errors.New("tekton PipelineRun UID does not match persisted artifact runtime state")
+	}
+
+	runtimeStatus := "BuildRunning"
+	switch status.Status {
+	case "True":
+		digest := strings.TrimSpace(status.ImageDigest)
+		if !isValidImageDigest(digest) {
+			return nil, fmt.Errorf("tekton build for %q completed without a valid image digest", change.ChangeNumber)
+		}
+		if strings.TrimSpace(status.SourceCommit) != "" && strings.TrimSpace(status.SourceCommit) != strings.TrimSpace(artifact.SourceCommitSHA) {
+			return nil, errors.New("tekton build source commit does not match persisted artifact runtime state")
+		}
+		artifact.ImageDigest = digest
+		artifact.Status = "True"
+		artifact.Reason = "Succeeded"
+		artifact.Message = "Application build completed"
+		runtimeStatus = "BuildSucceeded"
+	case "False":
+		artifact.Status = "False"
+		artifact.Reason = strings.TrimSpace(status.Reason)
+		if artifact.Reason == "" {
+			artifact.Reason = "Failed"
+		}
+		artifact.Message = strings.TrimSpace(status.Message)
+		runtimeStatus = "BuildFailed"
+	default:
+		artifact.Status = "Unknown"
+		artifact.Reason = "Running"
+		artifact.Message = "Application build is still running"
+		runtimeStatus = "BuildRunning"
+	}
+
+	if err := s.changeRuntimeStateStore.UpsertArtifact(ctx, runtimeStateChangeID(change), artifact); err != nil {
+		return nil, fmt.Errorf("persist artifact runtime state after checking build: %w", err)
+	}
+	result, err := s.store.MarkStep(ctx, idOrNumber, runtimeStatus)
+	if err != nil {
+		return nil, err
+	}
+	result["artifact"] = map[string]any{
+		"provider":        artifact.Provider,
+		"namespace":       artifact.Namespace,
+		"pipelineRunName": artifact.PipelineRunName,
+		"pipelineRunUID":  artifact.PipelineRunUID,
+		"sourceCommitSHA": artifact.SourceCommitSHA,
+		"imageRepository": artifact.ImageRepository,
+		"imageTag":        artifact.ImageTag,
+		"imageDigest":     artifact.ImageDigest,
+		"status":          artifact.Status,
+		"reason":          artifact.Reason,
+		"message":         artifact.Message,
 	}
 	return result, nil
 }

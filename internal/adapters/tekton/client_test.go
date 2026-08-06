@@ -159,3 +159,46 @@ func TestListTaskRunsByPipelineRun(t *testing.T) {
 		t.Fatalf("taskRun=%#v", taskRuns[0])
 	}
 }
+
+func TestGetPipelineRunByName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if r.URL.Path != "/apis/tekton.dev/v1/namespaces/devops-ci-demo/pipelineruns/build-run" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"metadata": map[string]any{"name": "build-run", "namespace": "devops-ci-demo", "uid": "build-uid"},
+			"status": map[string]any{
+				"completionTime": "2026-07-15T10:00:00Z",
+				"conditions":     []map[string]any{{"type": "Succeeded", "status": "True", "reason": "Succeeded", "message": "Tasks Completed: 2"}},
+				"results": []map[string]any{
+					{"name": "SOURCE_COMMIT", "value": "abcdef0123456789"},
+					{"name": "IMAGE_URL", "value": "registry/demo:tag"},
+					{"name": "IMAGE_DIGEST", "value": "sha256:aaaa"},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+	client, err := New(Config{APIURL: server.URL, Token: "test-token"}, WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := client.GetPipelineRunByName(context.Background(), "devops-ci-demo", "build-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Name != "build-run" || status.UID != "build-uid" || status.Status != "True" {
+		t.Fatalf("status=%#v", status)
+	}
+	got := map[string]string{}
+	for _, entry := range status.Results {
+		got[entry.Name] = entry.Value
+	}
+	if got["SOURCE_COMMIT"] != "abcdef0123456789" || got["IMAGE_DIGEST"] != "sha256:aaaa" || got["IMAGE_URL"] != "registry/demo:tag" {
+		t.Fatalf("results=%#v", status.Results)
+	}
+}
