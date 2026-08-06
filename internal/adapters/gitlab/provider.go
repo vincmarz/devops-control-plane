@@ -16,6 +16,7 @@ type ProviderClient interface {
 	CreateOrUpdateFile(ctx context.Context, projectID int, branch, filePath, commitMessage, content string) (RepositoryFile, error)
 	OpenMergeRequest(ctx context.Context, projectID int, sourceBranch, targetBranch, title, description string) (MergeRequest, error)
 	FindOpenMergeRequest(ctx context.Context, projectID int, sourceBranch, targetBranch string) (MergeRequest, error)
+	WaitUntilMergeable(ctx context.Context, projectID, mergeRequestIID int) (MergeRequest, error)
 	MergeMergeRequest(ctx context.Context, projectID, mergeRequestIID int, sha, mergeCommitMessage string) (MergeRequest, error)
 }
 
@@ -81,10 +82,19 @@ func (p *Provider) MergeRequest(ctx context.Context, target app.GitRepositoryTar
 	if err != nil {
 		return 0, "", "", err
 	}
-	// GitLab rejects PUT /merge with a stale sha (HTTP 405) when the branch HEAD
-	// has been recomputed after the MR was opened. Unlike GitHub, GitLab treats
-	// sha as an optimistic lock. In this governed single-MR flow we intentionally
-	// omit sha and let GitLab merge the current HEAD, matching GitHub behavior.
+
+	// GitLab computes merge-ability asynchronously. Immediately after the merge
+	// request is opened its detailed_merge_status is "checking"/"unchecked" and
+	// PUT /merge issued in that window returns HTTP 405 Method Not Allowed. Wait
+	// until GitLab reports the merge request as mergeable before merging. This
+	// race - not a stale sha - is the real cause of the 405 observed in the
+	// GitLab GitOps write path.
+	if _, err := p.client.WaitUntilMergeable(ctx, target.ProjectID, mergeRequest.IID); err != nil {
+		return 0, "", "", err
+	}
+
+	// The sha optimistic-lock is intentionally omitted so GitLab merges the
+	// current HEAD, matching GitHub behaviour in this governed single-MR flow.
 	merged, err := p.client.MergeMergeRequest(ctx, target.ProjectID, mergeRequest.IID, "", mergeCommitMessage)
 	if err != nil {
 		return 0, "", "", err

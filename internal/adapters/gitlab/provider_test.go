@@ -18,6 +18,8 @@ type fakeProviderClient struct {
 	targetBranch   string
 	mergeIID       int
 	mergeSHA       string
+	waitCalled     bool
+	waitIID        int
 	repositoryFile RepositoryFile
 	err            error
 }
@@ -48,7 +50,18 @@ func (f *fakeProviderClient) FindOpenMergeRequest(_ context.Context, projectID i
 	f.projectID, f.sourceBranch, f.targetBranch = projectID, sourceBranch, targetBranch
 	return MergeRequest{IID: 9, SHA: "abc123"}, f.err
 }
+func (f *fakeProviderClient) WaitUntilMergeable(_ context.Context, projectID, mergeRequestIID int) (MergeRequest, error) {
+	f.waitCalled = true
+	f.waitIID = mergeRequestIID
+	if f.err != nil {
+		return MergeRequest{}, f.err
+	}
+	return MergeRequest{IID: mergeRequestIID, DetailedMergeStatus: "mergeable"}, nil
+}
 func (f *fakeProviderClient) MergeMergeRequest(_ context.Context, projectID, mergeRequestIID int, sha, mergeCommitMessage string) (MergeRequest, error) {
+	if !f.waitCalled {
+		return MergeRequest{}, errors.New("merge attempted before WaitUntilMergeable")
+	}
 	f.projectID, f.mergeIID, f.mergeSHA = projectID, mergeRequestIID, sha
 	return MergeRequest{IID: mergeRequestIID, WebURL: "https://gitlab.example/mr/9", MergeCommitSHA: "def456"}, f.err
 }
@@ -122,6 +135,18 @@ func TestProviderMergeRequestFindsAndMerges(t *testing.T) {
 	}
 	if client.mergeIID != 9 || client.mergeSHA != "" {
 		t.Fatalf("unexpected merge call: %#v", client)
+	}
+	if !client.waitCalled || client.waitIID != 9 {
+		t.Fatalf("expected WaitUntilMergeable to be called for IID 9 before merge: %#v", client)
+	}
+}
+
+func TestProviderMergeRequestFailsWhenNotMergeable(t *testing.T) {
+	client := &fakeProviderClient{err: errors.New("timed out waiting for gitlab merge request 9 to become mergeable")}
+	provider, _ := NewProvider("gitlab-lab", client)
+	_, _, _, err := provider.MergeRequest(context.Background(), gitLabTarget(), "change/CHG-1", "main", "merge")
+	if err == nil || !strings.Contains(err.Error(), "mergeable") {
+		t.Fatalf("expected mergeable wait error, got %v", err)
 	}
 }
 
