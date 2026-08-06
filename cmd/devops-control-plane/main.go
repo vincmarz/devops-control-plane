@@ -47,6 +47,8 @@ func main() {
 	applicationCatalog := app.DefaultApplicationCatalog()
 	gitOpsRepositoryTargetResolver := app.NewGitOpsRepositoryTargetResolver(applicationCatalog.ResolveGitOpsBinding)
 	changeServiceOptions = append(changeServiceOptions, app.WithGitSourceBindingResolverFunc(applicationCatalog.ResolveSourceBinding))
+	changeServiceOptions = append(changeServiceOptions, app.WithGitOpsBindingResolverFunc(applicationCatalog.ResolveGitOpsBinding))
+	changeServiceOptions = append(changeServiceOptions, app.WithGitOpsImageKustomizationPath(cfg.GitOpsImageKustomizationPath))
 	gitProviders := make([]app.GitProvider, 0, 2)
 
 	if cfg.GitLabBaseURL != "" || cfg.GitLabToken != "" {

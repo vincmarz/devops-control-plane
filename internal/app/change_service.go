@@ -266,6 +266,14 @@ func WithGitSourceBindingResolverFunc(fn GitSourceBindingResolverFunc) ChangeSer
 	return func(s *ChangeService) { s.gitSourceBindingResolver = fn }
 }
 
+func WithGitOpsBindingResolverFunc(fn GitSourceBindingResolverFunc) ChangeServiceOption {
+	return func(s *ChangeService) { s.gitOpsBindingResolver = fn }
+}
+
+func WithGitOpsImageKustomizationPath(path string) ChangeServiceOption {
+	return func(s *ChangeService) { s.gitOpsImageKustomizationPath = strings.TrimSpace(path) }
+}
+
 func WithGitProviderResolver(resolver GitProviderResolver) ChangeServiceOption {
 	return func(s *ChangeService) { s.gitProviderResolver = resolver }
 }
@@ -314,8 +322,10 @@ type ChangeService struct {
 	runtimeClientProviderSelector           RuntimeClientProviderSelectorFunc
 	runtimeClientSecretRefsRegistry         RuntimeClientSecretRefsRegistry
 
-	gitSourceBindingResolver GitSourceBindingResolverFunc
-	gitProviderResolver      GitProviderResolver
+	gitSourceBindingResolver     GitSourceBindingResolverFunc
+	gitOpsBindingResolver        GitSourceBindingResolverFunc
+	gitOpsImageKustomizationPath string
+	gitProviderResolver          GitProviderResolver
 
 	gitCreateBranch       GitCreateBranchFunc
 	gitCreateOrUpdateFile GitCreateOrUpdateFileFunc
@@ -1163,6 +1173,143 @@ func mapArgoCDDeploymentRuntimeStatus(syncStatus string, healthStatus string) st
 		return "DeploymentProgressing"
 	}
 	return "DeploymentUnknown"
+}
+
+func (s *ChangeService) resolveGitOps(applicationName string) (GitRepositoryTarget, GitProvider, error) {
+	if s.gitOpsBindingResolver == nil {
+		return GitRepositoryTarget{}, nil, errors.New("git gitops binding resolver is not configured")
+	}
+	if s.gitProviderResolver == nil {
+		return GitRepositoryTarget{}, nil, errors.New("git provider resolver is not configured")
+	}
+	binding, err := s.gitOpsBindingResolver(applicationName)
+	if err != nil {
+		return GitRepositoryTarget{}, nil, err
+	}
+	target, err := NewGitRepositoryTarget(binding)
+	if err != nil {
+		return GitRepositoryTarget{}, nil, err
+	}
+	provider, err := s.gitProviderResolver.Resolve(target)
+	if err != nil {
+		return GitRepositoryTarget{}, nil, err
+	}
+	return target, provider, nil
+}
+
+func generatedGitOpsKustomization(imageRepository string, imageDigest string) string {
+	return fmt.Sprintf(`apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
+
+images:
+  - name: %s
+    newName: %s
+    digest: %s
+`, imageRepository, imageRepository, imageDigest)
+}
+
+// UpdateGitOps writes the immutable built image digest into the GitOps
+// repository using a deterministic Kustomize images override, then opens and
+// merges a review request. It is fail-closed: it requires a valid persisted
+// artifact digest before performing any Git operation.
+func (s *ChangeService) UpdateGitOps(ctx context.Context, idOrNumber string) (map[string]any, error) {
+	idOrNumber = strings.TrimSpace(idOrNumber)
+	if idOrNumber == "" {
+		return nil, errors.New("change id or number is required")
+	}
+	if s.changeRuntimeStateStore == nil {
+		return nil, errors.New("change runtime state store is not configured")
+	}
+	kustomizationPath := strings.TrimSpace(s.gitOpsImageKustomizationPath)
+	if kustomizationPath == "" {
+		return nil, errors.New("gitops image kustomization path is not configured")
+	}
+
+	change, err := s.store.Get(ctx, idOrNumber)
+	if err != nil {
+		return nil, err
+	}
+	current, err := s.changeRuntimeStateStore.Get(ctx, runtimeStateChangeID(change))
+	if err != nil {
+		return nil, fmt.Errorf("read runtime state before updating gitops: %w", err)
+	}
+	artifact := current.Artifact
+	imageRepository := strings.TrimSpace(artifact.ImageRepository)
+	if imageRepository == "" {
+		return nil, errors.New("artifact runtime state does not contain an image repository")
+	}
+	imageDigest := strings.TrimSpace(artifact.ImageDigest)
+	if !isValidImageDigest(imageDigest) {
+		return nil, errors.New("artifact runtime state does not contain a valid image digest")
+	}
+
+	target, provider, err := s.resolveGitOps(change.ApplicationName)
+	if err != nil {
+		return nil, fmt.Errorf("resolve gitops repository for application %q: %w", change.ApplicationName, err)
+	}
+
+	branchName := fmt.Sprintf("gitops/%s", change.ChangeNumber)
+	if err := provider.CreateBranch(ctx, target, branchName, target.DefaultBranch); err != nil {
+		return nil, fmt.Errorf("create gitops branch %q: %w", branchName, err)
+	}
+	content := generatedGitOpsKustomization(imageRepository, imageDigest)
+	commitMessage := fmt.Sprintf("%s - set %s image digest", change.ChangeNumber, change.ApplicationName)
+	updateResult, err := provider.CreateOrUpdateFile(ctx, target, branchName, kustomizationPath, commitMessage, content)
+	if err != nil {
+		return nil, fmt.Errorf("update gitops file %q on branch %q: %w", kustomizationPath, branchName, err)
+	}
+	title := fmt.Sprintf("%s - GitOps image update for %s", change.ChangeNumber, change.ApplicationName)
+	description := fmt.Sprintf("Set image %s@%s for %s.", imageRepository, imageDigest, change.ApplicationName)
+	proposalNumber, proposalURL, err := provider.OpenMergeRequest(ctx, target, branchName, target.DefaultBranch, title, description)
+	if err != nil {
+		return nil, fmt.Errorf("open gitops review request on branch %q: %w", branchName, err)
+	}
+	mergeMessage := fmt.Sprintf("%s - merge GitOps image update", change.ChangeNumber)
+	_, _, mergeCommitSHA, err := provider.MergeRequest(ctx, target, branchName, target.DefaultBranch, mergeMessage)
+	if err != nil {
+		return nil, fmt.Errorf("merge gitops review request on branch %q: %w", branchName, err)
+	}
+
+	revision := strings.TrimSpace(mergeCommitSHA)
+	if revision == "" {
+		revision = strings.TrimSpace(updateResult.CommitSHA)
+	}
+	gitOps := current.GitOps
+	gitOps.Provider = target.Provider
+	gitOps.ProviderRef = target.ProviderRef
+	gitOps.ProjectID = target.ProjectID
+	gitOps.ProjectPath = target.ProjectPath
+	gitOps.RepositoryURL = target.RepositoryURL
+	gitOps.DefaultBranch = target.DefaultBranch
+	gitOps.Revision = revision
+	gitOps.CommitSHA = strings.TrimSpace(mergeCommitSHA)
+	if err := s.changeRuntimeStateStore.UpsertGitOps(ctx, runtimeStateChangeID(change), gitOps); err != nil {
+		return nil, fmt.Errorf("persist gitops runtime state after updating gitops on branch %q name=%q: %w", branchName, updateResult.FilePath, err)
+	}
+	result, err := s.store.MarkStep(ctx, idOrNumber, "GitOpsUpdated")
+	if err != nil {
+		return nil, err
+	}
+	result["gitops"] = map[string]any{
+		"provider":        gitOps.Provider,
+		"providerRef":     gitOps.ProviderRef,
+		"repositoryURL":   gitOps.RepositoryURL,
+		"branch":          branchName,
+		"filePath":        kustomizationPath,
+		"proposalNumber":  proposalNumber,
+		"proposalURL":     proposalURL,
+		"commitSHA":       gitOps.CommitSHA,
+		"revision":        gitOps.Revision,
+		"imageRepository": imageRepository,
+		"imageDigest":     imageDigest,
+	}
+	return result, nil
 }
 
 func (s *ChangeService) resolveGitSource(applicationName string) (GitRepositoryTarget, GitProvider, bool, error) {

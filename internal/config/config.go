@@ -39,20 +39,21 @@ type Config struct {
 	GitHubInsecureTLS    bool
 	GitHubCAFile         string
 
-	TektonNamespace           string
-	TektonPipelineName        string
-	TektonBuildPipelineName   string
-	TektonServiceAccount      string
-	TektonTimeoutSeconds      int
-	TektonPollIntervalSecs    int
-	TektonGitURL              string
-	TektonGitRevision         string
-	TektonGitRevisionTemplate string
-	TektonValidationPath      string
-	TektonImage               string
-	TektonBuildImage          string
-	TektonWorkspacePVC        string
-	TektonDockerConfigSecret  string
+	TektonNamespace              string
+	TektonPipelineName           string
+	TektonBuildPipelineName      string
+	TektonServiceAccount         string
+	TektonTimeoutSeconds         int
+	TektonPollIntervalSecs       int
+	TektonGitURL                 string
+	TektonGitRevision            string
+	TektonGitRevisionTemplate    string
+	TektonValidationPath         string
+	TektonImage                  string
+	TektonBuildImage             string
+	GitOpsImageKustomizationPath string
+	TektonWorkspacePVC           string
+	TektonDockerConfigSecret     string
 
 	KubernetesAPIURL      string
 	KubernetesToken       string
@@ -100,20 +101,21 @@ func Load() Config {
 		GitHubInsecureTLS:    getBoolEnv("GITHUB_INSECURE_TLS", false),
 		GitHubCAFile:         getEnv("GITHUB_CA_FILE", ""),
 
-		TektonNamespace:           getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
-		TektonPipelineName:        getEnv("TEKTON_PIPELINE_NAME", "validate-gitops"),
-		TektonBuildPipelineName:   getEnv("TEKTON_BUILD_PIPELINE_NAME", "go-build-and-push"),
-		TektonServiceAccount:      getEnv("TEKTON_SERVICE_ACCOUNT", "pipeline"),
-		TektonTimeoutSeconds:      getIntEnv("TEKTON_TIMEOUT_SECONDS", 900),
-		TektonPollIntervalSecs:    getIntEnv("TEKTON_POLL_INTERVAL_SECONDS", 5),
-		TektonGitURL:              getEnv("TEKTON_GIT_URL", "https://github.com/vincmarz/demo-go-color-app.git"),
-		TektonGitRevision:         getEnv("TEKTON_GIT_REVISION", "main"),
-		TektonGitRevisionTemplate: getEnv("TEKTON_GIT_REVISION_TEMPLATE", ""),
-		TektonValidationPath:      getEnv("TEKTON_VALIDATION_PATH", ""),
-		TektonImage:               getEnv("TEKTON_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest"),
-		TektonBuildImage:          getEnv("TEKTON_BUILD_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app"),
-		TektonWorkspacePVC:        getEnv("TEKTON_WORKSPACE_PVC", "pipeline-workspace"),
-		TektonDockerConfigSecret:  getEnv("TEKTON_DOCKERCONFIG_SECRET", "pipeline-registry-dockerconfig"),
+		TektonNamespace:              getEnv("TEKTON_NAMESPACE", "devops-ci-demo"),
+		TektonPipelineName:           getEnv("TEKTON_PIPELINE_NAME", "validate-gitops"),
+		TektonBuildPipelineName:      getEnv("TEKTON_BUILD_PIPELINE_NAME", "go-build-and-push"),
+		TektonServiceAccount:         getEnv("TEKTON_SERVICE_ACCOUNT", "pipeline"),
+		TektonTimeoutSeconds:         getIntEnv("TEKTON_TIMEOUT_SECONDS", 900),
+		TektonPollIntervalSecs:       getIntEnv("TEKTON_POLL_INTERVAL_SECONDS", 5),
+		TektonGitURL:                 getEnv("TEKTON_GIT_URL", "https://github.com/vincmarz/demo-go-color-app.git"),
+		TektonGitRevision:            getEnv("TEKTON_GIT_REVISION", "main"),
+		TektonGitRevisionTemplate:    getEnv("TEKTON_GIT_REVISION_TEMPLATE", ""),
+		TektonValidationPath:         getEnv("TEKTON_VALIDATION_PATH", ""),
+		TektonImage:                  getEnv("TEKTON_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app:latest"),
+		TektonBuildImage:             getEnv("TEKTON_BUILD_IMAGE", "image-registry.openshift-image-registry.svc:5000/devops-ci-demo/demo-go-color-app"),
+		GitOpsImageKustomizationPath: getEnv("GITOPS_IMAGE_KUSTOMIZATION_PATH", "apps/demo-go-color-app/kustomization.yaml"),
+		TektonWorkspacePVC:           getEnv("TEKTON_WORKSPACE_PVC", "pipeline-workspace"),
+		TektonDockerConfigSecret:     getEnv("TEKTON_DOCKERCONFIG_SECRET", "pipeline-registry-dockerconfig"),
 
 		KubernetesAPIURL:      kubernetesAPIURL,
 		KubernetesToken:       kubernetesToken,
