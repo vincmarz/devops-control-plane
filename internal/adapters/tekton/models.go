@@ -14,6 +14,7 @@ type PipelineRunStatus struct {
 	Message           string
 	CreationTimestamp string
 	CompletionTime    string
+	Results           []PipelineRunResult
 }
 type TaskRunStatus struct {
 	Name             string
@@ -25,4 +26,9 @@ type TaskRunStatus struct {
 	Message          string
 	StartTime        string
 	CompletionTime   string
+}
+
+type PipelineRunResult struct {
+	Name  string
+	Value string
 }

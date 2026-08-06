@@ -234,6 +234,32 @@ func main() {
 			}, nil
 		}, cfg.TektonBuildImage))
 
+		changeServiceOptions = append(changeServiceOptions, app.WithTektonCheckBuild(func(ctx context.Context, change domain.ChangeRequest, namespace string, pipelineRunName string) (app.TektonBuildStatusResult, error) {
+			status, err := tektonClient.GetPipelineRunByName(ctx, namespace, pipelineRunName)
+			if err != nil {
+				return app.TektonBuildStatusResult{}, err
+			}
+			buildStatus := app.TektonBuildStatusResult{
+				Name:      status.Name,
+				Namespace: status.Namespace,
+				UID:       status.UID,
+				Status:    status.Status,
+				Reason:    status.Reason,
+				Message:   status.Message,
+			}
+			for _, entry := range status.Results {
+				switch entry.Name {
+				case "SOURCE_COMMIT":
+					buildStatus.SourceCommit = entry.Value
+				case "IMAGE_URL":
+					buildStatus.ImageURL = entry.Value
+				case "IMAGE_DIGEST":
+					buildStatus.ImageDigest = entry.Value
+				}
+			}
+			return buildStatus, nil
+		}))
+
 		changeServiceOptions = append(changeServiceOptions, app.WithTektonCheckValidation(func(ctx context.Context, change domain.ChangeRequest) (app.TektonValidationResult, error) {
 			gitOpsTarget, err := gitOpsRepositoryTargetResolver.Resolve(change.ApplicationName, app.GitOpsConsumerTekton)
 			if err != nil {
