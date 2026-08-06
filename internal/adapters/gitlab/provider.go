@@ -81,7 +81,11 @@ func (p *Provider) MergeRequest(ctx context.Context, target app.GitRepositoryTar
 	if err != nil {
 		return 0, "", "", err
 	}
-	merged, err := p.client.MergeMergeRequest(ctx, target.ProjectID, mergeRequest.IID, mergeRequest.SHA, mergeCommitMessage)
+	// GitLab rejects PUT /merge with a stale sha (HTTP 405) when the branch HEAD
+	// has been recomputed after the MR was opened. Unlike GitHub, GitLab treats
+	// sha as an optimistic lock. In this governed single-MR flow we intentionally
+	// omit sha and let GitLab merge the current HEAD, matching GitHub behavior.
+	merged, err := p.client.MergeMergeRequest(ctx, target.ProjectID, mergeRequest.IID, "", mergeCommitMessage)
 	if err != nil {
 		return 0, "", "", err
 	}
