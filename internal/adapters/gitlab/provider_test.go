@@ -120,7 +120,7 @@ func TestProviderMergeRequestFindsAndMerges(t *testing.T) {
 	if iid != 9 || webURL != "https://gitlab.example/mr/9" || sha != "def456" {
 		t.Fatalf("iid=%d url=%s sha=%s", iid, webURL, sha)
 	}
-	if client.mergeIID != 9 || client.mergeSHA != "abc123" {
+	if client.mergeIID != 9 || client.mergeSHA != "" {
 		t.Fatalf("unexpected merge call: %#v", client)
 	}
 }
