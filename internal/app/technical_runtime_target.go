@@ -16,18 +16,19 @@ import (
 // application layer for future multi-cluster client selection without changing
 // the current runtime adapters or enabling disabled environments.
 type TechnicalRuntimeTarget struct {
-	TargetEnvironment      string
-	EnvironmentName        string
-	EnvironmentDisplayName string
-	ClusterName            string
-	ClusterDisplayName     string
-	ClusterEnabled         bool
-	KubernetesNamespace    string
-	TektonNamespace        string
-	TektonPipelineName     string
-	ArgoCDApplicationName  string
-	GitTargetBranch        string
-	ValidationPath         string
+	TargetEnvironment        string
+	EnvironmentName          string
+	EnvironmentDisplayName   string
+	ClusterName              string
+	ClusterDisplayName       string
+	ClusterEnabled           bool
+	KubernetesNamespace      string
+	KubernetesDeploymentName string
+	TektonNamespace          string
+	TektonPipelineName       string
+	ArgoCDApplicationName    string
+	GitTargetBranch          string
+	ValidationPath           string
 }
 
 // TechnicalRuntimeTargetResolver resolves the technical runtime target for a
@@ -78,18 +79,19 @@ func (r TechnicalRuntimeTargetResolver) Resolve(targetEnvironment string) (Techn
 	}
 
 	target := TechnicalRuntimeTarget{
-		TargetEnvironment:      environment.Name,
-		EnvironmentName:        environment.Name,
-		EnvironmentDisplayName: strings.TrimSpace(environment.DisplayName),
-		ClusterName:            cluster.Name,
-		ClusterDisplayName:     strings.TrimSpace(cluster.DisplayName),
-		ClusterEnabled:         cluster.Enabled,
-		KubernetesNamespace:    strings.TrimSpace(environment.KubernetesNamespace),
-		TektonNamespace:        strings.TrimSpace(environment.TektonNamespace),
-		TektonPipelineName:     r.defaultTektonPipelineName,
-		ArgoCDApplicationName:  strings.TrimSpace(environment.ArgoCDApplicationName),
-		GitTargetBranch:        strings.TrimSpace(environment.GitTargetBranch),
-		ValidationPath:         strings.TrimSpace(environment.ValidationPath),
+		TargetEnvironment:        environment.Name,
+		EnvironmentName:          environment.Name,
+		EnvironmentDisplayName:   strings.TrimSpace(environment.DisplayName),
+		ClusterName:              cluster.Name,
+		ClusterDisplayName:       strings.TrimSpace(cluster.DisplayName),
+		ClusterEnabled:           cluster.Enabled,
+		KubernetesNamespace:      strings.TrimSpace(environment.KubernetesNamespace),
+		KubernetesDeploymentName: strings.TrimSpace(environment.KubernetesDeploymentName),
+		TektonNamespace:          strings.TrimSpace(environment.TektonNamespace),
+		TektonPipelineName:       r.defaultTektonPipelineName,
+		ArgoCDApplicationName:    strings.TrimSpace(environment.ArgoCDApplicationName),
+		GitTargetBranch:          strings.TrimSpace(environment.GitTargetBranch),
+		ValidationPath:           strings.TrimSpace(environment.ValidationPath),
 	}
 
 	if target.EnvironmentDisplayName == "" {

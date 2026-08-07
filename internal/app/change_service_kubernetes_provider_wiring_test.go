@@ -18,7 +18,7 @@ func TestChangeServiceCollectEvidenceUsesKubernetesRuntimeProvider(t *testing.T)
 		"kubernetesRuntimeClientProviderRegistry",
 		"collectKubernetesRuntimeEvidence(ctx, change, providerSelection)",
 		"selection.Target.KubernetesNamespace",
-		"client.CollectRuntimeEvidence(ctx, namespace, change.ApplicationName)",
+		"client.CollectRuntimeEvidence(ctx, namespace, resolveDeploymentName(selection.Target, change.ApplicationName))",
 	}
 	for _, check := range checks {
 		if !strings.Contains(text, check) {

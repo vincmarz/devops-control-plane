@@ -396,13 +396,24 @@ func (s *ChangeService) collectKubernetesRuntimeEvidence(ctx context.Context, ch
 		if namespace == "" {
 			return nil, fmt.Errorf("technical runtime target for change %s does not define kubernetesNamespace", change.ChangeNumber)
 		}
-		return client.CollectRuntimeEvidence(ctx, namespace, change.ApplicationName)
+		return client.CollectRuntimeEvidence(ctx, namespace, resolveDeploymentName(selection.Target, change.ApplicationName))
 	}
 
 	if s.kubernetesRuntimeEvidenceCollector == nil {
 		return nil, nil
 	}
 	return s.kubernetesRuntimeEvidenceCollector(ctx, change)
+}
+
+// resolveDeploymentName returns the Kubernetes Deployment name for evidence
+// collection. It prefers the environment-provided KubernetesDeploymentName and
+// falls back to the application name when it is not set, preserving the
+// existing behaviour for environments where the two names coincide.
+func resolveDeploymentName(target TechnicalRuntimeTarget, applicationName string) string {
+	if name := strings.TrimSpace(target.KubernetesDeploymentName); name != "" {
+		return name
+	}
+	return applicationName
 }
 
 func kubernetesRuntimeObservation(target TechnicalRuntimeTarget, runtimeEvidence map[string]any) domain.RuntimeObservationState {
