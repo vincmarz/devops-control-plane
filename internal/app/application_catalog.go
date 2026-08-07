@@ -20,15 +20,17 @@ const (
 )
 
 type RepositoryBinding struct {
-	Provider        string   `yaml:"provider" json:"provider"`
-	ProviderRef     string   `yaml:"providerRef" json:"providerRef"`
-	Role            string   `yaml:"role" json:"role"`
-	ProjectID       int      `yaml:"projectID,omitempty" json:"projectID,omitempty"`
-	ProjectPath     string   `yaml:"projectPath" json:"projectPath"`
-	RepositoryURL   string   `yaml:"repositoryURL" json:"repositoryURL"`
-	DefaultBranch   string   `yaml:"defaultBranch" json:"defaultBranch"`
-	WorkflowEnabled bool     `yaml:"workflowEnabled,omitempty" json:"workflowEnabled,omitempty"`
-	ConsumedBy      []string `yaml:"consumedBy,omitempty" json:"consumedBy,omitempty"`
+	Provider          string   `yaml:"provider" json:"provider"`
+	ProviderRef       string   `yaml:"providerRef" json:"providerRef"`
+	Role              string   `yaml:"role" json:"role"`
+	ProjectID         int      `yaml:"projectID,omitempty" json:"projectID,omitempty"`
+	ProjectPath       string   `yaml:"projectPath" json:"projectPath"`
+	RepositoryURL     string   `yaml:"repositoryURL" json:"repositoryURL"`
+	DefaultBranch     string   `yaml:"defaultBranch" json:"defaultBranch"`
+	WorkflowEnabled   bool     `yaml:"workflowEnabled,omitempty" json:"workflowEnabled,omitempty"`
+	ConsumedBy        []string `yaml:"consumedBy,omitempty" json:"consumedBy,omitempty"`
+	BuildImage        string   `yaml:"buildImage,omitempty" json:"buildImage,omitempty"`
+	KustomizationPath string   `yaml:"kustomizationPath,omitempty" json:"kustomizationPath,omitempty"`
 }
 
 type ApplicationDefinition struct {
@@ -174,6 +176,8 @@ func normalizeRepositoryBinding(b *RepositoryBinding) {
 	b.ProviderRef = strings.TrimSpace(b.ProviderRef)
 	b.Role = strings.ToLower(strings.TrimSpace(b.Role))
 	b.ProjectPath = strings.TrimSpace(b.ProjectPath)
+	b.BuildImage = strings.TrimSpace(b.BuildImage)
+	b.KustomizationPath = strings.TrimSpace(b.KustomizationPath)
 	b.RepositoryURL = strings.TrimSpace(b.RepositoryURL)
 	b.DefaultBranch = strings.TrimSpace(b.DefaultBranch)
 	for i := range b.ConsumedBy {
