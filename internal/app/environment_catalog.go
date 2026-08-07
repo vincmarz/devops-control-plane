@@ -12,21 +12,22 @@ import (
 const environmentCatalogFileEnv = "ENVIRONMENT_CATALOG_FILE"
 
 type EnvironmentDefinition struct {
-	Name                  string `yaml:"name"`
-	ApplicationName       string `yaml:"applicationName"`
-	DisplayName           string `yaml:"displayName"`
-	Enabled               bool   `yaml:"enabled"`
-	Category              string `yaml:"category"`
-	Description           string `yaml:"description"`
-	ClusterName           string `yaml:"clusterName"`
-	KubernetesNamespace   string `yaml:"kubernetesNamespace"`
-	TektonNamespace       string `yaml:"tektonNamespace"`
-	ArgoCDApplicationName string `yaml:"argocdApplicationName"`
-	GitTargetBranch       string `yaml:"gitTargetBranch"`
-	ValidationPath        string `yaml:"validationPath"`
-	AllowTechnicalActions bool   `yaml:"allowTechnicalActions"`
-	AllowPromotionSource  bool   `yaml:"allowPromotionSource"`
-	AllowPromotionTarget  bool   `yaml:"allowPromotionTarget"`
+	Name                     string `yaml:"name"`
+	ApplicationName          string `yaml:"applicationName"`
+	DisplayName              string `yaml:"displayName"`
+	Enabled                  bool   `yaml:"enabled"`
+	Category                 string `yaml:"category"`
+	Description              string `yaml:"description"`
+	ClusterName              string `yaml:"clusterName"`
+	KubernetesNamespace      string `yaml:"kubernetesNamespace"`
+	KubernetesDeploymentName string `yaml:"kubernetesDeploymentName"`
+	TektonNamespace          string `yaml:"tektonNamespace"`
+	ArgoCDApplicationName    string `yaml:"argocdApplicationName"`
+	GitTargetBranch          string `yaml:"gitTargetBranch"`
+	ValidationPath           string `yaml:"validationPath"`
+	AllowTechnicalActions    bool   `yaml:"allowTechnicalActions"`
+	AllowPromotionSource     bool   `yaml:"allowPromotionSource"`
+	AllowPromotionTarget     bool   `yaml:"allowPromotionTarget"`
 }
 
 type EnvironmentCatalog struct {
@@ -134,6 +135,7 @@ func NewEnvironmentCatalog(definitions []EnvironmentDefinition, defaultEnvironme
 		definition.ApplicationName = strings.TrimSpace(definition.ApplicationName)
 		definition.ClusterName = normalizeClusterName(definition.ClusterName)
 		definition.ArgoCDApplicationName = strings.TrimSpace(definition.ArgoCDApplicationName)
+		definition.KubernetesDeploymentName = strings.TrimSpace(definition.KubernetesDeploymentName)
 		definition.ValidationPath = strings.TrimSpace(definition.ValidationPath)
 		catalog.environments[name] = definition
 	}
