@@ -673,7 +673,7 @@ func (s *ChangeService) StartBuild(ctx context.Context, idOrNumber string) (map[
 	if err != nil {
 		return nil, err
 	}
-	imageRepository, err := splitImageRepository(s.tektonBuildImage)
+	imageRepository, err := splitImageRepository(resolveBuildImage(binding, s.tektonBuildImage))
 	if err != nil {
 		return nil, err
 	}
@@ -1245,6 +1245,11 @@ func (s *ChangeService) UpdateGitOps(ctx context.Context, idOrNumber string) (ma
 	change, err := s.store.Get(ctx, idOrNumber)
 	if err != nil {
 		return nil, err
+	}
+	if s.gitOpsBindingResolver != nil {
+		if b, berr := s.gitOpsBindingResolver(change.ApplicationName); berr == nil {
+			kustomizationPath = resolveKustomizationPath(b, kustomizationPath)
+		}
 	}
 	current, err := s.changeRuntimeStateStore.Get(ctx, runtimeStateChangeID(change))
 	if err != nil {
@@ -1978,4 +1983,24 @@ func isAllowedRiskLevel(riskLevel string) bool {
 	default:
 		return false
 	}
+}
+
+// resolveBuildImage returns the build image for a change, preferring the
+// per-application source binding BuildImage and falling back to the global
+// build image when the binding does not set one.
+func resolveBuildImage(binding RepositoryBinding, fallback string) string {
+	if img := strings.TrimSpace(binding.BuildImage); img != "" {
+		return img
+	}
+	return fallback
+}
+
+// resolveKustomizationPath returns the GitOps kustomization path, preferring
+// the per-application GitOps binding KustomizationPath and falling back to the
+// global configured path when the binding does not set one.
+func resolveKustomizationPath(binding RepositoryBinding, fallback string) string {
+	if p := strings.TrimSpace(binding.KustomizationPath); p != "" {
+		return p
+	}
+	return fallback
 }
