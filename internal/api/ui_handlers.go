@@ -17,6 +17,7 @@ type uiData struct {
 	Title                  string
 	Subtitle               string
 	Active                 string
+	ActiveNav              string
 	Mode                   string
 	Changes                []map[string]any
 	Applications           []map[string]any
@@ -39,7 +40,7 @@ type uiData struct {
 func (h *Handler) uiDashboard(w http.ResponseWriter, r *http.Request) {
 	changes, err := h.uiChangesData(r)
 	if err != nil {
-		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Dashboard", Subtitle: "Applications and change overview", Active: "dashboard", Error: err.Error()})
+		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Dashboard", Subtitle: "Applications and change overview", Active: "dashboard", ActiveNav: "dashboard", Error: err.Error()})
 		return
 	}
 	apps := h.uiApplicationsData(r)
@@ -50,16 +51,16 @@ func (h *Handler) uiDashboard(w http.ResponseWriter, r *http.Request) {
 	events, evidence := h.uiChangeDetailsData(r, selected)
 	stats := buildUIStats(changes, apps, evidence)
 	addApplicationGroupingStats(stats, logicalApplications, standaloneApplications)
-	h.renderUI(w, http.StatusOK, uiData{Title: "Dashboard", Subtitle: "Applications and change overview", Active: "dashboard", Changes: changes, Applications: apps, LogicalApplications: logicalApplications, StandaloneApplications: standaloneApplications, SelectedChange: selected, Events: events, Evidence: evidence, Stats: stats})
+	h.renderUI(w, http.StatusOK, uiData{Title: "Dashboard", Subtitle: "Applications and change overview", Active: "dashboard", ActiveNav: "dashboard", Changes: changes, Applications: apps, LogicalApplications: logicalApplications, StandaloneApplications: standaloneApplications, SelectedChange: selected, Events: events, Evidence: evidence, Stats: stats})
 }
 
 func (h *Handler) uiChanges(w http.ResponseWriter, r *http.Request) {
 	changes, err := h.uiChangesData(r)
 	if err != nil {
-		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Change Requests", Subtitle: "Change requests managed by the Control Plane", Active: "changes", Error: err.Error()})
+		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Change Requests", Subtitle: "Change requests managed by the Control Plane", Active: "changes", ActiveNav: "all-changes", Error: err.Error()})
 		return
 	}
-	h.renderUI(w, http.StatusOK, uiData{Title: "Change Requests", Subtitle: "Change requests managed by the Control Plane", Active: "changes", Changes: changes, Stats: buildUIStats(changes, nil, nil)})
+	h.renderUI(w, http.StatusOK, uiData{Title: "Change Requests", Subtitle: "Change requests managed by the Control Plane", Active: "changes", ActiveNav: "all-changes", Changes: changes, Stats: buildUIStats(changes, nil, nil)})
 }
 
 func (h *Handler) uiApplications(w http.ResponseWriter, r *http.Request) {
@@ -70,20 +71,20 @@ func (h *Handler) uiApplications(w http.ResponseWriter, r *http.Request) {
 	changes, _ := h.uiChangesData(r)
 	stats := buildUIStats(changes, apps, nil)
 	addApplicationGroupingStats(stats, logicalApplications, standaloneApplications)
-	h.renderUI(w, http.StatusOK, uiData{Title: "Applications", Subtitle: "Logical applications grouped by environment and standalone Argo CD applications", Active: "applications", Applications: apps, LogicalApplications: logicalApplications, StandaloneApplications: standaloneApplications, Changes: changes, Stats: stats})
+	h.renderUI(w, http.StatusOK, uiData{Title: "Applications", Subtitle: "Logical applications grouped by environment and standalone Argo CD applications", Active: "applications", ActiveNav: "applications", Applications: apps, LogicalApplications: logicalApplications, StandaloneApplications: standaloneApplications, Changes: changes, Stats: stats})
 }
 
 func (h *Handler) uiChangesAPIPage(w http.ResponseWriter, r *http.Request) {
 	changes, err := h.uiChangesData(r)
 	if err != nil {
-		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Changes API", Subtitle: "API data preview", Active: "changes", Mode: "changesAPI", Error: err.Error()})
+		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Changes API", Subtitle: "API data preview", Active: "changes", ActiveNav: "changes-api", Mode: "changesAPI", Error: err.Error()})
 		return
 	}
-	h.renderUI(w, http.StatusOK, uiData{Title: "Changes API", Subtitle: "API data preview with navigation", Active: "changes", Mode: "changesAPI", Changes: changes, Stats: buildUIStats(changes, nil, nil)})
+	h.renderUI(w, http.StatusOK, uiData{Title: "Changes API", Subtitle: "API data preview with navigation", Active: "changes", ActiveNav: "changes-api", Mode: "changesAPI", Changes: changes, Stats: buildUIStats(changes, nil, nil)})
 }
 
 func (h *Handler) uiSettings(w http.ResponseWriter, r *http.Request) {
-	h.renderUI(w, http.StatusOK, uiData{Title: "Settings", Subtitle: "Runtime readiness, environment and access placeholders", Active: "settings"})
+	h.renderUI(w, http.StatusOK, uiData{Title: "Settings", Subtitle: "Runtime readiness, environment and access placeholders", Active: "settings", ActiveNav: "settings"})
 }
 
 func (h *Handler) uiApplicationDetail(w http.ResponseWriter, r *http.Request) {
@@ -95,14 +96,14 @@ func (h *Handler) uiApplicationDetail(w http.ResponseWriter, r *http.Request) {
 	apps := h.uiApplicationsData(r)
 	selected, err := h.uiApplicationByName(r, name, apps)
 	if err != nil {
-		h.renderUI(w, http.StatusNotFound, uiData{Title: "Application", Subtitle: name, Active: "applications", Applications: apps, Error: err.Error()})
+		h.renderUI(w, http.StatusNotFound, uiData{Title: "Application", Subtitle: name, Active: "applications", ActiveNav: "applications", Applications: apps, Error: err.Error()})
 		return
 	}
 	resources := toMapSlice(h.deps.Services.Applications.Resources(r.Context(), name))
 	history := toMapSlice(h.deps.Services.Applications.History(r.Context(), name))
 	runtime := toMap(h.deps.Services.Applications.Runtime(r.Context(), name))
 	changes, _ := h.uiChangesData(r)
-	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Application: %s", str(get(selected, "name"))), Subtitle: "Application runtime and GitOps detail", Active: "applications", Applications: apps, SelectedApplication: selected, Resources: resources, History: history, Runtime: runtime, Changes: changes, Stats: buildUIStats(changes, apps, nil)})
+	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Application: %s", str(get(selected, "name"))), Subtitle: "Application runtime and GitOps detail", Active: "applications", ActiveNav: "applications", Applications: apps, SelectedApplication: selected, Resources: resources, History: history, Runtime: runtime, Changes: changes, Stats: buildUIStats(changes, apps, nil)})
 }
 
 func (h *Handler) uiChangeDetail(w http.ResponseWriter, r *http.Request) {
@@ -127,13 +128,13 @@ func (h *Handler) uiChangeDetail(w http.ResponseWriter, r *http.Request) {
 	id := parts[0]
 	change, err := h.deps.Services.Changes.Get(r.Context(), id)
 	if err != nil {
-		h.renderUI(w, http.StatusNotFound, uiData{Title: "Change Request", Subtitle: id, Active: "changes", Error: err.Error()})
+		h.renderUI(w, http.StatusNotFound, uiData{Title: "Change Request", Subtitle: id, Active: "changes", ActiveNav: "all-changes", Error: err.Error()})
 		return
 	}
 	selected := withUIActionVisibility(r.Context(), toMap(change))
 	runtimeState, err := h.deps.Services.Changes.GetRuntimeState(r.Context(), id)
 	if err != nil {
-		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Change Request", Subtitle: id, Active: "changes", Error: err.Error()})
+		h.renderUI(w, http.StatusInternalServerError, uiData{Title: "Change Request", Subtitle: id, Active: "changes", ActiveNav: "all-changes", Error: err.Error()})
 		return
 	}
 	events, evidence := h.uiChangeDetailsData(r, selected)
@@ -142,37 +143,37 @@ func (h *Handler) uiChangeDetail(w http.ResponseWriter, r *http.Request) {
 			selected["runtimeStatus"] = status
 		}
 	}
-	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Change Request: %s", str(get(selected, "changeNumber"))), Subtitle: "Operational change detail", Active: "changes", SelectedChange: selected, ChangeRuntimeState: toMap(runtimeState), Events: events, Evidence: evidence, Stats: map[string]any{"evidence": len(evidence)}, Flash: r.URL.Query().Get("flash"), ActionError: r.URL.Query().Get("error")})
+	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Change Request: %s", str(get(selected, "changeNumber"))), Subtitle: "Operational change detail", Active: "changes", ActiveNav: "all-changes", SelectedChange: selected, ChangeRuntimeState: toMap(runtimeState), Events: events, Evidence: evidence, Stats: map[string]any{"evidence": len(evidence)}, Flash: r.URL.Query().Get("flash"), ActionError: r.URL.Query().Get("error")})
 }
 
 func (h *Handler) uiChangeEvents(w http.ResponseWriter, r *http.Request, id string) {
 	change, err := h.deps.Services.Changes.Get(r.Context(), id)
 	if err != nil {
-		h.renderUI(w, http.StatusNotFound, uiData{Title: "Audit Events", Subtitle: id, Active: "changes", Error: err.Error()})
+		h.renderUI(w, http.StatusNotFound, uiData{Title: "Audit Events", Subtitle: id, Active: "changes", ActiveNav: "audit-log", Error: err.Error()})
 		return
 	}
 	events, err := h.deps.Services.Changes.Events(r.Context(), id)
 	if err != nil {
-		h.renderUI(w, http.StatusNotFound, uiData{Title: "Audit Events", Subtitle: id, Active: "changes", Error: err.Error()})
+		h.renderUI(w, http.StatusNotFound, uiData{Title: "Audit Events", Subtitle: id, Active: "changes", ActiveNav: "audit-log", Error: err.Error()})
 		return
 	}
 	selected := withUIActionVisibility(r.Context(), toMap(change))
-	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Audit events: %s", changeNumberOrID(selected)), Subtitle: "Change audit trail and technical workflow events", Active: "changes", Mode: "changeEvents", SelectedChange: selected, Events: toMapSlice(events), Stats: map[string]any{"events": len(events)}})
+	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Audit events: %s", changeNumberOrID(selected)), Subtitle: "Change audit trail and technical workflow events", Active: "changes", ActiveNav: "audit-log", Mode: "changeEvents", SelectedChange: selected, Events: toMapSlice(events), Stats: map[string]any{"events": len(events)}})
 }
 
 func (h *Handler) uiChangeEvidence(w http.ResponseWriter, r *http.Request, id string) {
 	change, err := h.deps.Services.Changes.Get(r.Context(), id)
 	if err != nil {
-		h.renderUI(w, http.StatusNotFound, uiData{Title: "Evidence", Subtitle: id, Active: "changes", Error: err.Error()})
+		h.renderUI(w, http.StatusNotFound, uiData{Title: "Evidence", Subtitle: id, Active: "changes", ActiveNav: "evidence", Error: err.Error()})
 		return
 	}
 	evidence, err := h.deps.Services.Evidence.List(r.Context(), id, "")
 	if err != nil {
-		h.renderUI(w, http.StatusNotFound, uiData{Title: "Evidence", Subtitle: id, Active: "changes", Error: err.Error()})
+		h.renderUI(w, http.StatusNotFound, uiData{Title: "Evidence", Subtitle: id, Active: "changes", ActiveNav: "evidence", Error: err.Error()})
 		return
 	}
 	selected := withUIActionVisibility(r.Context(), toMap(change))
-	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Evidence: %s", changeNumberOrID(selected)), Subtitle: "Collected technical and runtime evidence", Active: "changes", Mode: "changeEvidence", SelectedChange: selected, Evidence: toMapSlice(evidence), Stats: map[string]any{"evidence": len(evidence)}})
+	h.renderUI(w, http.StatusOK, uiData{Title: fmt.Sprintf("Evidence: %s", changeNumberOrID(selected)), Subtitle: "Collected technical and runtime evidence", Active: "changes", ActiveNav: "evidence", Mode: "changeEvidence", SelectedChange: selected, Evidence: toMapSlice(evidence), Stats: map[string]any{"evidence": len(evidence)}})
 }
 
 func (h *Handler) uiChangeAction(w http.ResponseWriter, r *http.Request) {
@@ -671,8 +672,1379 @@ func advancedActions(change map[string]any) []map[string]any {
 func jsonPretty(v any) string { raw, _ := json.MarshalIndent(v, "", "  "); return string(raw) }
 
 const uiTemplate = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Title}} - DevOps Control Plane</title><style>
-:root{--nav:#071b33;--nav2:#0b2646;--blue:#2563eb;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--card:#fff}*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}a{color:#075eea;text-decoration:none}.app{display:flex;min-height:100vh}.sidebar{width:280px;background:linear-gradient(180deg,var(--nav),var(--nav2));color:white;padding:24px 16px;display:flex;flex-direction:column;gap:22px;position:fixed;inset:0 auto 0 0}.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:18px}.brand-icon{width:36px;height:36px;border:2px solid #3b82f6;border-radius:10px;display:grid;place-items:center;color:#60a5fa}.nav-group{border-top:1px solid rgba(255,255,255,.12);padding-top:14px}.nav a{display:flex;align-items:center;gap:12px;color:#dbeafe;padding:12px 14px;border-radius:8px;margin:4px 0;font-weight:600}.nav a.active,.nav a:hover{background:#1d4ed8;color:#fff}.sys{margin-top:auto;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:14px;background:rgba(255,255,255,.03)}.sys h4{margin:0 0 12px}.sys-row{display:flex;justify-content:space-between;font-size:13px;margin:10px 0}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#22c55e;margin-right:8px}.version{font-size:12px;color:#cbd5e1}.main{margin-left:280px;width:calc(100% - 280px)}.topbar{height:88px;padding:20px 28px;border-bottom:1px solid var(--line);background:white;display:flex;align-items:center;justify-content:space-between}.title h1{margin:0;font-size:25px}.title p{margin:6px 0 0;color:var(--muted)}.user{display:flex;align-items:stretch;gap:0}.select,.avatar{border:1px solid #cbd5e1;border-radius:8px;background:white;padding:10px 16px}.environment-summary{min-width:500px;max-width:660px;align-self:stretch;border:1px solid #cbd5e1;border-radius:8px 0 0 8px;background:white;padding:7px 14px;box-shadow:0 1px 3px rgba(15,23,42,.05);line-height:1.32}.environment-summary-title{font-weight:750;color:#0f172a;margin-bottom:4px;font-size:13px}.environment-summary-row{display:grid;grid-template-columns:88px 1fr 1fr;gap:8px;font-size:12px;color:#64748b;white-space:nowrap}.environment-summary-row b{color:#334155}.environment-summary-row span{color:#64748b}.user-summary{display:flex;align-items:center;justify-content:center;gap:12px;align-self:stretch;border:1px solid #cbd5e1;border-left:0;border-radius:0 8px 8px 0;background:white;padding:7px 14px;box-shadow:0 1px 3px rgba(15,23,42,.05);min-height:78px;min-width:150px}.user-summary b{color:#334155;font-weight:400}.avatar{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;font-weight:700;color:#475569}.content{padding:24px 28px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 20px rgba(15,23,42,.04)}.metric{padding:18px;display:flex;gap:16px;align-items:center}.metric .icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-weight:800}.kpi-title-line{display:flex;align-items:center;gap:.45rem;white-space:nowrap}.kpi-title{color:var(--text);font-size:16px}.kpi-counter{display:inline-flex;align-items:center;justify-content:center;min-width:1.55rem;height:1.75rem;padding:0 .35rem;border:1px solid #334155;border-radius:.25rem;background:#f8fafc;color:#0f172a;font-size:1.35rem;font-weight:700;line-height:1}.metric>div>span{display:block;color:var(--muted);font-size:13px;margin-top:6px}.grid{display:grid;grid-template-columns:1.05fr 1.55fr 1.35fr;gap:18px}.panel{padding:0}.panel h3{font-size:16px;margin:0;padding:18px;border-bottom:1px solid var(--line)}.logical-app{border-bottom:1px solid var(--line)}.logical-app-title,.standalone-title,.logical-app-table-title{padding:12px 18px;font-weight:800;color:#334155;background:#f8fafc}.environment-instance{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-top:1px solid var(--line)}.standalone-title{border-top:1px solid var(--line)}.empty-state{padding:16px 18px}.list{padding:0;margin:0;list-style:none}.list li{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--line)}.small{font-size:13px;color:var(--muted)}.badge{border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700}.badge-ok{background:#dcfce7;color:#15803d;border:1px solid #86efac}.badge-bad{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}.badge-warn{background:#fef3c7;color:#b45309;border:1px solid #fde68a}.badge-info{background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe}.badge-muted{background:#f1f5f9;color:#475569}.detail{padding:18px}.detail-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.kv{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px}.kv .label{color:var(--muted);font-size:13px;margin-bottom:4px}.section{border-top:1px solid var(--line);margin-top:18px;padding-top:18px}.actions{display:flex;flex-wrap:wrap;gap:10px}.action-groups{display:grid;gap:14px}.action-card{border:1px solid var(--line);border-radius:10px;padding:10px;background:#f8fafc;max-width:260px}.action-card form{margin:0 0 6px}.action-desc{line-height:1.35}.btn{border:1px solid #2563eb;color:#1d4ed8;background:white;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer}.btn.primary{background:#2563eb;color:white}.timeline{padding:18px}.step{display:flex;gap:12px;margin:0 0 17px}.circle{width:18px;height:18px;border:2px solid #94a3b8;border-radius:50%;margin-top:2px}.circle.done{background:#16a34a;border-color:#16a34a}.evidence{padding:18px}.ev-row{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}.table{width:100%;border-collapse:collapse;background:white}.table th,.table td{border-bottom:1px solid var(--line);padding:12px;text-align:left}.table th{font-size:12px;color:#475569;text-transform:uppercase}.full{grid-column:1 / -1}.json{white-space:pre-wrap;background:#0f172a;color:#dbeafe;border-radius:8px;padding:14px;max-height:360px;overflow:auto}.evidence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}.evidence-card{border:1px solid var(--line);border-radius:10px;padding:12px;background:#f8fafc}.evidence-card h4{margin:0 0 8px;font-size:14px}.evidence-kv{display:flex;justify-content:space-between;gap:12px;padding:4px 0;color:#334155;font-size:13px}.pod-list{margin:0;padding-left:18px}.pod-list li{margin:5px 0;color:#334155;font-size:13px}details{margin-top:12px}summary{cursor:pointer;color:#1d4ed8;font-weight:700;font-size:13px}.alert{padding:12px 14px;border-radius:8px;margin-bottom:16px;font-weight:700}.alert-ok{background:#dcfce7;color:#15803d;border:1px solid #86efac}.alert-error{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}.footer{text-align:center;color:var(--muted);font-size:12px;margin-top:28px}@media(max-width:1300px){.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.sidebar{position:static;width:100%}.main{margin-left:0;width:100%}.app{display:block}}
-</style></head><body><div class="app"><aside class="sidebar"><div class="brand"><div class="brand-icon">☁</div><div>DevOps Control Plane</div></div><nav class="nav"><a class="{{if eq .Active "dashboard"}}active{{end}}" href="/">▣ Dashboard</a><a class="{{if eq .Active "applications"}}active{{end}}" href="/ui/applications">▧ Applications</a><div class="nav-group"><a class="{{if eq .Active "changes"}}active{{end}}" href="/ui/changes">◌ Change Requests</a><a href="/ui/changes">All changes</a><a href="/ui/changes-api">Changes API</a></div><div class="nav-group"><a href="/ui/changes/CHG-2026-0005/evidence">▤ Evidence</a><a href="/ui/changes/CHG-2026-0005/events">☷ Audit log</a></div><div class="nav-group"><a class="{{if eq .Active "settings"}}active{{end}}" href="/ui/settings">⚙ Settings</a></div></nav><div class="sys"><h4>System status</h4><div class="sys-row"><span><i class="dot"></i>API</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Database</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Git Providers</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Tekton</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Argo CD</span><b>OK</b></div></div><div class="version">DevOps Control Plane<br>v0.1.0</div></aside><main class="main"><header class="topbar"><div class="title"><h1>{{.Title}}</h1><p>{{.Subtitle}}</p></div><div class="user"><div class="environment-summary"><div class="environment-summary-title">Environments / Namespaces</div>{{range environmentSummaries}}<div class="environment-summary-row"><b>{{get . "name"}}</b><span>k8s: {{get . "kubernetesNamespace"}}</span><span>tekton: {{get . "tektonNamespace"}}</span></div>{{end}}</div><div class="user-summary"><div class="avatar">A</div><b>admin</b></div></div></header><section class="content">{{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}{{if .ActionError}}<div class="alert alert-error">{{.ActionError}}</div>{{end}}{{if .Error}}<div class="card detail"><b>Error:</b> {{.Error}}</div>{{else}}{{if eq .Mode "changeEvents"}}{{template "changeEventsPage" .}}{{else if eq .Mode "changeEvidence"}}{{template "changeEvidencePage" .}}{{else if eq .Active "settings"}}{{template "settingsPage" .}}{{else if eq .Mode "changesAPI"}}{{template "changesAPIPage" .}}{{else if eq .Active "changes"}}{{if .SelectedChange}}{{template "changeDetail" .}}{{else}}{{template "changesList" .}}{{end}}{{else if eq .Active "applications"}}{{if .SelectedApplication}}{{template "applicationDetail" .}}{{else}}{{template "applicationsList" .}}{{end}}{{else}}{{template "dashboard" .}}{{end}}{{end}}<div class="footer">© 2026 DevOps Control Plane <span style="float:right">v0.1.0</span></div></section></main></div></body></html>
+/* DevOps Control Plane - Enterprise UI Design System */
+
+/* Color palette and design tokens */
+:root {
+  --color-primary: #0f172a;
+  --color-primary-light: #1e293b;
+  --color-primary-dark: #020617;
+  --color-accent: #2563eb;
+  --color-accent-light: #3b82f6;
+  --color-accent-darker: #1d4ed8;
+  --color-success: #16a34a;
+  --color-success-bg: #dcfce7;
+  --color-success-fg: #15803d;
+  --color-warning: #d97706;
+  --color-warning-bg: #fef3c7;
+  --color-warning-fg: #b45309;
+  --color-critical: #dc2626;
+  --color-critical-bg: #fee2e2;
+  --color-critical-fg: #b91c1c;
+  --color-info: #1d4ed8;
+  --color-info-bg: #dbeafe;
+  --color-info-fg: #1d4ed8;
+
+  --sidebar-bg: #071b33;
+  --sidebar-bg-accent: #0b2646;
+  --sidebar-text: #ffffff;
+  --sidebar-text-secondary: #cbd5e1;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+
+  --border-color: #e2e8f0;
+  --border-color-light: #cbd5e1;
+  --border-color-darker: #94a3b8;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 8px 20px rgba(15, 23, 42, 0.1);
+  --shadow-xl: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Global styles */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Links */
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-accent-light);
+  text-decoration: underline;
+}
+
+a:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Layout container */
+.app {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-secondary);
+}
+
+/* ===== SIDEBAR NAVIGATION ===== */
+
+.sidebar {
+  width: 280px;
+  background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--sidebar-bg-accent) 100%);
+  color: var(--sidebar-text);
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Brand section */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.5px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--color-accent-light);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #60a5fa;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+/* Navigation groups */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-group:not(:first-child) {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 14px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--sidebar-text);
+}
+
+.nav a:focus {
+  outline: 2px solid var(--color-accent-light);
+  outline-offset: -2px;
+}
+
+.nav a.active {
+  background: var(--color-accent-darker);
+  color: var(--sidebar-text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+}
+
+.nav-section-label {
+  display: block;
+  padding: 12px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: default;
+  user-select: none;
+}
+
+/* System status box */
+.sys {
+  margin-top: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+}
+
+.sys h4 {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.sys-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sys-row:last-child {
+  border-bottom: none;
+}
+
+.sys-row span {
+  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sys-row b {
+  color: var(--color-success-bg);
+  font-weight: 700;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  box-shadow: 0 0 8px rgba(22, 163, 74, 0.4);
+  flex-shrink: 0;
+}
+
+/* Version info */
+.version {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  line-height: 1.6;
+}
+
+/* ===== MAIN CONTENT ===== */
+
+.main {
+  margin-left: 280px;
+  width: calc(100% - 280px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+}
+
+/* Top navigation bar */
+.topbar {
+  min-height: 80px;
+  height: auto;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 50;
+}
+
+/* Page title section */
+.title {
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+
+.title h1 {
+  margin: 0;
+  padding: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.title p {
+  margin: 6px 0 0;
+  padding: 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* User/environment area */
+.user {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.environment-summary {
+  min-width: 500px;
+  max-width: 660px;
+  flex-shrink: 0;
+  align-self: stretch;
+  border: 1px solid var(--border-color);
+  border-radius: 8px 0 0 8px;
+  background: var(--bg-primary);
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  line-height: 1.4;
+}
+
+.environment-summary-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.environment-summary-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 1fr;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  padding: 6px 0;
+  align-items: center;
+}
+
+.environment-summary-row b {
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.environment-summary-row span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.user-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  align-self: stretch;
+  border: 1px solid var(--border-color);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-primary);
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  min-height: 56px;
+  min-width: 160px;
+  flex-shrink: 0;
+}
+
+.user-summary b {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 700;
+  color: var(--bg-primary);
+  background: var(--color-accent);
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.select {
+  border: 1px solid var(--border-color-light);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  padding: 10px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+/* ===== CONTENT AREA ===== */
+
+.content {
+  flex: 1;
+  padding: 28px;
+  background: var(--bg-secondary);
+  overflow-y: auto;
+}
+
+/* KPI Cards */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-normal);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-color-light);
+}
+
+.card:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.metric {
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.metric .icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.metric > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.kpi-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.kpi-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.kpi-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--text-secondary);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.metric > div > span {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Grid layout for main sections */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1.3fr;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.grid .full {
+  grid-column: 1 / -1;
+}
+
+/* Panels and sections */
+.panel {
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+}
+
+.panel h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  padding: 18px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel h3 a {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+/* Application grouping */
+.logical-app {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.logical-app:last-child {
+  border-bottom: none;
+}
+
+.logical-app-title,
+.standalone-title,
+.logical-app-table-title {
+  padding: 14px 18px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.environment-instance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-color);
+  border-top: 0;
+  gap: 16px;
+  transition: background var(--transition-fast);
+}
+
+.environment-instance:hover {
+  background: var(--bg-secondary);
+}
+
+.environment-instance > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.environment-instance b {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.environment-instance .small {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.standalone-title {
+  border-top: 1px solid var(--border-color);
+}
+
+/* Empty state */
+.empty-state {
+  padding: 20px 18px;
+  text-align: center;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+}
+
+/* Lists */
+.list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 12px;
+  transition: background var(--transition-fast);
+}
+
+.list li:hover {
+  background: var(--bg-secondary);
+}
+
+.list li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.list li b {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.small {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+/* ===== BADGES ===== */
+
+.badge {
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  display: inline-block;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid;
+}
+
+.badge-ok {
+  background: var(--color-success-bg);
+  color: var(--color-success-fg);
+  border-color: var(--color-success);
+}
+
+.badge-bad {
+  background: var(--color-critical-bg);
+  color: var(--color-critical-fg);
+  border-color: var(--color-critical);
+}
+
+.badge-warn {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+  border-color: var(--color-warning);
+}
+
+.badge-info {
+  background: var(--color-info-bg);
+  color: var(--color-info-fg);
+  border-color: var(--color-accent);
+}
+
+.badge-muted {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--border-color-light);
+}
+
+/* ===== DETAIL VIEWS ===== */
+
+.detail {
+  padding: 24px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+}
+
+.detail h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 18px;
+  color: var(--text-primary);
+}
+
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.detail-head h3 {
+  margin: 0;
+  flex: 1;
+}
+
+/* Key-value pairs */
+.kv {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+  margin-bottom: 24px;
+}
+
+.kv > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.kv .label {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  margin-bottom: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.kv b {
+  color: var(--text-primary);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+/* Sections */
+.section {
+  border-top: 1px solid var(--border-color);
+  margin-top: 24px;
+  padding-top: 24px;
+}
+
+.section h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  color: var(--text-primary);
+}
+
+.section p {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.section p:last-child {
+  margin-bottom: 0;
+}
+
+/* ===== ACTIONS ===== */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.action-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.action-card {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--bg-secondary);
+  max-width: 280px;
+  transition: all var(--transition-normal);
+}
+
+.action-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-accent);
+  background: var(--bg-primary);
+}
+
+.action-card form {
+  margin: 0 0 8px;
+}
+
+.action-desc {
+  line-height: 1.5;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* Buttons */
+.btn {
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  background: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  user-select: none;
+  text-decoration: none;
+}
+
+.btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--color-accent-darker);
+  color: var(--color-accent-darker);
+  text-decoration: none;
+}
+
+.btn:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn.primary {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+.btn.primary:hover {
+  background: var(--color-accent-darker);
+  border-color: var(--color-accent-darker);
+  color: white;
+}
+
+/* ===== TIMELINE & STATUS ===== */
+
+.timeline {
+  padding: 20px;
+}
+
+.step {
+  display: flex;
+  gap: 16px;
+  margin: 0 0 20px;
+  align-items: flex-start;
+}
+
+.circle {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color-light);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 1px;
+  background: white;
+  transition: all var(--transition-normal);
+}
+
+.circle.done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.step > div {
+  flex: 1;
+}
+
+.step b {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.step .small {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* Evidence section */
+.evidence {
+  padding: 20px;
+}
+
+.ev-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-color);
+  align-items: flex-start;
+}
+
+.ev-row:last-child {
+  border-bottom: none;
+}
+
+.ev-row > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.ev-row b {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.ev-row a {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* ===== TABLES ===== */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-primary);
+  font-size: 13px;
+}
+
+.table thead {
+  background: var(--bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.table th {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.table tbody tr:focus-within {
+  outline: 2px inset var(--color-accent);
+  outline-offset: -1px;
+}
+
+.table tbody tr td:first-child a,
+.table tbody tr td b {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.table .badge {
+  margin: 0;
+}
+
+/* ===== EVIDENCE GRID ===== */
+
+.evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.evidence-card {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--bg-secondary);
+  transition: all var(--transition-normal);
+}
+
+.evidence-card:hover {
+  border-color: var(--border-color-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.evidence-card h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.evidence-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  align-items: baseline;
+}
+
+.evidence-kv span {
+  font-weight: 600;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.evidence-kv b {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+  flex: 1;
+  min-width: 0;
+}
+
+.pod-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.pod-list li {
+  margin: 4px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Details/Summary */
+details {
+  margin-top: 16px;
+}
+
+details > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  color: var(--color-accent);
+  font-weight: 700;
+  font-size: 12px;
+  transition: color var(--transition-fast);
+  user-select: none;
+}
+
+details > summary:hover {
+  color: var(--color-accent-darker);
+}
+
+details > summary:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+details[open] {
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+
+details[open] > summary {
+  margin-bottom: 12px;
+}
+
+/* ===== ALERTS ===== */
+
+.alert {
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font-weight: 700;
+  font-size: 13px;
+  border: 1px solid;
+  line-height: 1.5;
+}
+
+.alert-ok {
+  background: var(--color-success-bg);
+  color: var(--color-success-fg);
+  border-color: var(--color-success);
+}
+
+.alert-error {
+  background: var(--color-critical-bg);
+  color: var(--color-critical-fg);
+  border-color: var(--color-critical);
+}
+
+.alert-warn {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+  border-color: var(--color-warning);
+}
+
+/* ===== JSON DISPLAY ===== */
+
+.json {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: #0f172a;
+  color: #dbeafe;
+  border-radius: 10px;
+  padding: 16px;
+  max-height: 420px;
+  overflow: auto;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  border: 1px solid #1e293b;
+}
+
+.json::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.json::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+.json::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+.json::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ===== FULL WIDTH ===== */
+
+.full {
+  grid-column: 1 / -1;
+}
+
+/* ===== FOOTER ===== */
+
+.footer {
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  margin-top: 40px;
+  padding: 24px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+
+/* Tablet layout */
+@media (max-width: 1400px) {
+  .grid {
+    grid-template-columns: 1fr 1.2fr;
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+
+/* Tablet - stacked layout */
+@media (max-width: 1100px) {
+  .sidebar {
+    position: static;
+    width: 100%;
+    flex-direction: row;
+    gap: 20px;
+    padding: 16px 20px;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .brand {
+    flex-shrink: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    padding-right: 20px;
+    margin-right: 0;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .sys {
+    display: none;
+  }
+
+  .version {
+    display: none;
+  }
+
+  .main {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .user {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .environment-summary {
+    min-width: 100%;
+    border-radius: 8px;
+  }
+
+  .user-summary {
+    border-radius: 8px;
+    border-left: 1px solid var(--border-color);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .evidence-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 768px) {
+  .sidebar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .brand {
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-right: 0;
+    padding-bottom: 12px;
+  }
+
+  .content {
+    padding: 16px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .title h1 {
+    font-size: 20px;
+  }
+
+  .user {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .environment-summary {
+    min-width: 100%;
+    border-radius: 8px;
+  }
+
+  .user-summary {
+    width: 100%;
+    border-radius: 8px;
+    border-left: 1px solid var(--border-color);
+    justify-content: flex-start;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .kv {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .table {
+    font-size: 12px;
+  }
+
+  .table th,
+  .table td {
+    padding: 10px 8px;
+  }
+}
+</style></head><body><div class="app"><aside class="sidebar"><div class="brand"><div class="brand-icon">☁</div><div>DevOps Control Plane</div></div><nav class="nav"><a class="{{if eq .ActiveNav "dashboard"}}active{{end}}" href="/">▣ Dashboard</a><a class="{{if eq .ActiveNav "applications"}}active{{end}}" href="/ui/applications">▧ Applications</a><div class="nav-group"><div class="nav-section-label">◌ Change Requests</div><a class="{{if eq .ActiveNav "all-changes"}}active{{end}}" href="/ui/changes">All changes</a><a class="{{if eq .ActiveNav "changes-api"}}active{{end}}" href="/ui/changes-api">Changes API</a></div><div class="nav-group"><a class="{{if eq .ActiveNav "evidence"}}active{{end}}" href="/ui/changes/CHG-2026-0005/evidence">▤ Evidence</a><a class="{{if eq .ActiveNav "audit-log"}}active{{end}}" href="/ui/changes/CHG-2026-0005/events">☷ Audit log</a></div><div class="nav-group"><a class="{{if eq .ActiveNav "settings"}}active{{end}}" href="/ui/settings">⚙ Settings</a></div></nav><div class="sys"><h4>System status</h4><div class="sys-row"><span><i class="dot"></i>API</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Database</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Git Providers</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Tekton</span><b>OK</b></div><div class="sys-row"><span><i class="dot"></i>Argo CD</span><b>OK</b></div></div><div class="version">DevOps Control Plane<br>v0.1.0</div></aside><main class="main"><header class="topbar"><div class="title"><h1>{{.Title}}</h1><p>{{.Subtitle}}</p></div><div class="user"><div class="environment-summary"><div class="environment-summary-title">Environments / Namespaces</div>{{range environmentSummaries}}<div class="environment-summary-row"><b>{{get . "name"}}</b><span>k8s: {{get . "kubernetesNamespace"}}</span><span>tekton: {{get . "tektonNamespace"}}</span></div>{{end}}</div><div class="user-summary"><div class="avatar">A</div><b>admin</b></div></div></header><section class="content">{{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}{{if .ActionError}}<div class="alert alert-error">{{.ActionError}}</div>{{end}}{{if .Error}}<div class="card detail"><b>Error:</b> {{.Error}}</div>{{else}}{{if eq .Mode "changeEvents"}}{{template "changeEventsPage" .}}{{else if eq .Mode "changeEvidence"}}{{template "changeEvidencePage" .}}{{else if eq .Active "settings"}}{{template "settingsPage" .}}{{else if eq .Mode "changesAPI"}}{{template "changesAPIPage" .}}{{else if eq .Active "changes"}}{{if .SelectedChange}}{{template "changeDetail" .}}{{else}}{{template "changesList" .}}{{end}}{{else if eq .Active "applications"}}{{if .SelectedApplication}}{{template "applicationDetail" .}}{{else}}{{template "applicationsList" .}}{{end}}{{else}}{{template "dashboard" .}}{{end}}{{end}}<div class="footer">© 2026 DevOps Control Plane <span style="float:right">v0.1.0</span></div></section></main></div></body></html>
 {{define "dashboard"}}<div class="cards"><div class="card metric"><div class="icon" style="background:#dbeafe;color:#2563eb">□</div><div><div class="kpi-title-line"><span class="kpi-title">Logical Applications</span><b class="kpi-counter">{{get .Stats "logicalApplications"}}</b></div><span>{{get .Stats "environmentInstances"}} environment instances</span></div></div><div class="card metric"><div class="icon" style="background:#dcfce7;color:#16a34a">✓</div><div><div class="kpi-title-line"><span class="kpi-title">Completed changes</span><b class="kpi-counter">{{get .Stats "completed"}}</b></div><span>Last 30 days</span></div></div><div class="card metric"><div class="icon" style="background:#fef3c7;color:#d97706">◷</div><div><div class="kpi-title-line"><span class="kpi-title">Running changes</span><b class="kpi-counter">{{get .Stats "running"}}</b></div><span>Currently running</span></div></div><div class="card metric"><div class="icon" style="background:#fee2e2;color:#dc2626">!</div><div><div class="kpi-title-line"><span class="kpi-title">Failed changes</span><b class="kpi-counter">{{get .Stats "failed"}}</b></div><span>Last 30 days</span></div></div><div class="card metric"><div class="icon" style="background:#ede9fe;color:#7c3aed">▤</div><div><div class="kpi-title-line"><span class="kpi-title">Collected evidence</span><b class="kpi-counter">{{get .Stats "evidence"}}</b></div><span>For selected change</span></div></div></div><div class="grid"><div><div class="card panel"><h3>Logical Applications <a style="float:right;font-size:13px" href="/ui/applications">View all</a></h3>{{range .LogicalApplications}}<div class="logical-app"><div class="logical-app-title"><b>{{get . "name"}}</b></div>{{range get . "environments"}}<div class="environment-instance"><div><a href="/ui/applications/{{get . "argocdApplicationName"}}"><b>{{get . "environment"}}</b></a><div class="small">{{get . "argocdApplicationName"}} · {{get . "kubernetesNamespace"}}</div></div><span class="badge {{badgeClass (get . "healthStatus")}}">{{get . "healthStatus"}}</span></div>{{end}}</div>{{else}}<div class="small empty-state">No logical application bindings configured.</div>{{end}}{{if .StandaloneApplications}}<div class="standalone-title">Standalone Argo CD Applications</div>{{range .StandaloneApplications}}<div class="environment-instance"><div><a href="/ui/applications/{{get . "name"}}"><b>{{get . "name"}}</b></a><div class="small">{{get . "targetNamespace"}}</div></div><span class="badge {{badgeClass (get . "healthStatus")}}">{{get . "healthStatus"}}</span></div>{{end}}{{end}}</div><div class="card panel" style="margin-top:18px"><h3>Recent changes <a style="float:right;font-size:13px" href="/ui/changes">View all</a></h3><ul class="list">{{range recentChanges .Changes}}<li><div><a href="/ui/changes/{{changeNumberOrID .}}"><b>{{changeNumberOrID .}}</b></a><div class="small">{{get . "applicationName"}} · Environment: {{get . "targetEnvironment"}} · Requested by: {{get . "requestedBy"}}</div></div><span class="badge {{badgeClass (get . "runtimeStatus")}}">{{get . "runtimeStatus"}}</span></li>{{end}}</ul></div></div><div>{{template "changeCard" .}}</div><div><div class="card timeline"><h3>Workflow Change</h3>{{range .Events}}<div class="step"><span class="circle done"></span><div><b>{{eventStep .}}</b><div class="small">{{get . "createdAt"}}</div></div></div>{{else}}<div class="small">No events available</div>{{end}}</div><div class="card evidence" style="margin-top:18px"><h3>Available evidence</h3>{{range .Evidence}}<div class="ev-row"><div><b>{{get . "name"}}</b><div class="small">{{get . "summary"}}</div></div><a href="/ui/changes/{{get . "changeNumber"}}/evidence">View</a></div>{{else}}<div class="small">No evidence available</div>{{end}}</div></div></div>{{end}}
 {{define "changeCard"}}<div class="card detail">{{if .SelectedChange}}<div class="detail-head"><h3>Change Request: {{changeNumberOrID .SelectedChange}}</h3><span class="badge {{badgeClass (get .SelectedChange "runtimeStatus")}}">{{get .SelectedChange "runtimeStatus"}}</span></div><div class="kv"><div><div class="label">Application</div><b>{{get .SelectedChange "applicationName"}}</b></div><div><div class="label">Requester</div><b>{{get .SelectedChange "requestedBy"}}</b></div><div><div class="label">Environment</div><b>{{get .SelectedChange "targetEnvironment"}}</b></div><div><div class="label">Process lifecycle status</div><span class="badge {{badgeClass (get .SelectedChange "status")}}">{{get .SelectedChange "status"}}</span></div><div><div class="label">Technical runtime status</div><span class="badge {{badgeClass (get .SelectedChange "runtimeStatus")}}">{{get .SelectedChange "runtimeStatus"}}</span></div><div><div class="label">Created at</div><b>{{get .SelectedChange "createdAt"}}</b></div></div><div class="section"><h3>Status meaning</h3><p class="small">Process lifecycle status tracks the governance and approval state of the ChangeRequest. Technical runtime status tracks the latest automation, validation, deployment or evidence observation.</p></div><div class="section"><h3>Description</h3><p>{{get .SelectedChange "description"}}</p><div class="actions"><a class="btn" href="/ui/changes/{{changeNumberOrID .SelectedChange}}/evidence">View evidence</a><a class="btn" href="/ui/changes/{{changeNumberOrID .SelectedChange}}/events">View audit events</a></div></div><div class="section"><h3>Technical actions</h3>{{with environmentActionWarning .SelectedChange}}<div class="alert alert-error">{{.}}</div>{{end}}{{if and (environmentAllowsTechnicalActions .SelectedChange) (userCanSeeTechnicalActions .SelectedChange)}}<div class="action-groups"><div><div class="small" style="margin-bottom:8px">Recommended next actions</div><div class="actions">{{range recommendedActions .SelectedChange}}<div class="action-card"><form method="post" action="/ui/changes/{{changeNumberOrID $.SelectedChange}}/actions/{{get . "name"}}"><button class="btn {{if get . "primary"}}primary{{end}}">{{get . "label"}}</button></form><div class="small action-desc">{{get . "description"}}</div></div>{{else}}<div class="small">No recommended technical action for the current state.</div>{{end}}</div></div><details><summary>Advanced/manual actions</summary><div class="actions" style="margin-top:10px">{{range advancedActions .SelectedChange}}<div class="action-card"><form method="post" action="/ui/changes/{{changeNumberOrID $.SelectedChange}}/actions/{{get . "name"}}"><button class="btn">{{get . "label"}}</button></form><div class="small action-desc">{{get . "description"}}</div></div>{{end}}</div></details></div>{{else}}<div class="small">Technical actions are not available because the target environment is not currently enabled for automation.</div>{{end}}</div><div class="section"><h3>Technical runtime state</h3><div class="evidence-grid"><div class="evidence-card"><h4>Source repository</h4>{{with get .ChangeRuntimeState "source"}}<div class="evidence-kv"><span>Provider</span><b>{{get . "provider"}}</b></div><div class="evidence-kv"><span>Repository</span><b>{{get . "repositoryURL"}}</b></div><div class="evidence-kv"><span>Branch</span><b>{{get . "branch"}}</b></div><div class="evidence-kv"><span>Commit</span><b>{{short (get . "commitSHA")}}</b></div>{{else}}<div class="small">No runtime state recorded</div>{{end}}</div><div class="evidence-card"><h4>Build artifact state</h4>{{with get .ChangeRuntimeState "artifact"}}<div class="evidence-kv"><span>Provider</span><b>{{get . "provider"}}</b></div><div class="evidence-kv"><span>PipelineRun</span><b>{{get . "pipelineRunName"}}</b></div><div class="evidence-kv"><span>Source commit</span><b>{{short (get . "sourceCommitSHA")}}</b></div><div class="evidence-kv"><span>Image</span><b>{{get . "imageRepository"}}:{{get . "imageTag"}}</b></div><div class="evidence-kv"><span>Digest</span><b>{{short (get . "imageDigest")}}</b></div><div class="evidence-kv"><span>Status</span><b><span class="badge {{badgeClass (get . "status")}}">{{get . "status"}}</span></b></div><div class="evidence-kv"><span>Reason</span><b>{{get . "reason"}}</b></div>{{else}}<div class="small">No runtime state recorded</div>{{end}}</div><div class="evidence-card"><h4>GitOps repository</h4>{{with get .ChangeRuntimeState "gitops"}}<div class="evidence-kv"><span>Provider</span><b>{{get . "provider"}}</b></div><div class="evidence-kv"><span>Repository</span><b>{{get . "repositoryURL"}}</b></div><div class="evidence-kv"><span>Revision</span><b>{{get . "revision"}}</b></div><div class="evidence-kv"><span>Commit</span><b>{{short (get . "commitSHA")}}</b></div>{{else}}<div class="small">No runtime state recorded</div>{{end}}</div><div class="evidence-card"><h4>Tekton validation state</h4>{{with get .ChangeRuntimeState "tekton"}}<div class="evidence-kv"><span>PipelineRun</span><b>{{get . "pipelineRunName"}}</b></div><div class="evidence-kv"><span>Namespace</span><b>{{get . "namespace"}}</b></div><div class="evidence-kv"><span>Status</span><b><span class="badge {{badgeClass (get . "status")}}">{{get . "status"}}</span></b></div><div class="evidence-kv"><span>Reason</span><b>{{get . "reason"}}</b></div>{{else}}<div class="small">No runtime state recorded</div>{{end}}</div><div class="evidence-card"><h4>Argo CD deployment state</h4>{{with get .ChangeRuntimeState "argocd"}}<div class="evidence-kv"><span>Application</span><b>{{get . "applicationName"}}</b></div><div class="evidence-kv"><span>Sync</span><b>{{get . "syncStatus"}}</b></div><div class="evidence-kv"><span>Health</span><b>{{get . "healthStatus"}}</b></div><div class="evidence-kv"><span>Correlation</span><b>{{get . "correlationStatus"}}</b></div>{{else}}<div class="small">No runtime state recorded</div>{{end}}</div><div class="evidence-card"><h4>Kubernetes runtime state</h4>{{with get .ChangeRuntimeState "runtime"}}<div class="evidence-kv"><span>Cluster</span><b>{{get . "clusterName"}}</b></div><div class="evidence-kv"><span>Namespace</span><b>{{get . "namespace"}}</b></div><div class="evidence-kv"><span>Resource</span><b>{{get . "resourceKind"}} / {{get . "resourceName"}}</b></div><div class="evidence-kv"><span>Status</span><b><span class="badge {{badgeClass (get . "status")}}">{{get . "status"}}</span></b></div><div class="evidence-kv"><span>Reason</span><b>{{get . "reason"}}</b></div>{{else}}<div class="small">No runtime state recorded</div>{{end}}</div></div></div>{{with latestValidationEvidence .Evidence}}<div class="section"><h3>Tekton validation</h3><div class="evidence-card" style="margin-top:12px"><h4>Latest validation evidence</h4><div class="evidence-kv"><span>PipelineRun</span><b>{{validationField . "pipelineRunName"}}</b></div><div class="evidence-kv"><span>Tekton namespace</span><b>{{validationField . "tektonNamespace"}}</b></div><div class="evidence-kv"><span>Pipeline</span><b>{{validationField . "pipelineName"}}</b></div><div class="evidence-kv"><span>Git revision</span><b>{{validationField . "revision"}}</b></div><div class="evidence-kv"><span>Validation path</span><b>{{validationField . "validationPath"}}</b></div><div class="evidence-kv"><span>Status</span><b><span class="badge {{badgeClass (validationField . "status")}}">{{validationField . "status"}}</span></b></div><div class="evidence-kv"><span>Reason</span><b>{{validationField . "reason"}}</b></div><div class="evidence-kv"><span>Failed tasks</span><b>{{validationField . "failedTaskCount"}}</b></div><div class="evidence-kv"><span>Summary</span><b>{{validationField . "summary"}}</b></div><div class="evidence-kv"><span>Evidence sanitized</span><b><span class="badge {{badgeClass (get . "sanitized")}}">{{get . "sanitized"}}</span></b></div></div><details><summary>View raw validation evidence</summary><pre class="json">{{jsonPretty .}}</pre></details></div>{{end}}{{with latestEvidence .Evidence}}<div class="section"><h3>Latest runtime evidence</h3><div class="small">{{get . "summary"}}</div>{{with diagnosticsSummary .}}<div class="evidence-card" style="margin-top:12px"><h4>Deployment diagnostics</h4><div class="evidence-kv"><span>Summary</span><b>{{get . "summary"}}</b></div><div class="evidence-kv"><span>Argo CD synced</span><b>{{get . "argocdSynced"}}</b></div><div class="evidence-kv"><span>Argo CD healthy</span><b>{{get . "argocdHealthy"}}</b></div><div class="evidence-kv"><span>Deployment ready</span><b>{{get . "deploymentReady"}}</b></div><div class="evidence-kv"><span>Replicas</span><b>{{get . "readyReplicas"}}</b></div><div class="evidence-kv"><span>Pods</span><b>{{get . "podsReady"}}</b></div><div class="evidence-kv"><span>Restarts</span><b>{{get . "totalRestarts"}}</b></div><div class="evidence-kv"><span>Service available</span><b>{{get . "serviceAvailable"}}</b></div><div class="evidence-kv"><span>Route available</span><b>{{get . "routeAvailable"}}</b></div>{{with get . "warnings"}}<div class="small" style="margin-top:8px"><b>Warnings</b><ul class="pod-list">{{range .}}<li>{{.}}</li>{{end}}</ul></div>{{end}}</div>{{end}}<div class="evidence-grid">{{with get (kubeSummary .) "deployment"}}<div class="evidence-card"><h4>Deployment</h4><div class="evidence-kv"><span>Name</span><b>{{get . "name"}}</b></div><div class="evidence-kv"><span>Namespace</span><b>{{get . "namespace"}}</b></div><div class="evidence-kv"><span>Ready</span><b>{{get . "readyReplicas"}}/{{get . "desiredReplicas"}}</b></div><div class="evidence-kv"><span>Available</span><b>{{get . "availableReplicas"}}</b></div><div class="evidence-kv"><span>Updated</span><b>{{get . "updatedReplicas"}}</b></div></div>{{end}}{{with get (kubeSummary .) "service"}}<div class="evidence-card"><h4>Service</h4><div class="evidence-kv"><span>Name</span><b>{{get . "name"}}</b></div><div class="evidence-kv"><span>Type</span><b>{{get . "type"}}</b></div><div class="evidence-kv"><span>Cluster IP</span><b>{{get . "clusterIP"}}</b></div></div>{{end}}{{with get (kubeSummary .) "route"}}<div class="evidence-card"><h4>Route</h4><div class="evidence-kv"><span>Host</span><b>{{get . "host"}}</b></div><div class="evidence-kv"><span>TLS</span><b>{{get . "tlsTermination"}}</b></div><div class="evidence-kv"><span>To</span><b>{{get . "to"}}</b></div></div>{{end}}{{with get (kubeSummary .) "pods"}}<div class="evidence-card"><h4>Pods</h4><ul class="pod-list">{{range .}}<li><b>{{get . "name"}}</b> - {{get . "phase"}}, ready={{get . "ready"}}, restarts={{get . "restartCount"}}, node={{get . "nodeName"}}</li>{{end}}</ul></div>{{end}}</div><details><summary>View raw deployment evidence</summary><pre class="json">{{jsonPretty .}}</pre></details></div>{{end}}{{else}}<p>No ChangeRequest available.</p>{{end}}</div>{{end}}
 {{define "changesList"}}<div class="card panel full"><h3>Change Requests</h3><table class="table"><thead><tr><th>Change</th><th>Application</th><th>Requested by</th><th>Environment</th><th>Process lifecycle</th><th>Technical runtime</th><th>Action</th></tr></thead><tbody>{{range .Changes}}<tr><td><b>{{changeNumberOrID .}}</b></td><td>{{get . "applicationName"}}</td><td>{{get . "requestedBy"}}</td><td>{{get . "targetEnvironment"}}</td><td><span class="badge {{badgeClass (get . "status")}}">{{get . "status"}}</span></td><td><span class="badge {{badgeClass (get . "runtimeStatus")}}">{{get . "runtimeStatus"}}</span></td><td><a href="/ui/changes/{{changeNumberOrID .}}">Open</a></td></tr>{{end}}</tbody></table></div>{{end}}
