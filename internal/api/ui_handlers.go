@@ -1166,8 +1166,9 @@ a:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  white-space: nowrap;
   margin-bottom: 6px;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .kpi-title {
