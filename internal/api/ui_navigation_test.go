@@ -27,11 +27,6 @@ func TestUIDataActiveNavField(t *testing.T) {
 			expectedNav: "all-changes",
 		},
 		{
-			name:        "change requests sets ActiveNav to change-requests",
-			data:        uiData{ActiveNav: "change-requests"},
-			expectedNav: "change-requests",
-		},
-		{
 			name:        "changes API sets ActiveNav to changes-api",
 			data:        uiData{ActiveNav: "changes-api"},
 			expectedNav: "changes-api",
@@ -77,11 +72,6 @@ func TestTemplateUsesActiveNav(t *testing.T) {
 			name:     "Applications link uses ActiveNav",
 			navItem:  "Applications",
 			expected: `class="{{if eq .ActiveNav "applications"}}active{{end}}"`,
-		},
-		{
-			name:     "Change Requests parent link uses ActiveNav",
-			navItem:  "Change Requests",
-			expected: `class="{{if eq .ActiveNav "change-requests"}}active{{end}}"`,
 		},
 		{
 			name:     "All changes link uses ActiveNav",
@@ -142,7 +132,6 @@ func TestExactlyOneActiveNavLinkPerState(t *testing.T) {
 	navStates := []string{
 		"dashboard",
 		"applications",
-		"change-requests",
 		"all-changes",
 		"changes-api",
 		"evidence",
@@ -156,6 +145,40 @@ func TestExactlyOneActiveNavLinkPerState(t *testing.T) {
 		if count != 1 {
 			t.Errorf("Expected exactly 1 link for ActiveNav state %q, found %d instances of pattern: %s", state, count, pattern)
 		}
+	}
+}
+
+func TestChangeRequestsIsNonClickableSection(t *testing.T) {
+	navigationSection := extractTemplateSection(uiTemplate, `<nav class="nav">`, `</nav>`)
+
+	if !strings.Contains(navigationSection, `<div class="nav-section-label">◌ Change Requests</div>`) {
+		t.Error("Expected 'Change Requests' to be a non-clickable section label with nav-section-label class")
+	}
+
+	if strings.Contains(navigationSection, `<a href="/ui/changes">◌ Change Requests</a>`) {
+		t.Error("Expected 'Change Requests' to not be a clickable link")
+	}
+}
+
+func TestOnlyOneAllChangesLink(t *testing.T) {
+	navigationSection := extractTemplateSection(uiTemplate, `<nav class="nav">`, `</nav>`)
+
+	pattern := `href="/ui/changes"`
+	count := strings.Count(navigationSection, pattern)
+	if count != 1 {
+		t.Errorf("Expected exactly 1 link to /ui/changes in navigation, found %d", count)
+	}
+
+	if !strings.Contains(navigationSection, `class="{{if eq .ActiveNav "all-changes"}}active{{end}}" href="/ui/changes">All changes</a>`) {
+		t.Error("Expected 'All changes' link to use ActiveNav 'all-changes'")
+	}
+}
+
+func TestNoChangeRequestsActiveNavState(t *testing.T) {
+	navigationSection := extractTemplateSection(uiTemplate, `<nav class="nav">`, `</nav>`)
+
+	if strings.Contains(navigationSection, `{{if eq .ActiveNav "change-requests"}}`) {
+		t.Error("Expected 'change-requests' ActiveNav state to not exist in navigation")
 	}
 }
 
